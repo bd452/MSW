@@ -1,47 +1,64 @@
-- [ ] Host Platform
-  - [ ] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/SpiceBridge.swift }
-    - [ ] Replace mock timer stream with libspice-glib glue code { host/Sources/WinRunSpiceBridge/SpiceBridge.swift }
-  - [ ] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
-    - [ ] Use Virtualization.framework to boot, stop, and snapshot the VM { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
-    - [ ] Track uptime/metrics from real VM events { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
-  - [ ] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift }
-    - [ ] Stand up XPC listener + routing into VM controller { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift }
-    - [ ] Wire LaunchDaemon plist + install flow { infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh }
-  - [ ] WinRun.app window shell { host/Sources/WinRunApp/AppMain.swift }
-    - [ ] Render streamed frames via Metal + present NSWindow chrome { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift }
-    - [ ] Sync clipboard, menus, and resize events with guest { host/Sources/WinRunApp/AppMain.swift }
-  - [ ] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift }
-    - [ ] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift }
-    - [ ] Generate macOS launchers + embed icons/assets { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ }
-  - [ ] Shared configuration + logging { host/Sources/WinRunShared/WinRunShared.swift }
-    - [ ] Persist config (VM paths, Spice channels, auth) { host/Sources/WinRunShared/WinRunShared.swift }
-    - [ ] Provide structured logging sinks for host targets { host/Sources/WinRunShared/WinRunShared.swift }
-  - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift }
-    - [ ] Add unit tests for VM controller, CLI, and daemon glue { host/Tests/WinRunSharedTests/WinRunSharedTests.swift }
+- [ ] Host Platform { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions.md, docs/architecture.md>
+  - [ ] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, new:host/Sources/WinRunSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions.md>
+    - [ ] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceBridge.swift } <docs/decisions.md>
+    - [ ] Add C shim + pkg-config wiring for libspice-glib { new:host/Sources/WinRunSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions.md>
+    - [ ] Implement reconnect/backoff + error metrics { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions.md>
+  - [ ] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions.md>
+    - [ ] Drive Virtualization.framework boot/stop/snapshot flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions.md>
+    - [ ] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions.md>
+    - [ ] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions.md>
+  - [ ] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions.md>
+    - [ ] Stand up XPC listener + connect CLI/app clients { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions.md>
+    - [ ] Enforce authentication + request throttling { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions.md>
+    - [ ] Automate LaunchDaemon install/upgrade in bootstrap script { infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/development.md>
+  - [ ] WinRun.app window shell { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions.md>
+    - [ ] Render Spice frames via Metal layer + support Retina scaling { host/Sources/WinRunApp/AppMain.swift } <docs/decisions.md>
+    - [ ] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions.md>
+    - [ ] Handle window lifecycle + reconnection to streams { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift } <docs/decisions.md>
+  - [ ] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, apps/launchers/ } <docs/development.md>
+    - [ ] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/development.md>
+    - [ ] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/, host/Sources/WinRunShared/WinRunShared.swift } <docs/development.md>
+    - [ ] Surface guest session + shortcut management commands { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions.md>
+  - [ ] Shared configuration + logging { host/Sources/WinRunShared/WinRunShared.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/decisions.md>
+    - [ ] Implement persisted config store + schema validation { host/Sources/WinRunShared/WinRunShared.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/decisions.md>
+    - [ ] Provide structured logging sinks (os_log, file, telemetry) { host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions.md>
+    - [ ] Expose reusable error types + localization { host/Sources/WinRunShared/WinRunShared.swift } <docs/architecture.md>
+  - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
+    - [ ] Add unit tests for VM controller + Spice bridge { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
+    - [ ] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
 
-- [ ] Guest WinRunAgent
-  - [ ] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs }
-    - [ ] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs }
-    - [ ] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs }
-  - [ ] Program launch + session management { guest/WinRunAgent/Services/ProgramLauncher.cs, guest/WinRunAgent/Services/WinRunAgentService.cs }
-    - [ ] Launch Windows processes with arguments + working dirs { guest/WinRunAgent/Services/ProgramLauncher.cs }
-    - [ ] Track active sessions and report state to host { guest/WinRunAgent/Services/WinRunAgentService.cs }
-  - [ ] Icon extraction + shortcut sync { guest/WinRunAgent/Services/IconExtractionService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs }
-    - [ ] Extract and cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs }
-    - [ ] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs }
-  - [ ] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs }
-    - [ ] Replace mock logger with structured sinks + tracing { guest/WinRunAgent/Services/Logging.cs }
-  - [ ] Guest test coverage { guest/WinRunAgent.Tests/WindowTrackerTests.cs }
-    - [ ] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs }
+- [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions.md, docs/architecture.md>
+  - [ ] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, new:guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions.md>
+    - [ ] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, new:guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions.md>
+    - [ ] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs } <docs/decisions.md>
+    - [ ] Report capability flags + DPI info to host { guest/WinRunAgent/Services/Messages.cs } <docs/decisions.md>
+  - [ ] Program launch + session management { guest/WinRunAgent/Services/ProgramLauncher.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions.md>
+    - [ ] Launch Windows processes with arguments/env/working dirs { guest/WinRunAgent/Services/ProgramLauncher.cs } <docs/decisions.md>
+    - [ ] Track active sessions, heartbeats, and idle timeouts { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions.md>
+    - [ ] Expose control-channel handlers for host commands { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/Messages.cs } <docs/decisions.md>
+  - [ ] Icon extraction + shortcut sync { guest/WinRunAgent/Services/IconExtractionService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
+    - [ ] Extract & cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs } <docs/decisions.md>
+    - [ ] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
+    - [ ] Transfer icon blobs + metadata via Spice payloads { guest/WinRunAgent/Services/Messages.cs } <docs/decisions.md>
+  - [ ] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
+    - [ ] Replace mock logger with structured sinks + ETW providers { guest/WinRunAgent/Services/Logging.cs } <docs/development.md>
+    - [ ] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions.md>
+  - [ ] Guest test coverage { guest/WinRunAgent.Tests/WindowTrackerTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
+    - [ ] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
+    - [ ] Create integration tests for Spice channel serialization { new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
-- [ ] Cross-Cutting
-  - [ ] Host/guest protocol contracts { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs }
-    - [ ] Define Spice payload schemas + version negotiation { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs }
-  - [ ] Build + packaging automation { scripts/build-all.sh, scripts/bootstrap.sh, Makefile }
-    - [ ] Add macOS pkg + Windows MSI packaging steps { scripts/build-all.sh, Makefile }
-    - [ ] Ensure bootstrap installs dependencies + assets { scripts/bootstrap.sh }
-  - [ ] Documentation updates { README.md, docs/architecture.md, docs/development.md }
-    - [ ] Reflect production architecture + workflows { docs/architecture.md, docs/development.md }
+- [ ] Cross-Cutting & Operations { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, README.md } <docs/decisions.md, docs/development.md>
+  - [ ] Host/guest protocol contracts { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions.md>
+    - [ ] Define Spice payload schemas + version negotiation { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions.md>
+    - [ ] Document channel capabilities + security expectations { docs/architecture.md, docs/decisions.md }
+  - [ ] Build + packaging automation { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, new:scripts/package-host.sh, new:scripts/package-guest.ps1 } <docs/development.md>
+    - [ ] Add macOS pkg build step hooking pkgbuild/productbuild { scripts/build-all.sh, new:scripts/package-host.sh } <docs/development.md>
+    - [ ] Add Windows MSI/installer packaging { scripts/build-all.sh, new:scripts/package-guest.ps1 } <docs/development.md>
+    - [ ] Ensure bootstrap seeds Application Support + plist assets { scripts/bootstrap.sh, infrastructure/launchd/com.winrun.daemon.plist } <docs/development.md>
+  - [ ] Documentation updates { README.md, docs/architecture.md, docs/development.md, docs/decisions.md }
+    - [ ] Reflect production architecture + workflows { docs/architecture.md, docs/development.md, docs/decisions.md }
     - [ ] Update README with installation + usage once stable { README.md }
-  - [ ] Continuous integration { scripts/build-all.sh, Makefile }
-    - [ ] Add macOS + Windows CI workflows invoking repo scripts { scripts/build-all.sh, Makefile }
+  - [ ] Continuous integration { scripts/build-all.sh, scripts/bootstrap.sh, new:.github/workflows/host.yml, new:.github/workflows/guest.yml } <docs/development.md>
+    - [ ] Add macOS CI pipeline for Swift targets { new:.github/workflows/host.yml } <docs/development.md>
+    - [ ] Add Windows CI pipeline for dotnet agent { new:.github/workflows/guest.yml } <docs/development.md>
+    - [ ] Publish artifacts + aggregated test results { new:.github/workflows/host.yml, new:.github/workflows/guest.yml } <docs/development.md>
