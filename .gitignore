@@ -1,0 +1,38 @@
+# Swift Package Manager
+.build/
+DerivedData/
+Package.resolved
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcworkspace
+*.xcodeproj
+
+# macOS
+.DS_Store
+
+# .NET / C#
+[Bb]in/
+[Oo]bj/
+*.user
+*.rsuser
+*.suo
+*.cache
+*.ide/
+
+# Logs
+logs/
+*.log
+
+# VM artifacts
+vm-images/
+*.img
+
+# Generated launchers and icons
+GeneratedLaunchers/
+*.icns
+
+# Temporary files
+*.swp
+*.tmp
