@@ -1,21 +1,10 @@
-# Architecture Decisions
+# Architecture Decisions Index
 
-## Spice Bridge Integration
-- Bind Swift to libspice-glib through a thin C shim compiled in the `WinRunSpiceBridge` target.
-- Surface per-window frame + metadata streams over async delegates; the host app should remain platform agnostic.
-- Expose guardrails for reconnect/backoff so the macOS UI does not wedge when the guest agent restarts.
+This directory organizes decision records by domain so contributors can link to the relevant guidance from TODO items, specs, and pull requests.
 
-## Virtualization Lifecycle + Metrics
-- `VirtualMachineController` must own Virtualization.framework objects (VM, configuration, storage) and serialize state transitions.
-- Suspend/resume logic should key off active Spice sessions; idle detection feeds LaunchDaemon power policies.
-- Emit structured metrics (uptime, boot latency, session counts) into the shared logging stack for observability.
+- [Spice Bridge Integration](decisions/spice-bridge.md) — binding strategy, streaming model, and resilience expectations for the Swift ↔ libspice-glib bridge.
+- [Virtualization Lifecycle](decisions/virtualization.md) — ownership rules for `VirtualMachineController`, boot/suspend policies, and metrics requirements.
+- [Host ↔ Guest Protocols](decisions/protocols.md) — transport, schema versioning, and security considerations for XPC and Spice payloads.
+- [Operations & Packaging](decisions/operations.md) — build/bootstrap ownership, packaging targets, documentation expectations, and CI policies.
 
-## Host/Guest Protocol Contracts
-- All host<->guest control flows ride on XPC (host) and Spice custom channels (guest).
-- Shared Swift models (WinRunXPC) and guest C# DTOs must stay schema-compatible; introduce version negotiation before breaking fields.
-- Metadata payloads carry window bounds, display DPI, icon hashes, and capability flags to negotiate advanced features (clipboard, menus, drag/drop).
-
-## Packaging, Documentation, and CI
-- Treat `scripts/bootstrap.sh` + `scripts/build-all.sh` as the single source of truth for dependency install and build orchestration.
-- CI should run both host SwiftPM jobs (macOS runners) and guest dotnet workflows (Windows runners) before packaging artifacts.
-- Documentation (`README`, `docs/architecture.md`, `docs/development.md`) must describe the productionized pipeline so new contributors understand the expectations.
+Add new records under `docs/decisions/` when architecture choices impact multiple tasks, then link them from the relevant TODO items.
