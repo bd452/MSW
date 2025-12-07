@@ -1,0 +1,47 @@
+- [ ] Host Platform
+  - [ ] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/SpiceBridge.swift }
+    - [ ] Replace mock timer stream with libspice-glib glue code { host/Sources/WinRunSpiceBridge/SpiceBridge.swift }
+  - [ ] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+    - [ ] Use Virtualization.framework to boot, stop, and snapshot the VM { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+    - [ ] Track uptime/metrics from real VM events { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+  - [ ] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift }
+    - [ ] Stand up XPC listener + routing into VM controller { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift }
+    - [ ] Wire LaunchDaemon plist + install flow { infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh }
+  - [ ] WinRun.app window shell { host/Sources/WinRunApp/AppMain.swift }
+    - [ ] Render streamed frames via Metal + present NSWindow chrome { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift }
+    - [ ] Sync clipboard, menus, and resize events with guest { host/Sources/WinRunApp/AppMain.swift }
+  - [ ] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift }
+    - [ ] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift }
+    - [ ] Generate macOS launchers + embed icons/assets { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ }
+  - [ ] Shared configuration + logging { host/Sources/WinRunShared/WinRunShared.swift }
+    - [ ] Persist config (VM paths, Spice channels, auth) { host/Sources/WinRunShared/WinRunShared.swift }
+    - [ ] Provide structured logging sinks for host targets { host/Sources/WinRunShared/WinRunShared.swift }
+  - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift }
+    - [ ] Add unit tests for VM controller, CLI, and daemon glue { host/Tests/WinRunSharedTests/WinRunSharedTests.swift }
+
+- [ ] Guest WinRunAgent
+  - [ ] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs }
+    - [ ] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs }
+    - [ ] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs }
+  - [ ] Program launch + session management { guest/WinRunAgent/Services/ProgramLauncher.cs, guest/WinRunAgent/Services/WinRunAgentService.cs }
+    - [ ] Launch Windows processes with arguments + working dirs { guest/WinRunAgent/Services/ProgramLauncher.cs }
+    - [ ] Track active sessions and report state to host { guest/WinRunAgent/Services/WinRunAgentService.cs }
+  - [ ] Icon extraction + shortcut sync { guest/WinRunAgent/Services/IconExtractionService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs }
+    - [ ] Extract and cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs }
+    - [ ] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs }
+  - [ ] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs }
+    - [ ] Replace mock logger with structured sinks + tracing { guest/WinRunAgent/Services/Logging.cs }
+  - [ ] Guest test coverage { guest/WinRunAgent.Tests/WindowTrackerTests.cs }
+    - [ ] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs }
+
+- [ ] Cross-Cutting
+  - [ ] Host/guest protocol contracts { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs }
+    - [ ] Define Spice payload schemas + version negotiation { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs }
+  - [ ] Build + packaging automation { scripts/build-all.sh, scripts/bootstrap.sh, Makefile }
+    - [ ] Add macOS pkg + Windows MSI packaging steps { scripts/build-all.sh, Makefile }
+    - [ ] Ensure bootstrap installs dependencies + assets { scripts/bootstrap.sh }
+  - [ ] Documentation updates { README.md, docs/architecture.md, docs/development.md }
+    - [ ] Reflect production architecture + workflows { docs/architecture.md, docs/development.md }
+    - [ ] Update README with installation + usage once stable { README.md }
+  - [ ] Continuous integration { scripts/build-all.sh, Makefile }
+    - [ ] Add macOS + Windows CI workflows invoking repo scripts { scripts/build-all.sh, Makefile }
