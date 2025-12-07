@@ -1,11 +1,13 @@
 #include "CSpiceBridge.h"
 
 #include <pthread.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #if __APPLE__
 #include <glib.h>
@@ -32,6 +34,62 @@ static void winrun_write_error(char *buffer, size_t length, const char *message)
     size_t msg_len = strnlen(message, length - 1);
     memcpy(buffer, message, msg_len);
     buffer[msg_len] = '\0';
+}
+
+static winrun_spice_stream *winrun_spice_stream_create(
+    uint64_t window_id,
+    void *user_data,
+    winrun_spice_frame_cb frame_cb,
+    winrun_spice_metadata_cb metadata_cb,
+    winrun_spice_closed_cb closed_cb,
+    char *error_buffer,
+    size_t error_buffer_length
+) {
+    winrun_spice_stream *stream = calloc(1, sizeof(winrun_spice_stream));
+    if (!stream) {
+        winrun_write_error(error_buffer, error_buffer_length, "Allocation failure");
+        return NULL;
+    }
+
+    stream->window_id = window_id;
+    stream->user_data = user_data;
+    stream->frame_cb = frame_cb;
+    stream->metadata_cb = metadata_cb;
+    stream->closed_cb = closed_cb;
+    atomic_store(&stream->worker_running, true);
+    return stream;
+}
+
+static void winrun_spice_stream_free(winrun_spice_stream *stream) {
+    if (!stream) {
+        return;
+    }
+
+#if __APPLE__
+    if (stream->session) {
+        g_object_unref(stream->session);
+    }
+#endif
+
+    free(stream);
+}
+
+static bool winrun_spice_stream_start_worker(
+    winrun_spice_stream *stream,
+    char *error_buffer,
+    size_t error_buffer_length
+) {
+    if (!stream) {
+        return false;
+    }
+
+    if (pthread_create(&stream->worker_thread, NULL, winrun_mock_worker, stream) != 0) {
+        winrun_write_error(error_buffer, error_buffer_length, "Failed to spawn Spice worker thread");
+        atomic_store(&stream->worker_running, false);
+        return false;
+    }
+
+    return true;
 }
 
 static void *winrun_mock_worker(void *context) {
@@ -77,7 +135,7 @@ static void *winrun_mock_worker(void *context) {
     return NULL;
 }
 
-winrun_spice_stream *winrun_spice_stream_open(
+winrun_spice_stream *winrun_spice_stream_open_tcp(
     const char *host,
     uint16_t port,
     bool use_tls,
@@ -90,20 +148,18 @@ winrun_spice_stream *winrun_spice_stream_open(
     char *error_buffer,
     size_t error_buffer_length
 ) {
-    (void)ticket;
-
-    winrun_spice_stream *stream = calloc(1, sizeof(winrun_spice_stream));
+    winrun_spice_stream *stream = winrun_spice_stream_create(
+        window_id,
+        user_data,
+        frame_cb,
+        metadata_cb,
+        closed_cb,
+        error_buffer,
+        error_buffer_length
+    );
     if (!stream) {
-        winrun_write_error(error_buffer, error_buffer_length, "Allocation failure");
         return NULL;
     }
-
-    stream->window_id = window_id;
-    stream->user_data = user_data;
-    stream->frame_cb = frame_cb;
-    stream->metadata_cb = metadata_cb;
-    stream->closed_cb = closed_cb;
-    atomic_store(&stream->worker_running, true);
 
 #if __APPLE__
     char port_string[16];
@@ -115,6 +171,9 @@ winrun_spice_stream *winrun_spice_stream_open(
                      "host", host,
                      use_tls ? "tls-port" : "port", port_string,
                      NULL);
+        if (ticket) {
+            g_object_set(stream->session, "password", ticket, NULL);
+        }
         spice_session_connect(stream->session);
     }
 #else
@@ -123,10 +182,70 @@ winrun_spice_stream *winrun_spice_stream_open(
     (void)use_tls;
 #endif
 
-    if (pthread_create(&stream->worker_thread, NULL, winrun_mock_worker, stream) != 0) {
-        winrun_write_error(error_buffer, error_buffer_length, "Failed to spawn Spice worker thread");
-        atomic_store(&stream->worker_running, false);
-        free(stream);
+    if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
+        winrun_spice_stream_free(stream);
+        return NULL;
+    }
+
+    return stream;
+}
+
+winrun_spice_stream *winrun_spice_stream_open_shared(
+    int shared_fd,
+    uint64_t window_id,
+    void *user_data,
+    winrun_spice_frame_cb frame_cb,
+    winrun_spice_metadata_cb metadata_cb,
+    winrun_spice_closed_cb closed_cb,
+    const char *ticket,
+    char *error_buffer,
+    size_t error_buffer_length
+) {
+    if (shared_fd < 0) {
+        winrun_write_error(error_buffer, error_buffer_length, "Invalid shared-memory descriptor");
+        return NULL;
+    }
+
+    winrun_spice_stream *stream = winrun_spice_stream_create(
+        window_id,
+        user_data,
+        frame_cb,
+        metadata_cb,
+        closed_cb,
+        error_buffer,
+        error_buffer_length
+    );
+    if (!stream) {
+        return NULL;
+    }
+
+#if __APPLE__
+    int fd_dup = dup(shared_fd);
+    if (fd_dup < 0) {
+        winrun_write_error(error_buffer, error_buffer_length, strerror(errno));
+        winrun_spice_stream_free(stream);
+        return NULL;
+    }
+
+    stream->session = spice_session_new();
+    if (!stream->session) {
+        close(fd_dup);
+        winrun_spice_stream_free(stream);
+        winrun_write_error(error_buffer, error_buffer_length, "Unable to create Spice session");
+        return NULL;
+    }
+
+    if (ticket) {
+        g_object_set(stream->session, "password", ticket, NULL);
+    }
+
+    spice_session_connect_with_fd(stream->session, fd_dup);
+#else
+    (void)ticket;
+#endif
+
+    if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
+        winrun_spice_stream_free(stream);
         return NULL;
     }
 

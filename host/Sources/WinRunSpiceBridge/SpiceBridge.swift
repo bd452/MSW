@@ -39,25 +39,54 @@ public struct SpiceStreamConfiguration: Hashable {
         case tls
     }
 
-    public var host: String
-    public var port: UInt16
-    public var security: Security
-    public var ticket: String?
-
-    public init(
-        host: String = "127.0.0.1",
-        port: UInt16 = 5930,
-        security: Security = .plaintext,
-        ticket: String? = nil
-    ) {
-        self.host = host
-        self.port = port
-        self.security = security
-        self.ticket = ticket
+    public enum Transport: Hashable {
+        case tcp(host: String, port: UInt16, security: Security, ticket: String?)
+        case sharedMemory(descriptor: Int32, ticket: String?)
     }
 
-    public static var `default`: SpiceStreamConfiguration {
+    public var transport: Transport
+
+    public init(transport: Transport = .tcp(host: "127.0.0.1", port: 5930, security: .plaintext, ticket: nil)) {
+        self.transport = transport
+    }
+
+    public static func `default`() -> SpiceStreamConfiguration {
         SpiceStreamConfiguration()
+    }
+
+    public static func environmentDefault(
+        _ environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> SpiceStreamConfiguration {
+        if let fdValue = environment["WINRUN_SPICE_SHM_FD"], let fd = Int32(fdValue) {
+            let ticket = environment["WINRUN_SPICE_TICKET"]
+            return SpiceStreamConfiguration(transport: .sharedMemory(descriptor: fd, ticket: ticket))
+        }
+
+        let host = environment["WINRUN_SPICE_HOST"] ?? "127.0.0.1"
+        let portValue = environment["WINRUN_SPICE_PORT"] ?? "5930"
+        let port = UInt16(portValue) ?? 5930
+        let tlsEnabled = environment["WINRUN_SPICE_TLS"] == "1"
+        let ticket = environment["WINRUN_SPICE_TICKET"]
+        return SpiceStreamConfiguration(
+            transport: .tcp(
+                host: host,
+                port: port,
+                security: tlsEnabled ? .tls : .plaintext,
+                ticket: ticket
+            )
+        )
+    }
+}
+
+extension SpiceStreamConfiguration.Transport {
+    fileprivate var summaryDescription: String {
+        switch self {
+        case let .tcp(host, port, security, _):
+            let scheme = (security == .tls) ? "spice+tls" : "spice"
+            return "\(scheme)://\(host):\(port)"
+        case let .sharedMemory(descriptor, _):
+            return "shm(fd:\(descriptor))"
+        }
     }
 }
 
@@ -75,7 +104,7 @@ public final class SpiceWindowStream {
     private var metrics = SpiceStreamMetrics()
 
     public init(
-        configuration: SpiceStreamConfiguration = .default,
+        configuration: SpiceStreamConfiguration = SpiceStreamConfiguration.environmentDefault(),
         delegateQueue: DispatchQueue = .main,
         logger: Logger = StandardLogger(subsystem: "SpiceWindowStream"),
         transport: SpiceStreamTransport? = nil,
@@ -86,7 +115,7 @@ public final class SpiceWindowStream {
         self.logger = logger
         self.reconnectPolicy = reconnectPolicy
         #if os(macOS)
-        self.transport = transport ?? LibSpiceStreamTransport(configuration: configuration, logger: logger)
+        self.transport = transport ?? LibSpiceStreamTransport(logger: logger)
         #else
         self.transport = transport ?? MockSpiceStreamTransport(logger: logger)
         #endif
@@ -99,7 +128,7 @@ public final class SpiceWindowStream {
                 return
             }
 
-            self.logger.info("Connecting to Spice stream for window \(windowID)")
+            self.logger.info("Connecting to Spice stream for window \(windowID) via \(self.transportDescription())")
             self.state.windowID = windowID
             self.state.isUserInitiatedClose = false
             self.state.lifecycle = .connecting
@@ -152,9 +181,20 @@ public final class SpiceWindowStream {
             reconnectWorkItem = nil
             metrics.reconnectAttempts = 0
             logger.info("Spice stream connected for window \(windowID)")
+        } catch let error as SpiceStreamError {
+            switch error {
+            case .sharedMemoryUnavailable(let description):
+                metrics.lastErrorDescription = description
+                logger.error("Shared-memory Spice stream unavailable: \(description)")
+                finishDisconnect()
+            case .connectionFailed(let description):
+                metrics.lastErrorDescription = description
+                logger.error("Failed to connect Spice stream: \(description)")
+                scheduleReconnect(reason: SpiceStreamCloseReason(code: .transportError, message: description))
+            }
         } catch {
             metrics.lastErrorDescription = error.localizedDescription
-            logger.error("Failed to connect Spice stream: \(error.localizedDescription)")
+            logger.error("Unexpected Spice bridge error: \(error.localizedDescription)")
             scheduleReconnect(reason: SpiceStreamCloseReason(code: .transportError, message: error.localizedDescription))
         }
     }
@@ -193,6 +233,8 @@ public final class SpiceWindowStream {
             case .transportError where !wasUserInitiated,
                  .authenticationFailed where !wasUserInitiated:
                 self.scheduleReconnect(reason: reason)
+            case .sharedMemoryUnavailable:
+                self.finishDisconnect()
             default:
                 self.finishDisconnect()
             }
@@ -232,6 +274,10 @@ public final class SpiceWindowStream {
             guard let self else { return }
             self.delegate?.windowStreamDidClose(self)
         }
+    }
+
+    private func transportDescription() -> String {
+        configuration.transport.summaryDescription
     }
 }
 
@@ -273,6 +319,7 @@ private struct SpiceStreamCloseReason: CustomStringConvertible {
         case remoteClosed
         case transportError
         case authenticationFailed
+        case sharedMemoryUnavailable
     }
 
     let code: Code
@@ -314,14 +361,13 @@ private protocol SpiceStreamTransport {
 #if os(macOS)
 private enum SpiceStreamError: Error {
     case connectionFailed(String)
+    case sharedMemoryUnavailable(String)
 }
 
 private final class LibSpiceStreamTransport: SpiceStreamTransport {
-    private let configuration: SpiceStreamConfiguration
     private let logger: Logger
 
-    init(configuration: SpiceStreamConfiguration, logger: Logger) {
-        self.configuration = configuration
+    init(logger: Logger) {
         self.logger = logger
     }
 
@@ -335,13 +381,52 @@ private final class LibSpiceStreamTransport: SpiceStreamTransport {
         var errorBuffer = [CChar](repeating: 0, count: 512)
 
         let handle: UnsafeMutablePointer<winrun_spice_stream>?
-        if let ticket = configuration.ticket {
-            handle = configuration.host.withCString { hostPointer in
-                ticket.withCString { ticketPointer in
-                    winrun_spice_stream_open(
+
+        switch configuration.transport {
+        case let .tcp(host, port, security, ticket):
+            handle = host.withCString { hostPointer in
+                if let ticket {
+                    return ticket.withCString { ticketPointer in
+                        winrun_spice_stream_open_tcp(
+                            hostPointer,
+                            port,
+                            security == .tls,
+                            windowID,
+                            unmanaged.toOpaque(),
+                            spiceFrameThunk,
+                            spiceMetadataThunk,
+                            spiceClosedThunk,
+                            ticketPointer,
+                            &errorBuffer,
+                            errorBuffer.count
+                        )
+                    }
+                } else {
+                    return winrun_spice_stream_open_tcp(
                         hostPointer,
-                        configuration.port,
-                        configuration.security == .tls,
+                        port,
+                        security == .tls,
+                        windowID,
+                        unmanaged.toOpaque(),
+                        spiceFrameThunk,
+                        spiceMetadataThunk,
+                        spiceClosedThunk,
+                        nil,
+                        &errorBuffer,
+                        errorBuffer.count
+                    )
+                }
+            }
+        case let .sharedMemory(descriptor, ticket):
+            guard descriptor >= 0 else {
+                unmanaged.release()
+                throw SpiceStreamError.sharedMemoryUnavailable("Missing shared-memory descriptor")
+            }
+
+            if let ticket {
+                handle = ticket.withCString { ticketPointer in
+                    winrun_spice_stream_open_shared(
+                        descriptor,
                         windowID,
                         unmanaged.toOpaque(),
                         spiceFrameThunk,
@@ -352,13 +437,9 @@ private final class LibSpiceStreamTransport: SpiceStreamTransport {
                         errorBuffer.count
                     )
                 }
-            }
-        } else {
-            handle = configuration.host.withCString { hostPointer in
-                winrun_spice_stream_open(
-                    hostPointer,
-                    configuration.port,
-                    configuration.security == .tls,
+            } else {
+                handle = winrun_spice_stream_open_shared(
+                    descriptor,
                     windowID,
                     unmanaged.toOpaque(),
                     spiceFrameThunk,
@@ -482,7 +563,7 @@ private final class MockSpiceStreamTransport: SpiceStreamTransport {
         windowID: UInt64,
         callbacks: SpiceStreamCallbacks
     ) throws -> SpiceStreamSubscription {
-        logger.info("Mock Spice stream open for window \(windowID)")
+        logger.info("Mock Spice stream open for window \(windowID) via \(configuration.transport.summaryDescription)")
         let box = TimerBox()
         let timer = DispatchSource.makeTimerSource(queue: .global(qos: .userInitiated))
         timer.schedule(deadline: .now(), repeating: 1.0)
