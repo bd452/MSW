@@ -64,20 +64,37 @@ After completing a task:
 
 ## Branch Workflow
 
-When **both** of the following conditions are true:
-1. This is a **new chat session** (no prior conversation context)
-2. Working on a **new todo item** from `TODO.md`
+### When to Create a New Branch
 
-**Before making any code changes**, create a new feature branch:
+Create a new feature branch **only** at the **start of a new chat session** when beginning TODO.md work:
 
 ```bash
+git checkout main
 git checkout -b <branch-name>
 ```
+
+**Key rule:** One chat session = one branch. When the user asks to continue to the next TODO item within the same session, **stay on the current branch** and keep committing there.
+
+### When to Stay on Current Branch
+
+Stay on the current branch when:
+- Continuing to the next TODO item in the **same chat session**
+- The user says "next", "continue", or similar without explicitly requesting a new branch
+- Fixing issues or making follow-up changes to recent work
+- The current branch isn't `main` (you're already on a feature branch)
+
+### When NOT to Create a Branch
+
+Skip branch creation if:
+- **Same chat session** — Always stay on the current branch within a session
+- Making quick fixes unrelated to TODO.md tasks
+- User explicitly requests working on an existing branch
+- The current branch already matches the work being done
 
 ### Branch Naming Convention
 
 Use kebab-case names that clearly describe the work being done:
-- Derive the name from the todo item's description
+- Derive the name from the first todo item's description in that session
 - Keep it concise but descriptive (3-5 words typical)
 - Prefix with category if helpful (e.g., `feat-`, `fix-`, `refactor-`)
 
@@ -87,13 +104,21 @@ Use kebab-case names that clearly describe the work being done:
 - `fix-xpc-timeout-handling`
 - `refactor-window-tracker-events`
 
-### When NOT to Create a Branch
+### Session Workflow Example
 
-Skip branch creation if:
-- Continuing work from a previous chat session (branch likely exists)
-- Making quick fixes unrelated to TODO.md tasks
-- User explicitly requests working on an existing branch
-- The current branch already matches the work being done
+```
+New chat session starts
+├── User: "do the next todo item"
+├── AI: git checkout -b feat-config-store  ← Creates branch (new session)
+├── AI: implements config store, commits
+├── User: "next"
+├── AI: stays on feat-config-store         ← Same session, same branch
+├── AI: implements logging, commits
+├── User: "next"  
+├── AI: stays on feat-config-store         ← Same session, same branch
+├── AI: implements errors, commits
+└── Session ends with multiple commits on one branch
+```
 
 ## General Coding Standards
 
