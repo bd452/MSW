@@ -20,10 +20,10 @@
     - [X] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
     - [X] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ } <docs/development.md>
     - [X] Surface guest session + shortcut management commands { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
-  - [ ] Shared configuration + logging { host/Sources/WinRunShared/, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
+  - [X] Shared configuration + logging { host/Sources/WinRunShared/, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
     - [X] Implement persisted config store + schema validation { host/Sources/WinRunShared/VMConfiguration.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
     - [X] Provide structured logging sinks (os_log, file, telemetry) { host/Sources/WinRunShared/Logging.swift } <docs/architecture.md>
-    - [ ] Expose reusable error types + localization { host/Sources/WinRunShared/Errors.swift } <docs/architecture.md>
+    - [X] Expose reusable error types + localization { host/Sources/WinRunShared/Errors.swift } <docs/architecture.md>
   - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunSpiceBridgeTests/, new:host/Tests/WinRunVirtualMachineTests/ } <docs/development.md>
     - [ ] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [ ] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
