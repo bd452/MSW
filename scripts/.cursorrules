@@ -1,0 +1,122 @@
+# Scripts Rules
+
+## Script Inventory
+
+| Script | Purpose |
+|--------|---------|
+| `bootstrap.sh` | Install dependencies, prep Application Support |
+| `build-all.sh` | Orchestrate host + guest builds |
+| `package-host.sh` | (future) macOS pkg build |
+| `package-guest.ps1` | (future) Windows MSI build |
+
+## Script Ownership (from operations.md)
+
+- `bootstrap.sh` and `build-all.sh` are the **single source of truth** for dependency installation and build orchestration
+- New packaging steps must be implemented as reusable scripts, then invoked from `build-all.sh`
+
+## Shell Script Conventions
+
+### Shebang and Options
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+```
+
+- `set -e`: Exit on error
+- `set -u`: Error on undefined variables
+- `set -o pipefail`: Catch errors in pipelines
+
+### Error Handling
+```bash
+error() {
+  echo "Error: $1" >&2
+  exit 1
+}
+
+command -v swift >/dev/null || error "Swift not found"
+```
+
+### Idempotency
+- Scripts should be safe to run multiple times
+- Check for existing state before creating
+- Use `mkdir -p` instead of `mkdir`
+
+### Logging
+```bash
+log() { echo "[$(date +%H:%M:%S)] $*"; }
+log "Building host targets..."
+```
+
+### Platform Detection
+```bash
+case "$(uname -s)" in
+  Darwin) # macOS
+    ;;
+  Linux)
+    ;;
+  MINGW*|MSYS*|CYGWIN*) # Windows
+    ;;
+esac
+```
+
+## bootstrap.sh Requirements
+
+1. Install Homebrew packages (libspice-glib, pkg-config, etc.)
+2. Create Application Support directory structure
+3. Verify prerequisites (Xcode, Swift version)
+4. Be idempotent (safe to re-run)
+
+```bash
+# Expected structure created:
+~/Library/Application Support/WinRun/
+  config.json
+  # (VM images created later)
+```
+
+## build-all.sh Requirements
+
+1. Build host Swift targets
+2. Build guest .NET targets (if dotnet available)
+3. Skip guest gracefully when dotnet missing
+4. Support release/debug modes
+5. Run tests optionally
+
+```bash
+# Usage patterns:
+./scripts/build-all.sh           # Debug build
+./scripts/build-all.sh release   # Release build
+./scripts/build-all.sh test      # Build + test
+```
+
+## Packaging Scripts
+
+### package-host.sh (macOS)
+- Use `pkgbuild` for component packages
+- Use `productbuild` for distribution package
+- Sign with Developer ID
+- Include:
+  - `winrund` → `/usr/local/bin/`
+  - `WinRun.app` → `/Applications/`
+  - `winrun` → `/usr/local/bin/`
+  - LaunchDaemon plist → `/Library/LaunchDaemons/`
+
+### package-guest.ps1 (Windows)
+- PowerShell script for Windows
+- Use WiX or similar for MSI
+- Include:
+  - `WinRunAgent.exe` → `C:\Program Files\WinRun\`
+  - Service registration
+  - Spice guest tools prerequisite check
+
+## Testing Scripts
+
+- Test critical paths manually
+- Check exit codes
+- Verify idempotency
+- Test on clean systems when possible
+
+## Key Decision Documents
+
+- `docs/decisions/operations.md` — Script ownership, packaging targets, CI policies
+- `docs/development.md` — Usage examples, deployment steps
+

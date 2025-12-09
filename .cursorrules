@@ -1,0 +1,105 @@
+# WinRun Project Rules
+
+## Project Context
+
+WinRun is a seamless Windows-on-macOS solution using Virtualization.framework + Spice protocol to run Windows GUI apps as native-feeling macOS windows. Before making any decisions or implementations, reference `SUMMARY.md` for the authoritative design, requirements, and architectural approach.
+
+### Key Components
+- **Host (macOS)**: Swift daemon (`winrund`), AppKit app (`WinRun.app`), CLI (`winrun`), launcher templates
+- **Guest (Windows)**: C# service (`WinRunAgent`) running inside the VM
+- **Communication**: XPC for host IPC, Spice protocol for host↔guest streaming and control
+
+## TODO.md Completion Protocol
+
+When asked to complete a task in `TODO.md`, follow this depth-first recursive algorithm:
+
+### Algorithm
+
+1. **Start** at the requested task (or first incomplete task if none specified)
+2. **Check for children**: If the task has incomplete child tasks, descend to the first incomplete child
+3. **Complete leaf**: When you reach a task with no incomplete children, implement it
+4. **Mark complete**: After implementation, change `[ ]` to `[X]`
+5. **Return up**: Go back to the parent and evaluate:
+   - If parent has more incomplete children → go to next incomplete child
+   - If all children complete → check if parent is now complete, mark it `[X]`
+6. **Continue to sibling**: If current task is complete and has no incomplete children, move to next sibling
+7. **Recurse up**: If no siblings remain, return to parent level
+
+### Task Notation
+
+Each TODO item uses this notation:
+- `{ file1.swift, file2.swift }` — Files to edit during implementation
+- `{ new:path/to/file.swift }` — New files to create
+- `< docs/decisions/foo.md >` — Reference documentation for guidance
+
+### Implementation Rules
+
+1. **Read references first**: Before implementing, read all `<>` referenced docs
+2. **Check SUMMARY.md**: When confused about platform, approach, or requirements
+3. **One task at a time**: Complete tasks sequentially unless concurrent implementation is clearly more efficient
+4. **Update TODO.md**: Mark `[X]` immediately upon completing each task
+5. **Maintain coherence**: If you must change architecture:
+   - Update relevant docs first
+   - Re-evaluate all completed tasks referencing those docs
+   - Update affected tasks and their references recursively
+   - Avoid architecture changes when possible
+
+### Pre-Implementation Checklist
+
+Before starting any task:
+1. Read `SUMMARY.md` for context
+2. Read all `<>` referenced documentation
+3. Examine all `{}` files (both existing and `new:` paths)
+4. Understand the parent task's goal
+5. Check sibling tasks for related context
+
+### Post-Implementation Checklist
+
+After completing a task:
+1. Verify implementation matches documentation
+2. Mark the task `[X]` in `TODO.md`
+3. Check if parent task is now complete
+4. If all children complete, mark parent `[X]`
+5. Move to next incomplete task per the algorithm
+
+## General Coding Standards
+
+### Error Handling
+- Use idiomatic error handling for each platform (Result/throws in Swift, exceptions in C#)
+- All Spice/XPC operations need timeout handling
+- Critical commands must be idempotent (retries must not duplicate work)
+
+### Documentation
+- Keep `docs/` in sync with implementation
+- Link decision records from TODO items
+- Update `architecture.md` and `development.md` for user-facing changes
+
+### Testing
+- Unit tests for all non-trivial logic
+- Integration tests for cross-component flows
+- Host tests via XCTest, guest tests via xUnit
+
+## File Organization
+
+```
+host/                     Swift Package (macOS)
+  Sources/
+    WinRunShared/         Config, logging, error types
+    WinRunXPC/            IPC contracts
+    WinRunVirtualMachine/ VM lifecycle
+    WinRunSpiceBridge/    Spice C shim wrapper
+    WinRunDaemon/         winrund entry point
+    WinRunApp/            AppKit window shell
+    WinRunCLI/            CLI implementation
+  Tests/
+
+guest/                    .NET 8 (Windows)
+  WinRunAgent/            C# service
+  WinRunAgent.Tests/      xUnit tests
+
+apps/launchers/           macOS .app templates
+infrastructure/launchd/   LaunchDaemon plist
+scripts/                  Bootstrap, build, packaging
+docs/                     Architecture, decisions
+```
+

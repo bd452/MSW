@@ -1,0 +1,103 @@
+# Apps Rules
+
+## Launcher Templates
+
+The `launchers/templates/` directory contains resources used by `winrun create-launcher` to generate macOS `.app` wrappers for Windows executables.
+
+### Generated Launcher Structure
+
+```
+MyApp.app/
+  Contents/
+    Info.plist          App metadata (name, icon, executable)
+    MacOS/
+      launcher          Shell script or binary that invokes WinRun.app
+    Resources/
+      icon.icns         Icon extracted from Windows .exe
+```
+
+### Launcher Script Template
+
+```bash
+#!/bin/bash
+# MyApp.app/Contents/MacOS/launcher
+open -n /Applications/WinRun.app --args "C:\Path\To\app.exe"
+```
+
+### Info.plist Template
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "...">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>{{APP_NAME}}</string>
+
+    <key>CFBundleExecutable</key>
+    <string>launcher</string>
+
+    <key>CFBundleIconFile</key>
+    <string>icon</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.winrun.launcher.{{BUNDLE_ID}}</string>
+
+    <key>CFBundleVersion</key>
+    <string>1.0</string>
+
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+</dict>
+</plist>
+```
+
+### Placeholder Variables
+
+| Variable | Description |
+|----------|-------------|
+| `{{APP_NAME}}` | Display name from .exe metadata or shortcut |
+| `{{BUNDLE_ID}}` | Sanitized identifier (lowercase, no spaces) |
+| `{{EXE_PATH}}` | Windows path to executable |
+| `{{ICON_FILE}}` | Path to .icns icon file |
+
+## Icon Handling
+
+### Extraction Flow
+1. Guest agent extracts icon from Windows .exe (PE format)
+2. Icon data sent to host via Spice payload
+3. Host converts to .icns format
+4. Icon placed in launcher's Resources/
+
+### Icon Requirements
+- Support multiple resolutions (16x16 to 512x512)
+- Handle missing icons gracefully (use default)
+- Cache extracted icons in `~/Library/Caches/WinRun/icons/`
+
+## Installation Locations
+
+- User-installed: `~/Applications/WinRun Apps/`
+- System-wide: `/Applications/WinRun Apps/` (requires admin)
+- Shows in Launchpad, Spotlight, Finder
+
+## CLI Integration
+
+The `winrun create-launcher` command:
+1. Reads template files from this directory
+2. Substitutes placeholders with actual values
+3. Requests icon from guest agent (if not cached)
+4. Creates .app bundle at specified location
+5. Optionally registers with Launch Services
+
+## Guidelines
+
+### Template Changes
+- Keep templates minimal and generic
+- Document all placeholder variables
+- Test launcher creation after changes
+
+### Icon Conversion
+- Use `iconutil` for .icns creation
+- Support PNG source format from guest
+- Include all standard sizes in iconset
+

@@ -1,0 +1,126 @@
+# Host (macOS Swift) Rules
+
+## Package Structure
+
+This is a Swift Package with multiple targets. All host executables share common modules.
+
+### Targets
+
+| Target | Type | Purpose |
+|--------|------|---------|
+| `WinRunShared` | Library | Config store, logging, error types, shared models |
+| `WinRunXPC` | Library | XPC protocol definitions, async client |
+| `WinRunVirtualMachine` | Library | Virtualization.framework wrapper, VM lifecycle |
+| `WinRunSpiceBridge` | Library | Swift facade over libspice-glib via C shim |
+| `CSpiceBridge` | C Target | Thin C wrapper for libspice-glib |
+| `WinRunDaemon` | Executable | `winrund` - background daemon |
+| `WinRunApp` | Executable | `WinRun.app` - per-window GUI |
+| `WinRunCLI` | Executable | `winrun` - command-line tool |
+
+### Dependencies Flow
+
+```
+WinRunDaemon ─┬─→ WinRunVirtualMachine ─→ WinRunShared
+              ├─→ WinRunSpiceBridge ────→ CSpiceBridge
+              ├─→ WinRunXPC ────────────→ WinRunShared
+              └─→ WinRunShared
+
+WinRunApp ────┬─→ WinRunSpiceBridge
+              ├─→ WinRunXPC
+              └─→ WinRunShared
+
+WinRunCLI ────┬─→ WinRunXPC
+              └─→ WinRunShared
+```
+
+## Swift Conventions
+
+### Concurrency
+- Use Swift Concurrency (async/await, actors) for all async operations
+- `VirtualMachineController` should be an actor to serialize state transitions
+- XPC interfaces expose async methods
+
+### Error Handling
+- Define domain-specific error enums in `WinRunShared`
+- Propagate errors via throws; use Result only at API boundaries
+- Include context in errors for debugging
+
+### Logging
+- Use `os_log` for production logging
+- Structured logging with appropriate log levels
+- Include correlation IDs for request tracing
+
+## Module-Specific Guidelines
+
+### WinRunShared
+- Contains: `Configuration`, `Logger`, `WinRunError`, shared models
+- No dependencies on other WinRun modules
+- Platform-agnostic where possible for testing
+
+### WinRunXPC
+- Define XPC protocols with `@objc` for compatibility
+- Use Codable models for request/response payloads
+- Include version fields for protocol evolution
+
+### WinRunVirtualMachine
+- Wrap all Virtualization.framework calls
+- Validate configuration before applying
+- Emit metrics for boot duration, uptime, session counts
+
+### WinRunSpiceBridge
+- Swift facade over `CSpiceBridge` C target
+- Expose async streams for frames and metadata
+- Handle reconnection with exponential backoff
+- Support both shared-memory (production) and TCP (fallback) transports
+
+### CSpiceBridge
+- Minimal C code wrapping libspice-glib
+- Focus on session management, buffer lifecycle, callback forwarding
+- Use pkg-config for libspice-glib linkage
+
+### WinRunDaemon
+- Entry point for `winrund`
+- Set up XPC listener, VM controller, Spice server
+- Handle signals for graceful shutdown
+- Integrate with launchd lifecycle
+
+### WinRunApp
+- One instance per Windows window
+- Metal-backed rendering of Spice frames
+- Forward input events to Spice
+- Sync NSWindow properties with guest window metadata
+
+### WinRunCLI
+- Argument parsing via ArgumentParser
+- Connect to daemon via XPC
+- Commands: vm (start/stop/status), launch, create-launcher, config
+
+## Testing
+
+- Test files in `Tests/` mirror source structure
+- Use XCTest framework
+- Mock external dependencies (Virtualization, Spice) for unit tests
+- Integration tests can use process spawning
+
+## Build Commands
+
+```bash
+# Debug build
+swift build
+
+# Release build
+swift build -c release
+
+# Run tests
+swift test
+
+# Build specific target
+swift build --target WinRunDaemon
+```
+
+## Key Decision Documents
+
+- `docs/decisions/spice-bridge.md` — Binding strategy, transport selection
+- `docs/decisions/virtualization.md` — VM lifecycle, boot/suspend policies
+- `docs/decisions/protocols.md` — XPC contracts, Spice payload schemas
+
