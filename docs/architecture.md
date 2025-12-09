@@ -52,8 +52,7 @@ docs/                    Additional documentation
 
 ## Next Steps
 
-- Flesh out the Spice bridge with the actual libspice-glib C shim.
-- Replace mock window rendering in `WinRunApp` with Metal-backed view that consumes streamed frames.
-- Implement real XPC listener in `WinRunDaemon` and integrate LaunchDaemon plist.
-- Port the Windows agent to use Win32 hooks, Desktop Duplication, and Spice protocol extensions.
-- Automate packaging (pkg + installer) via CI workflows.
+- Complete the Windows guest agent (Win32 hooks, Desktop Duplication, Spice protocol extensions).
+- Expand host test coverage for VM controller and Spice bridge.
+- Add macOS pkg and Windows MSI packaging scripts.
+- Finalize host↔guest protocol schemas and version negotiation.
