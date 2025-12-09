@@ -21,8 +21,14 @@ typedef struct winrun_spice_stream {
     winrun_spice_frame_cb frame_cb;
     winrun_spice_metadata_cb metadata_cb;
     winrun_spice_closed_cb closed_cb;
+    winrun_clipboard_cb clipboard_cb;
+    void *clipboard_user_data;
+    pthread_mutex_t send_mutex;
 #if __APPLE__
     SpiceSession *session;
+    // TODO: Add inputs_channel and main_channel when full libspice-gtk is integrated
+    // SpiceInputsChannel *inputs_channel;
+    // SpiceMainChannel *main_channel;
 #endif
 } winrun_spice_stream;
 
@@ -57,6 +63,9 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->frame_cb = frame_cb;
     stream->metadata_cb = metadata_cb;
     stream->closed_cb = closed_cb;
+    stream->clipboard_cb = NULL;
+    stream->clipboard_user_data = NULL;
+    pthread_mutex_init(&stream->send_mutex, NULL);
     atomic_store(&stream->worker_running, true);
     return stream;
 }
@@ -65,6 +74,8 @@ static void winrun_spice_stream_free(winrun_spice_stream *stream) {
     if (!stream) {
         return;
     }
+
+    pthread_mutex_destroy(&stream->send_mutex);
 
 #if __APPLE__
     if (stream->session) {
@@ -259,11 +270,120 @@ void winrun_spice_stream_close(winrun_spice_stream_handle streamHandle) {
     atomic_store(&stream->worker_running, false);
     pthread_join(stream->worker_thread, NULL);
 
-#if __APPLE__
-    if (stream->session) {
-        g_object_unref(stream->session);
-    }
-#endif
+    winrun_spice_stream_free(stream);
+}
 
-    free(stream);
+// MARK: - Input Events
+
+bool winrun_spice_send_mouse_event(
+    winrun_spice_stream_handle streamHandle,
+    const winrun_mouse_event *event
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream || !event) {
+        return false;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+
+    // TODO: Implement actual Spice input send when libspice-gtk is fully integrated
+    // Will use spice_inputs_channel_motion, spice_inputs_channel_button_press, etc.
+    (void)event;
+
+    pthread_mutex_unlock(&stream->send_mutex);
+    return true;
+}
+
+bool winrun_spice_send_keyboard_event(
+    winrun_spice_stream_handle streamHandle,
+    const winrun_keyboard_event *event
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream || !event) {
+        return false;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+
+    // TODO: Implement actual Spice keyboard send when libspice-gtk is fully integrated
+    // Will use spice_inputs_channel_key_press and spice_inputs_channel_key_release
+    (void)event;
+
+    pthread_mutex_unlock(&stream->send_mutex);
+    return true;
+}
+
+// MARK: - Clipboard
+
+void winrun_spice_set_clipboard_callback(
+    winrun_spice_stream_handle streamHandle,
+    winrun_clipboard_cb clipboard_cb,
+    void *user_data
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream) {
+        return;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+    stream->clipboard_cb = clipboard_cb;
+    stream->clipboard_user_data = user_data;
+    pthread_mutex_unlock(&stream->send_mutex);
+}
+
+bool winrun_spice_send_clipboard(
+    winrun_spice_stream_handle streamHandle,
+    const winrun_clipboard_data *clipboard
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream || !clipboard || !clipboard->data) {
+        return false;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+
+    // TODO: Implement actual Spice clipboard send when libspice-gtk is fully integrated
+    // For now, clipboard data is queued for the mock worker to handle
+    (void)clipboard;
+
+    pthread_mutex_unlock(&stream->send_mutex);
+    return true;
+}
+
+void winrun_spice_request_clipboard(
+    winrun_spice_stream_handle streamHandle,
+    winrun_clipboard_format format
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream) {
+        return;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+
+    // TODO: Implement actual Spice clipboard request when libspice-gtk is fully integrated
+    (void)format;
+
+    pthread_mutex_unlock(&stream->send_mutex);
+}
+
+// MARK: - Drag and Drop
+
+bool winrun_spice_send_drag_event(
+    winrun_spice_stream_handle streamHandle,
+    const winrun_drag_event *event
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream || !event) {
+        return false;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+
+    // TODO: Implement actual Spice file transfer when libspice-gtk is fully integrated
+    // For drop events, we will use spice_main_channel_file_copy_async
+    (void)event;
+
+    pthread_mutex_unlock(&stream->send_mutex);
+    return true;
 }

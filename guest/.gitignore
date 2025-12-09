@@ -1,0 +1,28 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.rsuser
+*.suo
+*.cache
+*.ide/
+
+# Test results
+TestResults/
+*.trx
+
+# NuGet
+packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Windows
+Thumbs.db
+Desktop.ini
+

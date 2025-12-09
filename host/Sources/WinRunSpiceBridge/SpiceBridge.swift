@@ -10,6 +10,12 @@ public protocol SpiceWindowStreamDelegate: AnyObject {
     func windowStream(_ stream: SpiceWindowStream, didUpdateFrame frame: Data)
     func windowStream(_ stream: SpiceWindowStream, didUpdateMetadata metadata: WindowMetadata)
     func windowStreamDidClose(_ stream: SpiceWindowStream)
+    func windowStream(_ stream: SpiceWindowStream, didReceiveClipboard clipboard: ClipboardData)
+}
+
+public extension SpiceWindowStreamDelegate {
+    // Default empty implementation for optional clipboard delegate
+    func windowStream(_ stream: SpiceWindowStream, didReceiveClipboard clipboard: ClipboardData) {}
 }
 
 public struct WindowMetadata: Codable, Hashable {
@@ -173,6 +179,67 @@ public final class SpiceWindowStream {
         stateQueue.sync { metrics }
     }
 
+    // MARK: - Input Forwarding
+
+    /// Send a mouse event to the Windows guest
+    public func sendMouseEvent(_ event: MouseInputEvent) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping mouse event - stream not connected")
+                return
+            }
+            self.transport.sendMouseEvent(event)
+        }
+    }
+
+    /// Send a keyboard event to the Windows guest
+    public func sendKeyboardEvent(_ event: KeyboardInputEvent) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping keyboard event - stream not connected")
+                return
+            }
+            self.transport.sendKeyboardEvent(event)
+        }
+    }
+
+    // MARK: - Clipboard
+
+    /// Send clipboard data to the Windows guest
+    public func sendClipboard(_ clipboard: ClipboardData) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping clipboard data - stream not connected")
+                return
+            }
+            self.transport.sendClipboard(clipboard)
+        }
+    }
+
+    /// Request clipboard content from the Windows guest
+    public func requestClipboard(format: ClipboardFormat = .plainText) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Cannot request clipboard - stream not connected")
+                return
+            }
+            self.transport.requestClipboard(format: format)
+        }
+    }
+
+    // MARK: - Drag and Drop
+
+    /// Send a drag and drop event to the Windows guest
+    public func sendDragDropEvent(_ event: DragDropEvent) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping drag event - stream not connected")
+                return
+            }
+            self.transport.sendDragDropEvent(event)
+        }
+    }
+
     private func openStream(for windowID: UInt64) {
         let callbacks = SpiceStreamCallbacks(
             onFrame: { [weak self] data in
@@ -183,6 +250,9 @@ public final class SpiceWindowStream {
             },
             onClosed: { [weak self] reason in
                 self?.handleClose(reason: reason)
+            },
+            onClipboard: { [weak self] clipboard in
+                self?.handleClipboard(clipboard)
             }
         )
 
@@ -233,6 +303,16 @@ public final class SpiceWindowStream {
             self.delegateQueue.async { [weak self] in
                 guard let self else { return }
                 delegate.windowStream(self, didUpdateMetadata: metadata)
+            }
+        }
+    }
+
+    private func handleClipboard(_ clipboard: ClipboardData) {
+        stateQueue.async {
+            guard let delegate = self.delegate else { return }
+            self.delegateQueue.async { [weak self] in
+                guard let self else { return }
+                delegate.windowStream(self, didReceiveClipboard: clipboard)
             }
         }
     }
@@ -365,6 +445,7 @@ struct SpiceStreamCallbacks {
     let onFrame: (Data) -> Void
     let onMetadata: (WindowMetadata) -> Void
     let onClosed: (SpiceStreamCloseReason) -> Void
+    let onClipboard: (ClipboardData) -> Void
 }
 
 struct SpiceStreamSubscription {
@@ -387,6 +468,17 @@ protocol SpiceStreamTransport {
     ) throws -> SpiceStreamSubscription
 
     func closeStream(_ subscription: SpiceStreamSubscription)
+
+    // Input forwarding
+    func sendMouseEvent(_ event: MouseInputEvent)
+    func sendKeyboardEvent(_ event: KeyboardInputEvent)
+
+    // Clipboard
+    func sendClipboard(_ clipboard: ClipboardData)
+    func requestClipboard(format: ClipboardFormat)
+
+    // Drag and drop
+    func sendDragDropEvent(_ event: DragDropEvent)
 }
 
 #if os(macOS)
@@ -397,6 +489,7 @@ private enum SpiceStreamError: Error {
 
 private final class LibSpiceStreamTransport: SpiceStreamTransport {
     private let logger: Logger
+    private var currentHandle: SpiceStreamHandle?
 
     init(logger: Logger) {
         self.logger = logger
@@ -489,6 +582,8 @@ private final class LibSpiceStreamTransport: SpiceStreamTransport {
             throw SpiceStreamError.connectionFailed(message.isEmpty ? "Unknown libspice error" : message)
         }
 
+        self.currentHandle = handle
+
         return SpiceStreamSubscription {
             if let handle {
                 winrun_spice_stream_close(handle)
@@ -498,7 +593,136 @@ private final class LibSpiceStreamTransport: SpiceStreamTransport {
     }
 
     func closeStream(_ subscription: SpiceStreamSubscription) {
+        currentHandle = nil
         subscription.cleanup()
+    }
+
+    // MARK: - Input Forwarding
+
+    func sendMouseEvent(_ event: MouseInputEvent) {
+        guard let handle = currentHandle else { return }
+
+        var cEvent = winrun_mouse_event(
+            window_id: event.windowID,
+            event_type: winrun_mouse_event_type(rawValue: UInt32(event.eventType.rawValue)),
+            button: winrun_mouse_button(rawValue: UInt32(event.button?.rawValue ?? 0)),
+            x: event.x,
+            y: event.y,
+            scroll_delta_x: event.scrollDeltaX,
+            scroll_delta_y: event.scrollDeltaY,
+            modifiers: event.modifiers.rawValue
+        )
+
+        _ = winrun_spice_send_mouse_event(handle, &cEvent)
+    }
+
+    func sendKeyboardEvent(_ event: KeyboardInputEvent) {
+        guard let handle = currentHandle else { return }
+
+        let character = event.character
+
+        if let character {
+            character.withCString { charPtr in
+                var cEvent = winrun_keyboard_event(
+                    window_id: event.windowID,
+                    event_type: winrun_key_event_type(rawValue: UInt32(event.eventType.rawValue)),
+                    key_code: event.keyCode,
+                    scan_code: event.scanCode,
+                    is_extended_key: event.isExtendedKey,
+                    modifiers: event.modifiers.rawValue,
+                    character: charPtr
+                )
+                _ = winrun_spice_send_keyboard_event(handle, &cEvent)
+            }
+        } else {
+            var cEvent = winrun_keyboard_event(
+                window_id: event.windowID,
+                event_type: winrun_key_event_type(rawValue: UInt32(event.eventType.rawValue)),
+                key_code: event.keyCode,
+                scan_code: event.scanCode,
+                is_extended_key: event.isExtendedKey,
+                modifiers: event.modifiers.rawValue,
+                character: nil
+            )
+            _ = winrun_spice_send_keyboard_event(handle, &cEvent)
+        }
+    }
+
+    // MARK: - Clipboard
+
+    func sendClipboard(_ clipboard: ClipboardData) {
+        guard let handle = currentHandle else { return }
+
+        clipboard.data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            var cClipboard = winrun_clipboard_data(
+                format: clipboardFormatToC(clipboard.format),
+                data: baseAddress.assumingMemoryBound(to: UInt8.self),
+                data_length: clipboard.data.count,
+                sequence_number: clipboard.sequenceNumber
+            )
+            _ = winrun_spice_send_clipboard(handle, &cClipboard)
+        }
+    }
+
+    func requestClipboard(format: ClipboardFormat) {
+        guard let handle = currentHandle else { return }
+        winrun_spice_request_clipboard(handle, clipboardFormatToC(format))
+    }
+
+    // MARK: - Drag and Drop
+
+    func sendDragDropEvent(_ event: DragDropEvent) {
+        guard let handle = currentHandle else { return }
+
+        // Convert files to C structs
+        var cFiles: [winrun_dragged_file] = []
+        var hostPathPtrs: [UnsafeMutablePointer<CChar>?] = []
+        var guestPathPtrs: [UnsafeMutablePointer<CChar>?] = []
+
+        for file in event.files {
+            let hostPtr = strdup(file.hostPath)
+            let guestPtr = file.guestPath.flatMap { strdup($0) }
+            hostPathPtrs.append(hostPtr)
+            guestPathPtrs.append(guestPtr)
+
+            cFiles.append(winrun_dragged_file(
+                host_path: hostPtr,
+                guest_path: guestPtr,
+                file_size: file.fileSize,
+                is_directory: file.isDirectory
+            ))
+        }
+
+        defer {
+            for ptr in hostPathPtrs { free(ptr) }
+            for ptr in guestPathPtrs { free(ptr) }
+        }
+
+        cFiles.withUnsafeBufferPointer { filesBuffer in
+            var cEvent = winrun_drag_event(
+                window_id: event.windowID,
+                event_type: winrun_drag_event_type(rawValue: UInt32(event.eventType.rawValue)),
+                x: event.x,
+                y: event.y,
+                files: filesBuffer.baseAddress,
+                file_count: event.files.count,
+                allowed_operations: winrun_drag_operation(rawValue: UInt32(event.allowedOperations.first?.rawValue ?? 0)),
+                selected_operation: winrun_drag_operation(rawValue: UInt32(event.selectedOperation?.rawValue ?? 0))
+            )
+            _ = winrun_spice_send_drag_event(handle, &cEvent)
+        }
+    }
+
+    private func clipboardFormatToC(_ format: ClipboardFormat) -> winrun_clipboard_format {
+        switch format {
+        case .plainText: return WINRUN_CLIPBOARD_FORMAT_TEXT
+        case .rtf: return WINRUN_CLIPBOARD_FORMAT_RTF
+        case .html: return WINRUN_CLIPBOARD_FORMAT_HTML
+        case .png: return WINRUN_CLIPBOARD_FORMAT_PNG
+        case .tiff: return WINRUN_CLIPBOARD_FORMAT_TIFF
+        case .fileURL: return WINRUN_CLIPBOARD_FORMAT_FILE_URL
+        }
     }
 }
 
@@ -519,6 +743,10 @@ private final class CallbackTrampoline {
 
     func handleClose(_ reason: SpiceStreamCloseReason) {
         callbacks.onClosed(reason)
+    }
+
+    func handleClipboard(_ clipboard: ClipboardData) {
+        callbacks.onClipboard(clipboard)
     }
 }
 
@@ -578,6 +806,11 @@ private let spiceClosedThunk: @convention(c) (
     trampoline.handleClose(SpiceStreamCloseReason(code: code, message: message))
 }
 #else
+private enum SpiceStreamError: Error {
+    case connectionFailed(String)
+    case sharedMemoryUnavailable(String)
+}
+
 private final class MockSpiceStreamTransport: SpiceStreamTransport {
     private final class TimerBox {
         var timer: DispatchSourceTimer?
@@ -619,6 +852,32 @@ private final class MockSpiceStreamTransport: SpiceStreamTransport {
 
     func closeStream(_ subscription: SpiceStreamSubscription) {
         subscription.cleanup()
+    }
+
+    // MARK: - Input Forwarding (Mock)
+
+    func sendMouseEvent(_ event: MouseInputEvent) {
+        logger.debug("Mock: sendMouseEvent type=\(event.eventType) at (\(event.x), \(event.y))")
+    }
+
+    func sendKeyboardEvent(_ event: KeyboardInputEvent) {
+        logger.debug("Mock: sendKeyboardEvent type=\(event.eventType) keyCode=\(event.keyCode)")
+    }
+
+    // MARK: - Clipboard (Mock)
+
+    func sendClipboard(_ clipboard: ClipboardData) {
+        logger.debug("Mock: sendClipboard format=\(clipboard.format) size=\(clipboard.data.count)")
+    }
+
+    func requestClipboard(format: ClipboardFormat) {
+        logger.debug("Mock: requestClipboard format=\(format)")
+    }
+
+    // MARK: - Drag and Drop (Mock)
+
+    func sendDragDropEvent(_ event: DragDropEvent) {
+        logger.debug("Mock: sendDragDropEvent type=\(event.eventType) files=\(event.files.count)")
     }
 }
 #endif
