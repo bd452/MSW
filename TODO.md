@@ -10,7 +10,7 @@
     - [X] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
   - [ ] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions/protocols.md>
     - [X] Stand up XPC listener + connect CLI/app clients { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
-    - [ ] Enforce authentication + request throttling { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/protocols.md>
+    - [X] Enforce authentication + request throttling { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/protocols.md>
     - [ ] Automate LaunchDaemon install/upgrade in bootstrap script { infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/development.md>
   - [ ] WinRun.app window shell { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
     - [ ] Render Spice frames via Metal layer + support Retina scaling { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/spice-bridge.md>

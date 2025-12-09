@@ -30,6 +30,8 @@
 (cd host && swift build -c release)
 ```
 
+> **Note:** Debug builds (`swift build`) use permissive authentication that allows unsigned clients and higher rate limits. Release builds (`swift build -c release`) enforce code signature verification and stricter throttling. See `XPCAuthenticationConfig` and `ThrottlingConfig` in `WinRunShared`.
+
 ### Build Guest Agent Only
 ```
 (cd guest && dotnet build WinRunAgent.sln)

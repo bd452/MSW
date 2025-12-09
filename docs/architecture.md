@@ -37,10 +37,11 @@ docs/                    Additional documentation
 ## Cross-cutting Concerns
 
 1. **IPC Contracts** — `WinRunXPC` contains strongly-typed request/response models reused by CLI, App, and daemon.
-2. **Shared Resources** — `WinRunShared` defines config, logging, and error types consumed by every host target.
+2. **Shared Resources** — `WinRunShared` defines config, logging, error types, authentication policies, and rate limiting consumed by every host target.
 3. **Spice Streaming** — `WinRunSpiceBridge` abstracts the binding to libspice-glib. Current code provides a mock so development on Linux is still possible; replace with actual bridging before release.
 4. **Virtual Machine Management** — `WinRunVirtualMachine` owns state transitions (start, stop, suspend) and resource accounting.
 5. **Launcher Generation** — CLI exposes an ergonomic way to translate Windows shortcuts to `.app` bundles, mirroring the automation performed by the daemon when shortcuts are detected inside the guest.
+6. **XPC Security** — The daemon authenticates all XPC connections via code signature verification and Unix group membership, then applies per-client request throttling to prevent abuse. See `docs/decisions/protocols.md` for implementation details.
 
 ## Build Flow
 
