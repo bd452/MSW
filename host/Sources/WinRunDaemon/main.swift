@@ -90,6 +90,18 @@ import Security
         }
     }
 
+    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        Task { [self] in
+            do {
+                try await checkThrottle()
+                let state = try await vmController.shutdown()
+                reply(try encode(state), nil)
+            } catch {
+                reply(nil, nsError(error))
+            }
+        }
+    }
+
     private func encode<T: Encodable>(_ value: T) throws -> NSData {
         try NSData(data: encoder.encode(value))
     }
@@ -294,6 +306,11 @@ final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
     func suspendIfIdle(_ reply: @escaping (NSError?) -> Void) {
         service.currentClientId = clientId
         service.suspendIfIdle(reply)
+    }
+
+    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        service.currentClientId = clientId
+        service.stopVM(reply)
     }
 }
 

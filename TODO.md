@@ -17,8 +17,8 @@
     - [X] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/ClipboardManager.swift, host/Sources/WinRunShared/InputModels.swift } <docs/decisions/spice-bridge.md>
     - [X] Handle window lifecycle + reconnection to streams { host/Sources/WinRunApp/WinRunWindowController.swift, host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
   - [ ] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, apps/launchers/ } <docs/decisions/protocols.md, docs/development.md>
-    - [ ] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
-    - [ ] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ } <docs/development.md>
+    - [X] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
+    - [X] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ } <docs/development.md>
     - [ ] Surface guest session + shortcut management commands { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
   - [ ] Shared configuration + logging { host/Sources/WinRunShared/, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
     - [ ] Implement persisted config store + schema validation { host/Sources/WinRunShared/VMConfiguration.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>

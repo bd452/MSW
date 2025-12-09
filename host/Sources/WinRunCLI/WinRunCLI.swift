@@ -61,6 +61,9 @@ extension WinRunCLI {
                     case "start":
                         let state = try await client.ensureVMRunning()
                         print("VM status: \(state.status.rawValue)")
+                    case "stop":
+                        let state = try await client.stopVM()
+                        print("VM stopped: \(state.status.rawValue)")
                     case "suspend":
                         try await client.suspendIfIdle()
                         print("Requested suspend")
@@ -92,17 +95,40 @@ extension WinRunCLI {
     struct CreateLauncher: ParsableCommand {
         static var configuration = CommandConfiguration(abstract: "Generate a macOS .app launcher")
 
-        @Argument var executable: String
-        @Option(name: .shortAndLong, help: "Friendly name") var name: String?
-        @Option(name: .shortAndLong, help: "Destination folder") var destination: String?
+        @Argument(help: "Windows executable path (e.g., C:\\Program Files\\App\\app.exe)")
+        var executable: String
+
+        @Option(name: .shortAndLong, help: "Friendly name for the launcher")
+        var name: String?
+
+        @Option(name: .shortAndLong, help: "Destination folder (default: ~/Applications/WinRun Apps)")
+        var destination: String?
+
+        @Option(name: .shortAndLong, help: "Path to .icns icon file")
+        var icon: String?
+
+        @Option(name: .long, help: "Bundle identifier (default: com.winrun.launcher.<name>)")
+        var bundleId: String?
+
+        @Flag(name: .long, help: "Overwrite existing launcher if present")
+        var force: Bool = false
 
         mutating func run() throws {
-            let launcher = LauncherBuilder(
-                destinationRoot: destination.map(URL.init(fileURLWithPath:)) ?? FileManager.default.homeDirectoryForCurrentUser
+            let destinationRoot = destination.map(URL.init(fileURLWithPath:))
+                ?? FileManager.default.homeDirectoryForCurrentUser
                     .appendingPathComponent("Applications/WinRun Apps", isDirectory: true)
+
+            let launcher = LauncherBuilder(destinationRoot: destinationRoot)
+            let config = LauncherConfiguration(
+                windowsPath: executable,
+                displayName: name,
+                iconPath: icon.map(URL.init(fileURLWithPath:)),
+                bundleIdentifier: bundleId,
+                overwrite: force
             )
-            try launcher.generate(for: executable, displayName: name)
-            print("Created launcher for \(executable)")
+
+            let bundlePath = try launcher.generate(config: config)
+            print("Created launcher: \(bundlePath.path)")
         }
     }
 
@@ -119,35 +145,159 @@ extension WinRunCLI {
     }
 }
 
+struct LauncherConfiguration {
+    let windowsPath: String
+    let displayName: String?
+    let iconPath: URL?
+    let bundleIdentifier: String?
+    let overwrite: Bool
+
+    var resolvedName: String {
+        displayName ?? URL(fileURLWithPath: windowsPath).deletingPathExtension().lastPathComponent
+    }
+
+    var resolvedBundleIdentifier: String {
+        bundleIdentifier ?? "com.winrun.launcher.\(sanitizedName)"
+    }
+
+    private var sanitizedName: String {
+        resolvedName
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "." }
+    }
+}
+
+enum LauncherBuilderError: Error, CustomStringConvertible {
+    case bundleAlreadyExists(URL)
+    case iconNotFound(URL)
+    case iconCopyFailed(URL, Error)
+
+    var description: String {
+        switch self {
+        case .bundleAlreadyExists(let url):
+            return "Launcher already exists at \(url.path). Use --force to overwrite."
+        case .iconNotFound(let url):
+            return "Icon file not found: \(url.path)"
+        case .iconCopyFailed(let url, let error):
+            return "Failed to copy icon from \(url.path): \(error.localizedDescription)"
+        }
+    }
+}
+
 struct LauncherBuilder {
     let destinationRoot: URL
+    private let fm = FileManager.default
 
-    func generate(for windowsPath: String, displayName: String?) throws {
-        let name = displayName ?? URL(fileURLWithPath: windowsPath).deletingPathExtension().lastPathComponent
-        let bundle = destinationRoot.appendingPathComponent("\(name).app", isDirectory: true)
+    @discardableResult
+    func generate(config: LauncherConfiguration) throws -> URL {
+        let bundle = destinationRoot.appendingPathComponent("\(config.resolvedName).app", isDirectory: true)
+
+        // Check if bundle exists
+        if fm.fileExists(atPath: bundle.path) {
+            if config.overwrite {
+                try fm.removeItem(at: bundle)
+            } else {
+                throw LauncherBuilderError.bundleAlreadyExists(bundle)
+            }
+        }
+
         let contents = bundle.appendingPathComponent("Contents", isDirectory: true)
         let macOS = contents.appendingPathComponent("MacOS", isDirectory: true)
         let resources = contents.appendingPathComponent("Resources", isDirectory: true)
-        let fm = FileManager.default
+
         try fm.createDirectory(at: macOS, withIntermediateDirectories: true)
         try fm.createDirectory(at: resources, withIntermediateDirectories: true)
-        let launcherPath = macOS.appendingPathComponent("launcher")
-        let script = "#!/bin/bash\nopen -n /Applications/WinRun.app --args \"\(windowsPath)\"\n"
+
+        // Create launcher script
+        try writeLauncherScript(to: macOS, windowsPath: config.windowsPath)
+
+        // Copy icon if provided
+        var iconFileName: String? = nil
+        if let iconPath = config.iconPath {
+            iconFileName = try copyIcon(from: iconPath, to: resources)
+        }
+
+        // Create Info.plist
+        try writeInfoPlist(to: contents, config: config, iconFileName: iconFileName)
+
+        return bundle
+    }
+
+    private func writeLauncherScript(to macOSDir: URL, windowsPath: String) throws {
+        let launcherPath = macOSDir.appendingPathComponent("launcher")
+        // Escape quotes in the Windows path for bash
+        let escapedPath = windowsPath.replacingOccurrences(of: "\"", with: "\\\"")
+        let script = """
+            #!/bin/bash
+            # WinRun launcher - Generated by winrun create-launcher
+            exec open -n /Applications/WinRun.app --args "\(escapedPath)" "$@"
+
+            """
         try script.write(to: launcherPath, atomically: true, encoding: .utf8)
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcherPath.path)
+    }
+
+    private func copyIcon(from source: URL, to resourcesDir: URL) throws -> String {
+        guard fm.fileExists(atPath: source.path) else {
+            throw LauncherBuilderError.iconNotFound(source)
+        }
+
+        let iconFileName = "AppIcon.icns"
+        let destination = resourcesDir.appendingPathComponent(iconFileName)
+
+        do {
+            try fm.copyItem(at: source, to: destination)
+        } catch {
+            throw LauncherBuilderError.iconCopyFailed(source, error)
+        }
+
+        return iconFileName
+    }
+
+    private func writeInfoPlist(to contentsDir: URL, config: LauncherConfiguration, iconFileName: String?) throws {
+        var plistEntries = [
+            ("CFBundleName", config.resolvedName),
+            ("CFBundleDisplayName", config.resolvedName),
+            ("CFBundleIdentifier", config.resolvedBundleIdentifier),
+            ("CFBundleVersion", "1.0"),
+            ("CFBundleShortVersionString", "1.0"),
+            ("CFBundleExecutable", "launcher"),
+            ("CFBundlePackageType", "APPL"),
+            ("CFBundleInfoDictionaryVersion", "6.0"),
+            ("LSMinimumSystemVersion", "13.0"),
+            ("NSHighResolutionCapable", "true"),
+        ]
+
+        if let icon = iconFileName {
+            plistEntries.append(("CFBundleIconFile", icon))
+        }
+
+        let entriesXml = plistEntries.map { key, value in
+            "    <key>\(escapeXml(key))</key>\n    <string>\(escapeXml(value))</string>"
+        }.joined(separator: "\n")
+
         let infoPlist = """
-        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
-        <!DOCTYPE plist PUBLIC \"-//Apple Computer//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-        <plist version=\"1.0\">
-        <dict>
-            <key>CFBundleName</key>
-            <string>\(name)</string>
-            <key>CFBundleExecutable</key>
-            <string>launcher</string>
-        </dict>
-        </plist>
-        """
-        try infoPlist.write(to: contents.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+            \(entriesXml)
+            </dict>
+            </plist>
+
+            """
+
+        try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
+    }
+
+    private func escapeXml(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
 }
 

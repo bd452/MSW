@@ -6,6 +6,7 @@ import WinRunShared
     func executeProgram(_ requestData: NSData, reply: @escaping (NSError?) -> Void)
     func getStatus(_ reply: @escaping (NSData?, NSError?) -> Void)
     func suspendIfIdle(_ reply: @escaping (NSError?) -> Void)
+    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void)
 }
 
 public final class WinRunDaemonClient {
@@ -51,6 +52,15 @@ public final class WinRunDaemonClient {
         _ = try await send { handler, completion in
             handler.suspendIfIdle { error in
                 completion(self.decodeVoid(error: error))
+            }
+        }
+    }
+
+    public func stopVM() async throws -> VMState {
+        logger.info("Requesting VM shutdown")
+        return try await send { handler, completion in
+            handler.stopVM { data, error in
+                completion(self.decodeResponse(type: VMState.self, data: data, error: error))
             }
         }
     }
