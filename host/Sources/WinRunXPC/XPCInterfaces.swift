@@ -6,6 +6,15 @@ import WinRunShared
     func executeProgram(_ requestData: NSData, reply: @escaping (NSError?) -> Void)
     func getStatus(_ reply: @escaping (NSData?, NSError?) -> Void)
     func suspendIfIdle(_ reply: @escaping (NSError?) -> Void)
+    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void)
+
+    // Session management
+    func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void)
+    func closeSession(_ sessionId: NSString, reply: @escaping (NSError?) -> Void)
+
+    // Shortcut management
+    func listShortcuts(_ reply: @escaping (NSData?, NSError?) -> Void)
+    func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void)
 }
 
 public final class WinRunDaemonClient {
@@ -51,6 +60,55 @@ public final class WinRunDaemonClient {
         _ = try await send { handler, completion in
             handler.suspendIfIdle { error in
                 completion(self.decodeVoid(error: error))
+            }
+        }
+    }
+
+    public func stopVM() async throws -> VMState {
+        logger.info("Requesting VM shutdown")
+        return try await send { handler, completion in
+            handler.stopVM { data, error in
+                completion(self.decodeResponse(type: VMState.self, data: data, error: error))
+            }
+        }
+    }
+
+    // MARK: - Session Management
+
+    public func listSessions() async throws -> GuestSessionList {
+        logger.debug("Listing guest sessions")
+        return try await send { handler, completion in
+            handler.listSessions { data, error in
+                completion(self.decodeResponse(type: GuestSessionList.self, data: data, error: error))
+            }
+        }
+    }
+
+    public func closeSession(_ sessionId: String) async throws {
+        logger.info("Closing session \(sessionId)")
+        _ = try await send { handler, completion in
+            handler.closeSession(sessionId as NSString) { error in
+                completion(self.decodeVoid(error: error))
+            }
+        }
+    }
+
+    // MARK: - Shortcut Management
+
+    public func listShortcuts() async throws -> WindowsShortcutList {
+        logger.debug("Listing Windows shortcuts")
+        return try await send { handler, completion in
+            handler.listShortcuts { data, error in
+                completion(self.decodeResponse(type: WindowsShortcutList.self, data: data, error: error))
+            }
+        }
+    }
+
+    public func syncShortcuts(to destinationPath: String) async throws -> ShortcutSyncResult {
+        logger.info("Syncing shortcuts to \(destinationPath)")
+        return try await send { handler, completion in
+            handler.syncShortcuts(destinationPath as NSString) { data, error in
+                completion(self.decodeResponse(type: ShortcutSyncResult.self, data: data, error: error))
             }
         }
     }

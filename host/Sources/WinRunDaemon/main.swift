@@ -90,6 +90,81 @@ import Security
         }
     }
 
+    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        Task { [self] in
+            do {
+                try await checkThrottle()
+                let state = try await vmController.shutdown()
+                reply(try encode(state), nil)
+            } catch {
+                reply(nil, nsError(error))
+            }
+        }
+    }
+
+    // MARK: - Session Management
+
+    func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        Task { [self] in
+            do {
+                try await checkThrottle()
+                // TODO: Query guest agent for actual sessions
+                // For now, return empty list - will be populated when guest agent is connected
+                let sessions = GuestSessionList(sessions: [])
+                reply(try encode(sessions), nil)
+            } catch {
+                reply(nil, nsError(error))
+            }
+        }
+    }
+
+    func closeSession(_ sessionId: NSString, reply: @escaping (NSError?) -> Void) {
+        Task { [self] in
+            do {
+                try await checkThrottle()
+                let id = sessionId as String
+                logger.info("Would close session \(id)")
+                // TODO: Send close command to guest agent
+                // For now, just acknowledge the request
+                reply(nil)
+            } catch {
+                reply(nsError(error))
+            }
+        }
+    }
+
+    // MARK: - Shortcut Management
+
+    func listShortcuts(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        Task { [self] in
+            do {
+                try await checkThrottle()
+                // TODO: Query guest agent for detected shortcuts
+                // For now, return empty list - will be populated when guest agent is connected
+                let shortcuts = WindowsShortcutList(shortcuts: [])
+                reply(try encode(shortcuts), nil)
+            } catch {
+                reply(nil, nsError(error))
+            }
+        }
+    }
+
+    func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void) {
+        Task { [self] in
+            do {
+                try await checkThrottle()
+                let path = destinationPath as String
+                logger.info("Would sync shortcuts to \(path)")
+                // TODO: Fetch shortcuts from guest, create launchers
+                // For now, return empty result
+                let result = ShortcutSyncResult(created: 0, skipped: 0, failed: 0, launcherPaths: [])
+                reply(try encode(result), nil)
+            } catch {
+                reply(nil, nsError(error))
+            }
+        }
+    }
+
     private func encode<T: Encodable>(_ value: T) throws -> NSData {
         try NSData(data: encoder.encode(value))
     }
@@ -294,6 +369,31 @@ final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
     func suspendIfIdle(_ reply: @escaping (NSError?) -> Void) {
         service.currentClientId = clientId
         service.suspendIfIdle(reply)
+    }
+
+    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        service.currentClientId = clientId
+        service.stopVM(reply)
+    }
+
+    func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        service.currentClientId = clientId
+        service.listSessions(reply)
+    }
+
+    func closeSession(_ sessionId: NSString, reply: @escaping (NSError?) -> Void) {
+        service.currentClientId = clientId
+        service.closeSession(sessionId, reply: reply)
+    }
+
+    func listShortcuts(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        service.currentClientId = clientId
+        service.listShortcuts(reply)
+    }
+
+    func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void) {
+        service.currentClientId = clientId
+        service.syncShortcuts(destinationPath, reply: reply)
     }
 }
 

@@ -249,3 +249,81 @@ public struct ProgramLaunchRequest: Codable, Hashable {
     }
 }
 
+// MARK: - Guest Session
+
+/// Represents an active program session running in the guest VM
+public struct GuestSession: Codable, Hashable, Identifiable {
+    public let id: String
+    public let windowsPath: String
+    public let windowTitle: String?
+    public let processId: Int
+    public let startedAt: Date
+
+    public init(id: String, windowsPath: String, windowTitle: String?, processId: Int, startedAt: Date) {
+        self.id = id
+        self.windowsPath = windowsPath
+        self.windowTitle = windowTitle
+        self.processId = processId
+        self.startedAt = startedAt
+    }
+}
+
+public struct GuestSessionList: Codable {
+    public let sessions: [GuestSession]
+
+    public init(sessions: [GuestSession]) {
+        self.sessions = sessions
+    }
+}
+
+// MARK: - Windows Shortcut
+
+/// Represents a Windows shortcut (.lnk) detected in the guest VM
+public struct WindowsShortcut: Codable, Hashable, Identifiable {
+    public var id: String { shortcutPath }
+    public let shortcutPath: String
+    public let targetPath: String
+    public let displayName: String
+    public let iconPath: String?
+    public let arguments: String?
+    public let detectedAt: Date
+
+    public init(
+        shortcutPath: String,
+        targetPath: String,
+        displayName: String,
+        iconPath: String? = nil,
+        arguments: String? = nil,
+        detectedAt: Date = Date()
+    ) {
+        self.shortcutPath = shortcutPath
+        self.targetPath = targetPath
+        self.displayName = displayName
+        self.iconPath = iconPath
+        self.arguments = arguments
+        self.detectedAt = detectedAt
+    }
+}
+
+public struct WindowsShortcutList: Codable {
+    public let shortcuts: [WindowsShortcut]
+
+    public init(shortcuts: [WindowsShortcut]) {
+        self.shortcuts = shortcuts
+    }
+}
+
+public struct ShortcutSyncResult: Codable {
+    public let created: Int
+    public let skipped: Int
+    public let failed: Int
+    public let launcherPaths: [String]
+
+    public init(created: Int, skipped: Int, failed: Int, launcherPaths: [String]) {
+        self.created = created
+        self.skipped = skipped
+        self.failed = failed
+        self.launcherPaths = launcherPaths
+    }
+}
+
