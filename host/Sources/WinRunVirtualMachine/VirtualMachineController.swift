@@ -98,8 +98,8 @@ public actor VirtualMachineController {
 
         suspendedStateURL = snapshotURL
         clearNativeVM()
-        uptimeStart = nil
         let uptimeSeconds = uptime()
+        uptimeStart = nil
         state = VMState(status: .suspended, uptime: uptimeSeconds, activeSessions: 0)
     }
 
