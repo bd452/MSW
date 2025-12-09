@@ -510,4 +510,3 @@ extension WinRunError: Equatable {
         lhs.code == rhs.code
     }
 }
-

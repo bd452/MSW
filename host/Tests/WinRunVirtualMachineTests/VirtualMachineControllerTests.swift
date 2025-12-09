@@ -5,7 +5,6 @@ import XCTest
 // MARK: - VirtualMachineLifecycleError Tests
 
 final class VirtualMachineLifecycleErrorTests: XCTestCase {
-
     func testStartTimeoutDescription() {
         let error = VirtualMachineLifecycleError.startTimeout
 
@@ -38,7 +37,6 @@ final class VirtualMachineLifecycleErrorTests: XCTestCase {
 // MARK: - VMState Tests
 
 final class VMStateTests: XCTestCase {
-
     func testVMStateInitialization() {
         let state = VMState(status: .running, uptime: 123.5, activeSessions: 3)
 
@@ -74,7 +72,6 @@ final class VMStateTests: XCTestCase {
 // MARK: - VMMetricsSnapshot Tests
 
 final class VMMetricsSnapshotTests: XCTestCase {
-
     func testMetricsSnapshotDescription() {
         let snapshot = VMMetricsSnapshot(
             event: "vm_started",
@@ -124,7 +121,6 @@ final class VMMetricsSnapshotTests: XCTestCase {
 // Note: Full lifecycle tests require virtualization entitlements and are tested via Xcode
 
 final class VirtualMachineControllerBasicTests: XCTestCase {
-
     func testInitialStateIsStopped() async throws {
         let config = VMConfiguration()  // Uses defaults
         let controller = VirtualMachineController(configuration: config)

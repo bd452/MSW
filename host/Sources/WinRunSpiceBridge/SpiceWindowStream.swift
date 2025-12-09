@@ -408,4 +408,3 @@ public final class SpiceWindowStream {
         }
     }
 }
-

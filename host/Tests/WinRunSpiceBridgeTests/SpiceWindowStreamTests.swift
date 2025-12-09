@@ -731,7 +731,6 @@ final class SpiceWindowStreamTests: XCTestCase {
 // MARK: - ReconnectPolicy Tests
 
 final class ReconnectPolicyTests: XCTestCase {
-
     func testDefaultPolicyValues() {
         let policy = ReconnectPolicy()
 
@@ -777,7 +776,6 @@ final class ReconnectPolicyTests: XCTestCase {
 // MARK: - WindowMetadata Tests
 
 final class WindowMetadataTests: XCTestCase {
-
     func testWindowMetadataInitialization() {
         let metadata = WindowMetadata(
             windowID: 123,
@@ -853,4 +851,3 @@ private struct NullLogger: Logger {
         // Intentionally empty - discard all log messages
     }
 }
-

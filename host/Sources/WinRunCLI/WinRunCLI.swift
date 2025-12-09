@@ -376,7 +376,7 @@ struct LauncherBuilder {
         try writeLauncherScript(to: macOS, windowsPath: config.windowsPath)
 
         // Copy icon if provided
-        var iconFileName: String? = nil
+        var iconFileName: String?
         if let iconPath = config.iconPath {
             iconFileName = try copyIcon(from: iconPath, to: resources)
         }

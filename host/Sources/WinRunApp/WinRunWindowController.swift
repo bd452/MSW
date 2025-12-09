@@ -227,4 +227,3 @@ extension WinRunWindowController: ClipboardManagerDelegate {
         stream.sendClipboard(clipboard)
     }
 }
-

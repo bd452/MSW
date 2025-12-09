@@ -7,7 +7,6 @@ import XCTest
 /// Smoke tests for WinRunDaemonClient that verify XPC message handling
 /// without requiring an actual daemon connection.
 final class WinRunDaemonClientTests: XCTestCase {
-
     // MARK: - Client Initialization Tests
 
     func testClientInitializesWithDefaultLogger() {
@@ -73,7 +72,6 @@ final class WinRunDaemonClientTests: XCTestCase {
 
 /// Tests that verify the XPC protocol interface remains backward compatible
 final class XPCProtocolShapeTests: XCTestCase {
-
     func testWinRunDaemonXPCIsObjCProtocol() {
         // The protocol must be @objc for XPC to work
         let interface = NSXPCInterface(with: WinRunDaemonXPC.self)
@@ -207,7 +205,6 @@ final class XPCEncodingTests: XCTestCase {
 // MARK: - XPC Authentication Error Tests
 
 final class XPCAuthenticationErrorTests: XCTestCase {
-
     func testUserNotInAllowedGroupErrorDescription() {
         let error = XPCAuthenticationError.userNotInAllowedGroup(user: 501, group: "admin")
         let description = error.description
@@ -262,7 +259,6 @@ final class XPCAuthenticationErrorTests: XCTestCase {
 // MARK: - XPC Authentication Config Tests
 
 final class XPCAuthenticationConfigTests: XCTestCase {
-
     func testDevelopmentConfigAllowsUnsignedClients() {
         let config = XPCAuthenticationConfig.development
 
@@ -297,7 +293,6 @@ final class XPCAuthenticationConfigTests: XCTestCase {
 // MARK: - Throttling Config Tests
 
 final class ThrottlingConfigTests: XCTestCase {
-
     func testDevelopmentConfigHasHigherLimits() {
         let dev = ThrottlingConfig.development
         let prod = ThrottlingConfig.production
@@ -342,4 +337,3 @@ private final class MockLogger: Logger, @unchecked Sendable {
         _messages.append((level, message))
     }
 }
-

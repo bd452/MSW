@@ -108,7 +108,7 @@ public struct VMNetworkConfiguration: Codable, Hashable {
 
 public extension VMNetworkConfiguration {
     func validate() throws {
-        if mode == .bridged, (interfaceIdentifier?.isEmpty ?? true) {
+        if mode == .bridged, interfaceIdentifier?.isEmpty ?? true {
             throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
         }
     }
@@ -326,4 +326,3 @@ public struct ShortcutSyncResult: Codable {
         self.launcherPaths = launcherPaths
     }
 }
-

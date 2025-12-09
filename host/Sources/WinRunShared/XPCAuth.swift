@@ -6,16 +6,16 @@ import Foundation
 public struct XPCAuthenticationConfig: Codable, Hashable {
     /// Team identifier for code signing verification (e.g., "ABCD1234EF")
     public var teamIdentifier: String?
-    
+
     /// Bundle identifier prefixes allowed to connect
     public var allowedBundleIdentifierPrefixes: [String]
-    
+
     /// Unix group name for group membership checks
     public var allowedGroupName: String?
-    
+
     /// Whether to allow unsigned binaries (development only)
     public var allowUnsignedClients: Bool
-    
+
     public init(
         teamIdentifier: String? = nil,
         allowedBundleIdentifierPrefixes: [String] = ["com.winrun."],
@@ -27,7 +27,7 @@ public struct XPCAuthenticationConfig: Codable, Hashable {
         self.allowedGroupName = allowedGroupName
         self.allowUnsignedClients = allowUnsignedClients
     }
-    
+
     /// Default development configuration (more permissive)
     public static var development: XPCAuthenticationConfig {
         XPCAuthenticationConfig(
@@ -36,7 +36,7 @@ public struct XPCAuthenticationConfig: Codable, Hashable {
             allowUnsignedClients: true
         )
     }
-    
+
     /// Production configuration (stricter)
     public static var production: XPCAuthenticationConfig {
         XPCAuthenticationConfig(
@@ -56,7 +56,7 @@ public enum XPCAuthenticationError: Error, CustomStringConvertible {
     case unauthorizedBundleIdentifier(identifier: String)
     case userNotInAllowedGroup(user: uid_t, group: String)
     case throttled(retryAfterSeconds: TimeInterval)
-    
+
     public var description: String {
         switch self {
         case .connectionRejected(let reason):
@@ -81,16 +81,16 @@ public enum XPCAuthenticationError: Error, CustomStringConvertible {
 public struct ThrottlingConfig: Codable, Hashable {
     /// Maximum requests allowed per window
     public var maxRequestsPerWindow: Int
-    
+
     /// Time window in seconds
     public var windowSeconds: TimeInterval
-    
+
     /// Burst allowance (additional requests permitted for short bursts)
     public var burstAllowance: Int
-    
+
     /// Cooldown period after hitting rate limit
     public var cooldownSeconds: TimeInterval
-    
+
     public init(
         maxRequestsPerWindow: Int = 60,
         windowSeconds: TimeInterval = 60,
@@ -102,7 +102,7 @@ public struct ThrottlingConfig: Codable, Hashable {
         self.burstAllowance = burstAllowance
         self.cooldownSeconds = cooldownSeconds
     }
-    
+
     /// Permissive config for development
     public static var development: ThrottlingConfig {
         ThrottlingConfig(
@@ -112,7 +112,7 @@ public struct ThrottlingConfig: Codable, Hashable {
             cooldownSeconds: 1
         )
     }
-    
+
     /// Stricter production config
     public static var production: ThrottlingConfig {
         ThrottlingConfig(
@@ -129,18 +129,18 @@ public actor RateLimiter {
     private let config: ThrottlingConfig
     private var clientBuckets: [String: TokenBucket] = [:]
     private let logger: Logger?
-    
+
     public init(config: ThrottlingConfig = .production, logger: Logger? = nil) {
         self.config = config
         self.logger = logger
     }
-    
+
     /// Check if a request should be allowed for the given client identifier
     /// - Parameter clientId: Unique identifier for the client (e.g., PID or audit token hash)
     /// - Returns: Result indicating success or throttling error with retry time
     public func checkRequest(clientId: String) -> Result<Void, XPCAuthenticationError> {
         let now = Date()
-        
+
         // Get or create bucket for this client
         if clientBuckets[clientId] == nil {
             let capacity = Double(config.maxRequestsPerWindow + config.burstAllowance)
@@ -152,24 +152,24 @@ public actor RateLimiter {
                 cooldownUntil: nil
             )
         }
-        
+
         guard var bucket = clientBuckets[clientId] else {
             return .success(())
         }
-        
+
         // Check cooldown
         if let cooldownUntil = bucket.cooldownUntil, now < cooldownUntil {
             let retryAfter = cooldownUntil.timeIntervalSince(now)
             logger?.warn("Client \(clientId) is in cooldown for \(String(format: "%.1f", retryAfter))s")
             return .failure(.throttled(retryAfterSeconds: retryAfter))
         }
-        
+
         // Refill tokens based on elapsed time
         let elapsed = now.timeIntervalSince(bucket.lastRefill)
         let tokensToAdd = elapsed * bucket.refillRate
         bucket.tokens = min(bucket.capacity, bucket.tokens + tokensToAdd)
         bucket.lastRefill = now
-        
+
         // Try to consume a token
         if bucket.tokens >= 1.0 {
             bucket.tokens -= 1.0
@@ -184,13 +184,13 @@ public actor RateLimiter {
             return .failure(.throttled(retryAfterSeconds: config.cooldownSeconds))
         }
     }
-    
+
     /// Remove stale client entries to prevent memory growth
     public func pruneStaleClients(olderThan age: TimeInterval = 3600) {
         let cutoff = Date().addingTimeInterval(-age)
         clientBuckets = clientBuckets.filter { $0.value.lastRefill > cutoff }
     }
-    
+
     /// Get current metrics for monitoring
     public func metrics() -> ThrottlingMetrics {
         ThrottlingMetrics(
@@ -219,4 +219,3 @@ public struct ThrottlingMetrics: Codable {
     public let activeClients: Int
     public let clientsInCooldown: Int
 }
-

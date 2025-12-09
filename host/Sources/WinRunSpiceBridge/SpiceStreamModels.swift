@@ -179,4 +179,3 @@ enum SpiceStreamError: Error {
     case connectionFailed(String)
     case sharedMemoryUnavailable(String)
 }
-
