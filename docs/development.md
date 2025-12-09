@@ -175,8 +175,88 @@ cd guest && dotnet test WinRunAgent.sln
 
 ### CI Integration
 
-When GitHub Actions workflows are added:
-- `host.yml` runs `swift test` on macOS runners
-- `guest.yml` runs `dotnet test` on Windows runners
-- All tests must pass for PR merge
-- Test results and coverage are published as artifacts
+GitHub Actions enforces code quality on every PR:
+
+| Workflow | Platform | Checks |
+|----------|----------|--------|
+| `host.yml` | macOS 14 | Build, Test, SwiftLint |
+| `guest.yml` | Windows | Build, Test, `dotnet format` |
+
+All checks must pass before merge. See [Branch Protection](#branch-protection) below.
+
+## Linting & Formatting
+
+### Available Commands
+
+```bash
+# Run all checks (lint + build + test) - use before committing
+make check
+
+# Platform-specific checks
+make check-host    # SwiftLint + build + test
+make check-guest   # dotnet format + build + test
+
+# Lint only (verify style)
+make lint          # Both platforms
+make lint-host     # SwiftLint --strict
+make lint-guest    # dotnet format --verify-no-changes
+
+# Format (auto-fix style issues)
+make format        # Both platforms
+make format-host   # SwiftLint --fix
+make format-guest  # dotnet format
+```
+
+### Installing Linters
+
+**macOS (host):**
+```bash
+brew install swiftlint
+```
+
+**Windows (guest):**
+```bash
+# dotnet format is included with .NET 8 SDK
+dotnet tool list -g
+```
+
+### Configuration Files
+
+| Platform | Config File | Tool |
+|----------|-------------|------|
+| Host (Swift) | `host/.swiftlint.yml` | SwiftLint |
+| Guest (C#) | `guest/.editorconfig` | dotnet format |
+
+### Pre-Commit Workflow
+
+Before pushing changes, run:
+```bash
+make check
+```
+
+This runs the same checks as CI, catching issues before they reach GitHub.
+
+## Branch Protection
+
+To enforce CI checks before merge, configure branch protection in GitHub:
+
+1. Go to **Settings → Branches → Add rule**
+2. Branch name pattern: `main`
+3. Enable:
+   - ☑️ Require a pull request before merging
+   - ☑️ Require status checks to pass before merging
+   - ☑️ Require branches to be up to date before merging
+4. Select required status checks:
+   - `Host (macOS) / Build & Test`
+   - `Host (macOS) / Lint`
+   - `Guest (Windows) / Build & Test`
+   - `Guest (Windows) / Lint`
+5. Save changes
+
+### Path-Based Triggers
+
+CI workflows only run when relevant files change:
+- **Host workflow**: Triggered by changes in `host/**`
+- **Guest workflow**: Triggered by changes in `guest/**`
+
+This saves CI minutes when changes are isolated to one platform.
