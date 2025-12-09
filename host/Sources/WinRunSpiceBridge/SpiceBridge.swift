@@ -242,13 +242,15 @@ public final class SpiceWindowStream {
             self.logger.warn("Spice stream closed: \(reason)")
             let wasUserInitiated = self.state.isUserInitiatedClose
             self.state.subscription = nil
+            self.metrics.lastErrorDescription = reason.message
 
             switch reason.code {
             case .remoteClosed where !wasUserInitiated:
                 self.finishDisconnect()
             case .transportError where !wasUserInitiated,
-                 .authenticationFailed where !wasUserInitiated:
                 self.scheduleReconnect(reason: reason)
+            case .authenticationFailed:
+                self.finishDisconnect()
             case .sharedMemoryUnavailable:
                 self.finishDisconnect()
             default:
