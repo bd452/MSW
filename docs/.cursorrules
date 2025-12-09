@@ -1,0 +1,120 @@
+# Documentation Rules
+
+## Documentation Hierarchy
+
+```
+docs/
+  architecture.md     High-level component breakdown, build flow
+  development.md      Day-to-day workflows, commands, deployment
+  decisions.md        Index of architecture decision records
+  decisions/
+    spice-bridge.md   Spice binding strategy, transport, resilience
+    virtualization.md VM lifecycle, boot/suspend policies, metrics
+    protocols.md      Host↔guest protocol schemas, security
+    operations.md     Build scripts, packaging, CI policies
+```
+
+## Purpose of Each Document
+
+### SUMMARY.md (root)
+- **Authoritative source** for project design and requirements
+- Reference when making platform/approach decisions
+- Contains detailed component specifications
+- Includes protocol message definitions
+
+### architecture.md
+- Repository layout and module relationships
+- Build target descriptions
+- Cross-cutting concerns
+- Build flow overview
+
+### development.md
+- Prerequisites for each platform
+- Common task commands (bootstrap, build, test)
+- LaunchDaemon installation steps
+- CLI usage examples
+- Windows agent deployment
+
+### decisions/*.md
+- Capture significant architectural choices
+- Explain rationale and trade-offs
+- Linked from TODO items via `<>` notation
+- Add new records when choices impact multiple tasks
+
+## Writing Guidelines
+
+### Style
+- Use clear, direct language
+- Prefer bullet points for lists
+- Use code blocks for commands and file paths
+- Include examples where helpful
+
+### Structure
+- Start with a brief overview
+- Use hierarchical headings (##, ###)
+- Group related information
+- End with next steps or links to related docs
+
+### Code Examples
+- Use fenced code blocks with language tags
+- Keep examples concise but complete
+- Show both input and expected output where relevant
+
+## Decision Records Format
+
+When adding a new decision record:
+
+```markdown
+# [Topic] Decisions
+
+## [Aspect 1]
+- Key decision point
+- Rationale
+- Trade-offs considered
+
+## [Aspect 2]
+- ...
+```
+
+### When to Create Decision Records
+- Choice impacts multiple TODO items
+- Trade-off between competing approaches
+- Platform-specific considerations
+- Security or performance implications
+
+### Linking Decisions
+- Add entry to `decisions.md` index
+- Reference from TODO items: `< docs/decisions/foo.md >`
+- Cross-link between related decisions
+
+## Keeping Docs in Sync
+
+### When Implementing Tasks
+1. Read referenced docs before coding
+2. Update docs if implementation diverges
+3. Add new decisions if significant choices made
+
+### When Changing Architecture
+1. Update `SUMMARY.md` if core design changes
+2. Update `architecture.md` for structural changes
+3. Update `development.md` for workflow changes
+4. Create/update decision records as needed
+5. Re-evaluate tasks referencing changed docs
+
+## Cross-References
+
+### From TODO.md
+```
+- [ ] Task name { files } < docs/decisions/foo.md >
+```
+
+### Between Docs
+```markdown
+See [Spice Bridge Integration](decisions/spice-bridge.md) for details.
+```
+
+### To Code
+```markdown
+Implemented in `host/Sources/WinRunSpiceBridge/SpiceBridge.swift`
+```
+

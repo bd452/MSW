@@ -1,0 +1,158 @@
+# Guest (Windows .NET) Rules
+
+## Project Structure
+
+The guest agent is a C# Windows service built on .NET 8.
+
+```
+guest/
+  WinRunAgent/              Main service project
+    Program.cs              Entry point, service host setup
+    Services/
+      WinRunAgentService.cs Main service orchestration
+      WindowTracker.cs      Win32 window enumeration/hooks
+      ProgramLauncher.cs    Process creation and monitoring
+      IconExtractionService.cs  PE icon extraction
+      Messages.cs           Spice protocol DTOs
+      Logging.cs            Structured logging infrastructure
+    WinRunAgent.csproj
+
+  WinRunAgent.Tests/        xUnit test project
+    WindowTrackerTests.cs
+    WinRunAgent.Tests.csproj
+
+  WinRunAgent.sln           Solution file
+```
+
+## C# Conventions
+
+### Service Pattern
+- Use `BackgroundService` base class for long-running services
+- Dependency injection for all services
+- Graceful shutdown handling via `CancellationToken`
+
+### Win32 Interop
+- P/Invoke declarations in dedicated static classes
+- Use `SafeHandle` for native handles
+- Dispose patterns for all unmanaged resources
+
+### Error Handling
+- Throw exceptions for unrecoverable errors
+- Use return values or Result pattern for expected failures
+- Log all exceptions with full context
+
+### Async/Await
+- Async all the way for I/O operations
+- Use `ValueTask` for hot paths
+- Avoid `async void` except for event handlers
+
+## Component Guidelines
+
+### WinRunAgentService.cs
+- Main orchestrator coordinating all sub-services
+- Handles Spice channel lifecycle
+- Dispatches incoming host commands
+- Monitors idle timeouts and session heartbeats
+
+### WindowTracker.cs
+- Uses Win32 APIs: `EnumWindows`, `SetWinEventHook`
+- Tracks visible application windows (filters system/hidden windows)
+- Maintains HWND → metadata map
+- Reports window events: create, destroy, move, resize, title change
+- Integrates with Desktop Duplication for per-window capture
+
+### ProgramLauncher.cs
+- Wraps `CreateProcess` for program execution
+- Accepts path, arguments, working directory, environment
+- Monitors process lifecycle
+- Reports exit codes back to host
+
+### IconExtractionService.cs
+- Parses PE format to extract icon resources
+- Supports multiple sizes/resolutions
+- Caches extracted icons
+- Provides icon data for host launcher generation
+
+### Messages.cs
+- Defines Spice protocol DTOs matching host expectations
+- Version fields for protocol negotiation
+- Includes:
+  - Window metadata (bounds, DPI, flags, title)
+  - Frame payloads (format, dimensions, pixel data)
+  - Program launch requests/responses
+  - Shortcut notifications
+
+### Logging.cs
+- Structured logging with Serilog or Microsoft.Extensions.Logging
+- ETW provider for Windows event tracing
+- Log to file: `C:\ProgramData\WinRun\Logs\`
+- Include timestamps, correlation IDs, log levels
+
+## Spice Integration
+
+The agent communicates with the host via Spice protocol extensions:
+
+### Channels
+- **Control channel**: Commands (launch program, query status)
+- **Metadata channel**: Window events, shortcut notifications
+- **Frame channel**: Per-window pixel data
+
+### Message Types (from SUMMARY.md)
+- `MSG_WINDOW_CREATED` — New window appeared
+- `MSG_WINDOW_DESTROYED` — Window closed
+- `MSG_WINDOW_UPDATED` — Metadata changed
+- `MSG_WINDOW_PIXELS` — Frame data
+- `MSG_LAUNCH_PROGRAM` — Host requests program launch
+- `MSG_PROGRAM_EXITED` — Program terminated
+- `MSG_SHORTCUT_CREATED` — Desktop shortcut detected
+
+### Protocol Requirements
+- All messages include version for negotiation
+- Payloads must be validated
+- Timeout handling for all operations
+- Idempotent command handling
+
+## Desktop Duplication / Window Capture
+
+For per-window frame capture:
+- Prefer `Windows.Graphics.Capture` API (modern, efficient)
+- Fall back to Desktop Duplication API if needed
+- Only send dirty regions (changed pixels)
+- Tag frames with window ID
+
+## Testing
+
+- Use xUnit for all tests
+- Mock Win32 APIs via interfaces
+- Test message serialization roundtrips
+- Integration tests for Spice channel behavior
+
+## Build Commands
+
+```bash
+# Build solution
+dotnet build WinRunAgent.sln
+
+# Run tests
+dotnet test WinRunAgent.sln
+
+# Publish release
+dotnet publish -c Release -r win-x64
+
+# Create self-contained deployment
+dotnet publish -c Release -r win-x64 --self-contained
+```
+
+## Deployment
+
+1. Copy published output to `C:\Program Files\WinRun\`
+2. Register as Windows service: `sc create WinRunAgent binPath= "..." start= auto`
+3. Ensure Spice guest tools are installed (virtio-serial drivers)
+4. Logs appear in `C:\ProgramData\WinRun\Logs\`
+
+## Key Decision Documents
+
+- `docs/decisions/protocols.md` — Message schemas, versioning, security
+- `docs/architecture.md` — Overall system design
+- `SUMMARY.md` — Guest agent responsibilities (section 3)
+

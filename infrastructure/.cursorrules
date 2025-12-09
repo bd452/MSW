@@ -1,0 +1,94 @@
+# Infrastructure Rules
+
+## LaunchDaemon Configuration
+
+The `launchd/com.winrun.daemon.plist` configures the `winrund` daemon.
+
+### Plist Requirements
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "...">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.winrun.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/winrund</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Standard output/error logging -->
+    <key>StandardOutPath</key>
+    <string>/var/log/winrun/winrund.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/winrun/winrund.err</string>
+</dict>
+</plist>
+```
+
+### Key Properties
+
+| Key | Purpose |
+|-----|---------|
+| `Label` | Unique identifier for the daemon |
+| `ProgramArguments` | Path to daemon binary |
+| `RunAtLoad` | Start when plist is loaded |
+| `KeepAlive` | Restart if daemon exits |
+| `StandardOutPath` | stdout log location |
+| `StandardErrorPath` | stderr log location |
+
+### Installation Location
+
+- Plist: `/Library/LaunchDaemons/com.winrun.daemon.plist`
+- Binary: `/usr/local/bin/winrund`
+- Logs: `/var/log/winrun/`
+
+### Management Commands
+
+```bash
+# Load daemon
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.winrun.daemon.plist
+
+# Unload daemon
+sudo launchctl bootout system/com.winrun.daemon
+
+# Check status
+sudo launchctl print system/com.winrun.daemon
+
+# View logs
+tail -f /var/log/winrun/winrund.log
+```
+
+## Future Infrastructure
+
+### Packaging Assets
+- Installer resources (welcome text, license, etc.)
+- Post-install scripts
+- Uninstall scripts
+
+### CI/CD
+- GitHub Actions workflows (`.github/workflows/`)
+- Build matrices for different macOS versions
+- Artifact publishing
+
+## Guidelines
+
+### Plist Changes
+1. Test locally before committing
+2. Document any new keys
+3. Verify daemon starts cleanly after changes
+4. Check log output for errors
+
+### Adding Infrastructure
+1. Keep infrastructure assets alongside code
+2. Document in `docs/development.md`
+3. Add to bootstrap/packaging scripts as needed
+
