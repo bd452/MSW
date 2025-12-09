@@ -123,7 +123,11 @@ public final class ConfigStore: @unchecked Sendable {
     public func save(_ configuration: VMConfiguration) throws {
         lock.lock()
         defer { lock.unlock() }
+        try saveWithoutLocking(configuration)
+    }
 
+    /// Internal save that doesn't acquire the lock (caller must hold lock)
+    private func saveWithoutLocking(_ configuration: VMConfiguration) throws {
         let versioned = VersionedConfiguration(configuration: configuration)
 
         let encoder = JSONEncoder()
@@ -229,8 +233,8 @@ public final class ConfigStore: @unchecked Sendable {
             migrated = try migrate(from: version, config: migrated)
         }
 
-        // Save migrated config
-        try save(migrated.configuration)
+        // Save migrated config (use internal method to avoid deadlock - we already hold the lock)
+        try saveWithoutLocking(migrated.configuration)
 
         return migrated
     }
@@ -267,10 +271,7 @@ public extension ConfigStore {
             return false
         }
 
-        lock.unlock()
-        try save(VMConfiguration())
-        lock.lock()
-
+        try saveWithoutLocking(VMConfiguration())
         return true
     }
 }
