@@ -25,10 +25,14 @@ final class WinRunDaemonService: WinRunDaemonXPC {
 
     func executeProgram(_ request: ProgramLaunchRequest, reply: @escaping (Result<Void, Error>) -> Void) {
         Task { [weak self] in
+            guard let strongSelf = self else {
+                reply(.failure(WinRunError.ipcFailure))
+                return
+            }
             do {
-                _ = try await self?.vmController.ensureRunning()
-                self?.logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
-                self?.vmController.registerSession(delta: 1)
+                _ = try await strongSelf.vmController.ensureRunning()
+                strongSelf.logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
+                await strongSelf.vmController.registerSession(delta: 1)
                 reply(.success(()))
             } catch {
                 reply(.failure(error))
@@ -37,7 +41,10 @@ final class WinRunDaemonService: WinRunDaemonXPC {
     }
 
     func getStatus(reply: @escaping (Result<VMState, Error>) -> Void) {
-        reply(.success(vmController.currentState()))
+        Task { [vmController] in
+            let status = await vmController.currentState()
+            reply(.success(status))
+        }
     }
 
     func suspendIfIdle(reply: @escaping (Result<Void, Error>) -> Void) {
@@ -51,8 +58,8 @@ final class WinRunDaemonService: WinRunDaemonXPC {
         }
     }
 
-    func snapshot() -> VMState {
-        vmController.currentState()
+    func snapshot() async -> VMState {
+        await vmController.currentState()
     }
 }
 
@@ -64,8 +71,10 @@ struct WinRunDaemonMain {
         let service = WinRunDaemonService()
         let runLoop = RunLoop.current
         Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
-            let status = service.snapshot()
-            logger.debug("VM status: \(status.status.rawValue), sessions: \(status.activeSessions)")
+            Task {
+                let status = await service.snapshot()
+                logger.debug("VM status: \(status.status.rawValue), sessions: \(status.activeSessions)")
+            }
         }
         runLoop.run()
     }

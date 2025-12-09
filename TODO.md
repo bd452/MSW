@@ -1,10 +1,11 @@
 - [ ] Host Platform { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
-  - [ ] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, new:host/Sources/WinRunSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceBridge.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Add C shim + pkg-config wiring for libspice-glib { new:host/Sources/WinRunSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Implement reconnect/backoff + error metrics { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
+  - [X] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, new:host/Sources/CSpiceBridge/CSpiceBridge.c, new:host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
+    - [X] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceBridge.swift } <docs/decisions/spice-bridge.md>
+    - [X] Add C shim + pkg-config wiring for libspice-glib { new:host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
+    - [X] Implement reconnect/backoff + error metrics { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
+    - [X] Switch host transport to shared memory (vhost-user) { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/CSpiceBridge/CSpiceBridge.c, docs/decisions/spice-bridge.md } <docs/decisions/spice-bridge.md>
   - [ ] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions/virtualization.md>
-    - [ ] Drive Virtualization.framework boot/stop/snapshot flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+    - [X] Drive Virtualization.framework boot/stop/snapshot flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
     - [ ] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
     - [ ] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
   - [ ] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions/protocols.md>

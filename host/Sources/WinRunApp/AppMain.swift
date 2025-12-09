@@ -11,9 +11,14 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate {
     #if canImport(AppKit)
     private var window: NSWindow?
     #endif
-    private let stream = SpiceWindowStream()
+    private let stream: SpiceWindowStream
 
     override init() {
+        #if os(macOS)
+        self.stream = SpiceWindowStream(configuration: SpiceStreamConfiguration.environmentDefault())
+        #else
+        self.stream = SpiceWindowStream()
+        #endif
         super.init()
         stream.delegate = self
     }
