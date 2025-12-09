@@ -203,11 +203,13 @@ make test-guest   # test only
 ```
 
 #### CI Requirements
-GitHub Actions enforces quality gates on every PR:
-- `.github/workflows/host.yml` — Runs SwiftLint + `swift test` on macOS
-- `.github/workflows/guest.yml` — Runs `dotnet format --verify-no-changes` + `dotnet test` on Windows
+GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`:
+- **Host Build & Test** — `swift build` + `swift test` on macOS
+- **Host Lint** — SwiftLint with `--strict` on macOS
+- **Guest Build & Test** — `dotnet build` + `dotnet test` on Windows
+- **Guest Lint** — `dotnet format --verify-no-changes` on Windows
 
-All checks must pass before merge. Run `make check` locally before pushing to catch issues early.
+All four jobs run in parallel. The final **CI** gate job requires all to pass before merge. Run `make check` locally before pushing to catch issues early.
 
 ## File Organization
 

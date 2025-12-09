@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Host (macOS) - runs in parallel with Guest jobs
+  # ─────────────────────────────────────────────────────────────────────────────
+  host-build:
+    name: Host Build & Test
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install spice-gtk pkg-config
+      - name: Build
+        working-directory: host
+        run: swift build
+      - name: Test
+        working-directory: host
+        run: swift test
+
+  host-lint:
+    name: Host Lint
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Run SwiftLint
+        working-directory: host
+        run: swiftlint lint --strict --reporter github-actions-logging
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Guest (Windows) - runs in parallel with Host jobs
+  # ─────────────────────────────────────────────────────────────────────────────
+  guest-build:
+    name: Guest Build & Test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore dependencies
+        working-directory: guest
+        run: dotnet restore WinRunAgent.sln
+      - name: Build
+        working-directory: guest
+        run: dotnet build WinRunAgent.sln --no-restore --configuration Release
+      - name: Test
+        working-directory: guest
+        run: dotnet test WinRunAgent.sln --no-build --configuration Release --verbosity normal
+
+  guest-lint:
+    name: Guest Lint
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Check formatting
+        working-directory: guest
+        run: dotnet format WinRunAgent.sln --verify-no-changes --verbosity diagnostic
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Final gate - require this single check in branch protection
+  # ─────────────────────────────────────────────────────────────────────────────
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [host-build, host-lint, guest-build, guest-lint]
+    steps:
+      - name: Check all jobs passed
+        run: |
+          results=(
+            "${{ needs.host-build.result }}"
+            "${{ needs.host-lint.result }}"
+            "${{ needs.guest-build.result }}"
+            "${{ needs.guest-lint.result }}"
+          )
+          
+          for result in "${results[@]}"; do
+            if [[ "$result" != "success" ]]; then
+              echo "❌ One or more jobs failed"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All CI checks passed!"
+
