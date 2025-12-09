@@ -1,0 +1,303 @@
+import Foundation
+import WinRunShared
+
+/// Manages a Spice stream connection to a Windows guest window.
+///
+/// `SpiceWindowStream` handles:
+/// - Connection lifecycle (connect, disconnect, reconnect)
+/// - Frame and metadata delivery to delegate
+/// - Input forwarding (mouse, keyboard)
+/// - Clipboard synchronization
+/// - Drag and drop events
+public final class SpiceWindowStream {
+    public weak var delegate: SpiceWindowStreamDelegate?
+
+    private let configuration: SpiceStreamConfiguration
+    private let delegateQueue: DispatchQueue
+    private let transport: SpiceStreamTransport
+    private let logger: Logger
+    private let stateQueue = DispatchQueue(label: "com.winrun.spice.window-stream.state")
+    private var state = StreamState()
+    private var reconnectPolicy: ReconnectPolicy
+    private var reconnectWorkItem: DispatchWorkItem?
+    private var metrics = SpiceStreamMetrics()
+
+    public convenience init(
+        configuration: SpiceStreamConfiguration = SpiceStreamConfiguration.environmentDefault(),
+        delegateQueue: DispatchQueue = .main,
+        logger: Logger = StandardLogger(subsystem: "SpiceWindowStream"),
+        reconnectPolicy: ReconnectPolicy = ReconnectPolicy()
+    ) {
+        self.init(
+            configuration: configuration,
+            delegateQueue: delegateQueue,
+            logger: logger,
+            transport: nil,
+            reconnectPolicy: reconnectPolicy
+        )
+    }
+
+    init(
+        configuration: SpiceStreamConfiguration = SpiceStreamConfiguration.environmentDefault(),
+        delegateQueue: DispatchQueue = .main,
+        logger: Logger = StandardLogger(subsystem: "SpiceWindowStream"),
+        transport: SpiceStreamTransport?,
+        reconnectPolicy: ReconnectPolicy = ReconnectPolicy()
+    ) {
+        self.configuration = configuration
+        self.delegateQueue = delegateQueue
+        self.logger = logger
+        self.reconnectPolicy = reconnectPolicy
+        #if os(macOS)
+        self.transport = transport ?? LibSpiceStreamTransport(logger: logger)
+        #else
+        self.transport = transport ?? MockSpiceStreamTransport(logger: logger)
+        #endif
+    }
+
+    // MARK: - Connection Lifecycle
+
+    public func connect(toWindowID windowID: UInt64) {
+        stateQueue.async {
+            guard self.state.lifecycle == .disconnected else {
+                self.logger.debug("Ignoring duplicate connect for window \(windowID)")
+                return
+            }
+
+            self.logger.info("Connecting to Spice stream for window \(windowID) via \(self.transportDescription())")
+            self.state.windowID = windowID
+            self.state.isUserInitiatedClose = false
+            self.state.lifecycle = .connecting
+            self.metrics.lastErrorDescription = nil
+            self.openStream(for: windowID)
+        }
+    }
+
+    public func disconnect() {
+        stateQueue.async {
+            self.logger.info("Disconnect requested for window stream")
+            self.state.isUserInitiatedClose = true
+            self.cancelReconnect()
+            guard let subscription = self.state.subscription else {
+                self.finishDisconnect()
+                return
+            }
+
+            self.transport.closeStream(subscription)
+            self.state.subscription = nil
+            self.finishDisconnect()
+        }
+    }
+
+    public func metricsSnapshot() -> SpiceStreamMetrics {
+        stateQueue.sync { metrics }
+    }
+
+    // MARK: - Input Forwarding
+
+    /// Send a mouse event to the Windows guest
+    public func sendMouseEvent(_ event: MouseInputEvent) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping mouse event - stream not connected")
+                return
+            }
+            self.transport.sendMouseEvent(event)
+        }
+    }
+
+    /// Send a keyboard event to the Windows guest
+    public func sendKeyboardEvent(_ event: KeyboardInputEvent) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping keyboard event - stream not connected")
+                return
+            }
+            self.transport.sendKeyboardEvent(event)
+        }
+    }
+
+    // MARK: - Clipboard
+
+    /// Send clipboard data to the Windows guest
+    public func sendClipboard(_ clipboard: ClipboardData) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping clipboard data - stream not connected")
+                return
+            }
+            self.transport.sendClipboard(clipboard)
+        }
+    }
+
+    /// Request clipboard content from the Windows guest
+    public func requestClipboard(format: ClipboardFormat = .plainText) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Cannot request clipboard - stream not connected")
+                return
+            }
+            self.transport.requestClipboard(format: format)
+        }
+    }
+
+    // MARK: - Drag and Drop
+
+    /// Send a drag and drop event to the Windows guest
+    public func sendDragDropEvent(_ event: DragDropEvent) {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping drag event - stream not connected")
+                return
+            }
+            self.transport.sendDragDropEvent(event)
+        }
+    }
+
+    // MARK: - Private Implementation
+
+    private func openStream(for windowID: UInt64) {
+        let callbacks = SpiceStreamCallbacks(
+            onFrame: { [weak self] data in
+                self?.handleFrame(data)
+            },
+            onMetadata: { [weak self] metadata in
+                self?.handleMetadata(metadata)
+            },
+            onClosed: { [weak self] reason in
+                self?.handleClose(reason: reason)
+            },
+            onClipboard: { [weak self] clipboard in
+                self?.handleClipboard(clipboard)
+            }
+        )
+
+        do {
+            let subscription = try transport.openStream(
+                configuration: configuration,
+                windowID: windowID,
+                callbacks: callbacks
+            )
+            state.subscription = subscription
+            state.lifecycle = .connected
+            reconnectWorkItem = nil
+            metrics.reconnectAttempts = 0
+            logger.info("Spice stream connected for window \(windowID)")
+        } catch let error as SpiceStreamError {
+            switch error {
+            case .sharedMemoryUnavailable(let description):
+                metrics.lastErrorDescription = description
+                logger.error("Shared-memory Spice stream unavailable: \(description)")
+                finishDisconnect()
+            case .connectionFailed(let description):
+                metrics.lastErrorDescription = description
+                logger.error("Failed to connect Spice stream: \(description)")
+                scheduleReconnect(reason: SpiceStreamCloseReason(code: .transportError, message: description))
+            }
+        } catch {
+            metrics.lastErrorDescription = error.localizedDescription
+            logger.error("Unexpected Spice bridge error: \(error.localizedDescription)")
+            scheduleReconnect(reason: SpiceStreamCloseReason(code: .transportError, message: error.localizedDescription))
+        }
+    }
+
+    private func handleFrame(_ frame: Data) {
+        stateQueue.async {
+            self.metrics.framesReceived += 1
+            guard let delegate = self.delegate else { return }
+            self.delegateQueue.async { [weak self] in
+                guard let self else { return }
+                delegate.windowStream(self, didUpdateFrame: frame)
+            }
+        }
+    }
+
+    private func handleMetadata(_ metadata: WindowMetadata) {
+        stateQueue.async {
+            self.metrics.metadataUpdates += 1
+            guard let delegate = self.delegate else { return }
+            self.delegateQueue.async { [weak self] in
+                guard let self else { return }
+                delegate.windowStream(self, didUpdateMetadata: metadata)
+            }
+        }
+    }
+
+    private func handleClipboard(_ clipboard: ClipboardData) {
+        stateQueue.async {
+            guard let delegate = self.delegate else { return }
+            self.delegateQueue.async { [weak self] in
+                guard let self else { return }
+                delegate.windowStream(self, didReceiveClipboard: clipboard)
+            }
+        }
+    }
+
+    private func handleClose(reason: SpiceStreamCloseReason) {
+        stateQueue.async {
+            self.logger.warn("Spice stream closed: \(reason)")
+            let wasUserInitiated = self.state.isUserInitiatedClose
+            self.state.subscription = nil
+            self.metrics.lastErrorDescription = reason.message
+
+            switch reason.code {
+            case .remoteClosed where !wasUserInitiated:
+                self.finishDisconnect()
+            case .transportError where !wasUserInitiated:
+                self.scheduleReconnect(reason: reason)
+            case .authenticationFailed:
+                self.finishDisconnect()
+            case .sharedMemoryUnavailable:
+                self.finishDisconnect()
+            default:
+                self.finishDisconnect()
+            }
+        }
+    }
+
+    private func scheduleReconnect(reason: SpiceStreamCloseReason) {
+        guard let windowID = state.windowID else { return }
+        metrics.reconnectAttempts += 1
+        let attempt = metrics.reconnectAttempts
+        if let maxAttempts = reconnectPolicy.maxAttempts, attempt > maxAttempts {
+            logger.error("Spice reconnect limit (\(maxAttempts)) reached due to \(reason.code); giving up")
+            metrics.lastErrorDescription = reason.message
+            finishDisconnect()
+            return
+        }
+        let delay = reconnectPolicy.delay(for: attempt)
+        state.lifecycle = .reconnecting
+
+        reconnectWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.stateQueue.async {
+                guard !self.state.isUserInitiatedClose else { return }
+                self.logger.info("Attempting Spice reconnect #\(attempt) for window \(windowID)")
+                self.openStream(for: windowID)
+            }
+        }
+
+        reconnectWorkItem = workItem
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func cancelReconnect() {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+    }
+
+    private func finishDisconnect() {
+        state.lifecycle = .disconnected
+        cancelReconnect()
+        delegateQueue.async { [weak self] in
+            guard let self else { return }
+            self.delegate?.windowStreamDidClose(self)
+        }
+    }
+
+    private func transportDescription() -> String {
+        configuration.transport.summaryDescription
+    }
+}
+

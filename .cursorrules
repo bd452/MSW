@@ -233,11 +233,18 @@ C# uses namespaces and partial classes:
 - `Logging.swift` - Logger protocol and implementations
 - `Errors.swift` - Error types and descriptions
 - `XPCAuth.swift` - XPC authentication and throttling
-- `InputModels.swift` - Mouse, keyboard, clipboard, drag/drop
+- `InputModels.swift` - Mouse, keyboard, clipboard, drag/drop, key code mapping
 - `SpiceMetrics.swift` - Spice stream metrics
+
+**WinRunSpiceBridge** (Spice protocol wrapper):
+- `SpiceStreamConfiguration.swift` - Connection configuration and transport types
+- `SpiceStreamModels.swift` - WindowMetadata, delegate protocol, reconnect policy, internal types
+- `SpiceWindowStream.swift` - Main stream manager (connection lifecycle, input forwarding)
+- `SpiceStreamTransport.swift` - Transport protocol and platform implementations (LibSpice/Mock)
 
 **WinRunApp** (macOS app):
 - `AppMain.swift` - Entry point, app delegate, menu setup
+- `WinRunWindowController.swift` - Window management, Spice stream delegation
 - `MetalContentView.swift` - GPU rendering and input handling
 - `SpiceFrameRenderer.swift` - Metal frame rendering
 - `ClipboardManager.swift` - Clipboard synchronization

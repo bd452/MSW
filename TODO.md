@@ -1,31 +1,31 @@
-- [ ] Host Platform { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
-  - [X] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, new:host/Sources/CSpiceBridge/CSpiceBridge.c, new:host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
-    - [X] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceBridge.swift } <docs/decisions/spice-bridge.md>
-    - [X] Add C shim + pkg-config wiring for libspice-glib { new:host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
-    - [X] Implement reconnect/backoff + error metrics { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
-    - [X] Switch host transport to shared memory (vhost-user) { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/CSpiceBridge/CSpiceBridge.c, docs/decisions/spice-bridge.md } <docs/decisions/spice-bridge.md>
+- [ ] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
+  - [X] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/, host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
+    - [X] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift } <docs/decisions/spice-bridge.md>
+    - [X] Add C shim + pkg-config wiring for libspice-glib { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
+    - [X] Implement reconnect/backoff + error metrics { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamModels.swift, host/Sources/WinRunShared/SpiceMetrics.swift } <docs/decisions/spice-bridge.md>
+    - [X] Switch host transport to shared memory (vhost-user) { host/Sources/WinRunSpiceBridge/SpiceStreamConfiguration.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/spice-bridge.md>
 - [X] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions/virtualization.md>
     - [X] Drive Virtualization.framework boot/stop/snapshot flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
-    - [X] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
-    - [X] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
+    - [X] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/VMConfiguration.swift } <docs/decisions/virtualization.md>
+    - [X] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/Logging.swift } <docs/decisions/virtualization.md>
   - [X] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions/protocols.md>
     - [X] Stand up XPC listener + connect CLI/app clients { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
-    - [X] Enforce authentication + request throttling { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/protocols.md>
+    - [X] Enforce authentication + request throttling { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunShared/XPCAuth.swift } <docs/decisions/protocols.md>
     - [X] Automate LaunchDaemon install/upgrade in bootstrap script { infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/development.md>
-  - [ ] WinRun.app window shell { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
-    - [X] Render Spice frames via Metal layer + support Retina scaling { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/spice-bridge.md>
-    - [X] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Handle window lifecycle + reconnection to streams { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift } <docs/decisions/spice-bridge.md>
+  - [ ] WinRun.app window shell { host/Sources/WinRunApp/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md>
+    - [X] Render Spice frames via Metal layer + support Retina scaling { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
+    - [X] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/ClipboardManager.swift, host/Sources/WinRunShared/InputModels.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Handle window lifecycle + reconnection to streams { host/Sources/WinRunApp/WinRunWindowController.swift, host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
   - [ ] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, apps/launchers/ } <docs/decisions/protocols.md, docs/development.md>
     - [ ] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
-    - [ ] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/, host/Sources/WinRunShared/WinRunShared.swift } <docs/development.md>
+    - [ ] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ } <docs/development.md>
     - [ ] Surface guest session + shortcut management commands { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
-  - [ ] Shared configuration + logging { host/Sources/WinRunShared/WinRunShared.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
-    - [ ] Implement persisted config store + schema validation { host/Sources/WinRunShared/WinRunShared.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
-    - [ ] Provide structured logging sinks (os_log, file, telemetry) { host/Sources/WinRunShared/WinRunShared.swift } <docs/architecture.md>
-    - [ ] Expose reusable error types + localization { host/Sources/WinRunShared/WinRunShared.swift } <docs/architecture.md>
-  - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
-    - [ ] Add unit tests for VM controller + Spice bridge { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
+  - [ ] Shared configuration + logging { host/Sources/WinRunShared/, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
+    - [ ] Implement persisted config store + schema validation { host/Sources/WinRunShared/VMConfiguration.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
+    - [ ] Provide structured logging sinks (os_log, file, telemetry) { host/Sources/WinRunShared/Logging.swift } <docs/architecture.md>
+    - [ ] Expose reusable error types + localization { host/Sources/WinRunShared/Errors.swift } <docs/architecture.md>
+  - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunSpiceBridgeTests/, new:host/Tests/WinRunVirtualMachineTests/ } <docs/development.md>
+    - [ ] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [ ] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
 
 - [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
