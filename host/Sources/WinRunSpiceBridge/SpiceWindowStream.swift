@@ -69,7 +69,30 @@ public final class SpiceWindowStream {
             self.state.isUserInitiatedClose = false
             self.state.lifecycle = .connecting
             self.metrics.lastErrorDescription = nil
+            self.notifyStateChange(.connecting)
             self.openStream(for: windowID)
+        }
+    }
+
+    /// Returns the current public connection state.
+    public var connectionState: SpiceConnectionState {
+        stateQueue.sync {
+            switch state.lifecycle {
+            case .disconnected:
+                if let error = metrics.lastErrorDescription, !error.isEmpty {
+                    return .failed(reason: error)
+                }
+                return .disconnected
+            case .connecting:
+                return .connecting
+            case .connected:
+                return .connected
+            case .reconnecting:
+                return .reconnecting(
+                    attempt: metrics.reconnectAttempts,
+                    maxAttempts: reconnectPolicy.maxAttempts
+                )
+            }
         }
     }
 
@@ -87,6 +110,70 @@ public final class SpiceWindowStream {
             self.state.subscription = nil
             self.finishDisconnect()
         }
+    }
+
+    /// Manually trigger a reconnection attempt.
+    /// Useful for retry buttons after permanent failure.
+    public func reconnect() {
+        stateQueue.async {
+            guard let windowID = self.state.windowID else {
+                self.logger.warn("Cannot reconnect - no previous window ID")
+                return
+            }
+
+            // Reset error state and attempt counter for manual retry
+            self.metrics.lastErrorDescription = nil
+            self.metrics.reconnectAttempts = 0
+            self.state.isUserInitiatedClose = false
+
+            // If currently connected/connecting, disconnect first
+            if self.state.lifecycle != .disconnected {
+                if let subscription = self.state.subscription {
+                    self.transport.closeStream(subscription)
+                    self.state.subscription = nil
+                }
+                self.cancelReconnect()
+            }
+
+            self.logger.info("Manual reconnect requested for window \(windowID)")
+            self.state.lifecycle = .connecting
+            self.notifyStateChange(.connecting)
+            self.openStream(for: windowID)
+        }
+    }
+
+    /// Pause the stream when window is not visible (minimized, hidden).
+    /// This helps conserve resources while the window is out of sight.
+    public func pause() {
+        stateQueue.async {
+            guard self.state.lifecycle == .connected else { return }
+            self.state.isPaused = true
+            self.logger.debug("Stream paused (window not visible)")
+            // Note: We don't disconnect - just flag that we're paused
+            // Transport can optionally reduce frame rate or buffer frames
+        }
+    }
+
+    /// Resume the stream when window becomes visible again.
+    public func resume() {
+        stateQueue.async {
+            guard self.state.isPaused else { return }
+            self.state.isPaused = false
+            self.logger.debug("Stream resumed (window visible)")
+
+            // If we disconnected while paused, reconnect
+            if self.state.lifecycle == .disconnected, let windowID = self.state.windowID {
+                self.state.isUserInitiatedClose = false
+                self.state.lifecycle = .connecting
+                self.notifyStateChange(.connecting)
+                self.openStream(for: windowID)
+            }
+        }
+    }
+
+    /// Whether the stream is currently paused due to window visibility.
+    public var isPaused: Bool {
+        stateQueue.sync { state.isPaused }
     }
 
     public func metricsSnapshot() -> SpiceStreamMetrics {
@@ -183,11 +270,13 @@ public final class SpiceWindowStream {
             reconnectWorkItem = nil
             metrics.reconnectAttempts = 0
             logger.info("Spice stream connected for window \(windowID)")
+            notifyStateChange(.connected)
         } catch let error as SpiceStreamError {
             switch error {
             case .sharedMemoryUnavailable(let description):
                 metrics.lastErrorDescription = description
                 logger.error("Shared-memory Spice stream unavailable: \(description)")
+                notifyStateChange(.failed(reason: description))
                 finishDisconnect()
             case .connectionFailed(let description):
                 metrics.lastErrorDescription = description
@@ -262,11 +351,13 @@ public final class SpiceWindowStream {
         if let maxAttempts = reconnectPolicy.maxAttempts, attempt > maxAttempts {
             logger.error("Spice reconnect limit (\(maxAttempts)) reached due to \(reason.code); giving up")
             metrics.lastErrorDescription = reason.message
+            notifyStateChange(.failed(reason: reason.message))
             finishDisconnect()
             return
         }
         let delay = reconnectPolicy.delay(for: attempt)
         state.lifecycle = .reconnecting
+        notifyStateChange(.reconnecting(attempt: attempt, maxAttempts: reconnectPolicy.maxAttempts))
 
         reconnectWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
@@ -288,8 +379,17 @@ public final class SpiceWindowStream {
     }
 
     private func finishDisconnect() {
+        let hadError = metrics.lastErrorDescription != nil && !metrics.lastErrorDescription!.isEmpty
         state.lifecycle = .disconnected
         cancelReconnect()
+
+        // Notify state change before the close callback
+        if hadError {
+            notifyStateChange(.failed(reason: metrics.lastErrorDescription!))
+        } else {
+            notifyStateChange(.disconnected)
+        }
+
         delegateQueue.async { [weak self] in
             guard let self else { return }
             self.delegate?.windowStreamDidClose(self)
@@ -298,6 +398,14 @@ public final class SpiceWindowStream {
 
     private func transportDescription() -> String {
         configuration.transport.summaryDescription
+    }
+
+    private func notifyStateChange(_ newState: SpiceConnectionState) {
+        guard let delegate else { return }
+        delegateQueue.async { [weak self] in
+            guard let self else { return }
+            delegate.windowStream(self, didChangeState: newState)
+        }
     }
 }
 
