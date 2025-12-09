@@ -7,6 +7,7 @@
 - Swift 5.9 toolchain
 - Homebrew packages (`scripts/bootstrap.sh` handles install)
 - libspice-glib development headers (installed via brew)
+- (Optional) .NET SDK for running guest linting locally: `brew install dotnet`
 
 ### Windows Guest
 - Windows Server 2022 (Desktop Experience disabled)

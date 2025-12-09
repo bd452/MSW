@@ -11,11 +11,12 @@ public sealed class WindowTracker
         _logger = logger;
     }
 
+    // TODO: Implement real Win32 hooks - see TODO.md "Implement Win32 hooks + Desktop Duplication feeds"
     public void Start(EventHandler<WindowEventArgs> handler)
     {
-        _logger.Info("Starting Win32 window hooks (mock implementation in repo)");
+        _logger.Info("Starting Win32 window hooks (stub - not yet implemented)");
         // Production builds would install SetWinEventHook callbacks here.
-        Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             while (true)
             {

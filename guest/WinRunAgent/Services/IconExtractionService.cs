@@ -9,9 +9,11 @@ public sealed class IconExtractionService
         _logger = logger;
     }
 
+    // TODO: Implement real icon extraction - see TODO.md "Extract & cache high-res icons for host launchers"
     public Task<byte[]> ExtractIconAsync(string executablePath, CancellationToken token)
     {
-        _logger.Info($"Extracting icon for {executablePath} (mock implementation)");
+        _ = token; // Will be used for cancellation once extraction is implemented
+        _logger.Info($"Extracting icon for {executablePath} (stub - not yet implemented)");
         return Task.FromResult(Array.Empty<byte>());
     }
 }
