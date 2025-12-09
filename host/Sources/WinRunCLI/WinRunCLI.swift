@@ -11,6 +11,8 @@ struct WinRunCLI: ParsableCommand {
         subcommands: [
             Launch.self,
             VM.self,
+            Session.self,
+            Shortcut.self,
             Config.self,
             CreateLauncher.self,
             Init.self
@@ -78,6 +80,167 @@ extension WinRunCLI {
                 }
             }
             dispatchMain()
+        }
+    }
+
+    struct Session: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "Manage guest sessions",
+            subcommands: [List.self, Close.self],
+            defaultSubcommand: List.self
+        )
+
+        struct List: ParsableCommand {
+            static var configuration = CommandConfiguration(abstract: "List active sessions")
+
+            @Flag(name: .shortAndLong, help: "Output as JSON")
+            var json: Bool = false
+
+            mutating func run() throws {
+                let jsonOutput = json
+                Task {
+                    let client = WinRunDaemonClient()
+                    do {
+                        let result = try await client.listSessions()
+                        if jsonOutput {
+                            let encoder = JSONEncoder()
+                            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                            encoder.dateEncodingStrategy = .iso8601
+                            let data = try encoder.encode(result)
+                            print(String(data: data, encoding: .utf8) ?? "{}")
+                        } else if result.sessions.isEmpty {
+                            print("No active sessions")
+                        } else {
+                            let formatter = DateFormatter()
+                            formatter.dateStyle = .short
+                            formatter.timeStyle = .medium
+                            for session in result.sessions {
+                                let title = session.windowTitle ?? "(no title)"
+                                let started = formatter.string(from: session.startedAt)
+                                print("\(session.id)  \(title)")
+                                print("    Path: \(session.windowsPath)")
+                                print("    PID: \(session.processId), Started: \(started)")
+                            }
+                        }
+                    } catch {
+                        WinRunCLI.exit(withError: error)
+                    }
+                }
+                dispatchMain()
+            }
+        }
+
+        struct Close: ParsableCommand {
+            static var configuration = CommandConfiguration(abstract: "Close a session by ID")
+
+            @Argument(help: "Session ID to close")
+            var sessionId: String
+
+            mutating func run() throws {
+                let id = sessionId
+                Task {
+                    let client = WinRunDaemonClient()
+                    do {
+                        try await client.closeSession(id)
+                        print("Closed session \(id)")
+                    } catch {
+                        WinRunCLI.exit(withError: error)
+                    }
+                }
+                dispatchMain()
+            }
+        }
+    }
+
+    struct Shortcut: ParsableCommand {
+        static var configuration = CommandConfiguration(
+            abstract: "Manage Windows shortcuts",
+            subcommands: [List.self, Sync.self],
+            defaultSubcommand: List.self
+        )
+
+        struct List: ParsableCommand {
+            static var configuration = CommandConfiguration(abstract: "List detected Windows shortcuts")
+
+            @Flag(name: .shortAndLong, help: "Output as JSON")
+            var json: Bool = false
+
+            mutating func run() throws {
+                let jsonOutput = json
+                Task {
+                    let client = WinRunDaemonClient()
+                    do {
+                        let result = try await client.listShortcuts()
+                        if jsonOutput {
+                            let encoder = JSONEncoder()
+                            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                            encoder.dateEncodingStrategy = .iso8601
+                            let data = try encoder.encode(result)
+                            print(String(data: data, encoding: .utf8) ?? "{}")
+                        } else if result.shortcuts.isEmpty {
+                            print("No Windows shortcuts detected")
+                            print("Shortcuts will appear here when the guest agent detects them.")
+                        } else {
+                            for shortcut in result.shortcuts {
+                                print("\(shortcut.displayName)")
+                                print("    Target: \(shortcut.targetPath)")
+                                if let args = shortcut.arguments, !args.isEmpty {
+                                    print("    Args: \(args)")
+                                }
+                            }
+                        }
+                    } catch {
+                        WinRunCLI.exit(withError: error)
+                    }
+                }
+                dispatchMain()
+            }
+        }
+
+        struct Sync: ParsableCommand {
+            static var configuration = CommandConfiguration(
+                abstract: "Create macOS launchers for detected Windows shortcuts"
+            )
+
+            @Option(name: .shortAndLong, help: "Destination folder (default: ~/Applications/WinRun Apps)")
+            var destination: String?
+
+            @Flag(name: .shortAndLong, help: "Output as JSON")
+            var json: Bool = false
+
+            mutating func run() throws {
+                let destinationRoot = destination
+                    ?? FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent("Applications/WinRun Apps", isDirectory: true).path
+                let jsonOutput = json
+
+                Task {
+                    let client = WinRunDaemonClient()
+                    do {
+                        let result = try await client.syncShortcuts(to: destinationRoot)
+                        if jsonOutput {
+                            let encoder = JSONEncoder()
+                            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                            let data = try encoder.encode(result)
+                            print(String(data: data, encoding: .utf8) ?? "{}")
+                        } else {
+                            print("Sync complete:")
+                            print("  Created: \(result.created)")
+                            print("  Skipped: \(result.skipped)")
+                            print("  Failed: \(result.failed)")
+                            if !result.launcherPaths.isEmpty {
+                                print("\nCreated launchers:")
+                                for path in result.launcherPaths {
+                                    print("  \(path)")
+                                }
+                            }
+                        }
+                    } catch {
+                        WinRunCLI.exit(withError: error)
+                    }
+                }
+                dispatchMain()
+            }
         }
     }
 
