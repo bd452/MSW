@@ -59,6 +59,144 @@ winrun_spice_stream_handle winrun_spice_stream_open_shared(
 
 void winrun_spice_stream_close(winrun_spice_stream_handle stream);
 
+// MARK: - Input Events
+
+typedef enum {
+    WINRUN_MOUSE_EVENT_MOVE = 0,
+    WINRUN_MOUSE_EVENT_PRESS = 1,
+    WINRUN_MOUSE_EVENT_RELEASE = 2,
+    WINRUN_MOUSE_EVENT_SCROLL = 3
+} winrun_mouse_event_type;
+
+typedef enum {
+    WINRUN_MOUSE_BUTTON_LEFT = 1,
+    WINRUN_MOUSE_BUTTON_RIGHT = 2,
+    WINRUN_MOUSE_BUTTON_MIDDLE = 4,
+    WINRUN_MOUSE_BUTTON_EXTRA1 = 5,
+    WINRUN_MOUSE_BUTTON_EXTRA2 = 6
+} winrun_mouse_button;
+
+typedef struct {
+    uint64_t window_id;
+    winrun_mouse_event_type event_type;
+    winrun_mouse_button button;
+    double x;
+    double y;
+    double scroll_delta_x;
+    double scroll_delta_y;
+    int32_t modifiers;
+} winrun_mouse_event;
+
+typedef enum {
+    WINRUN_KEY_EVENT_DOWN = 0,
+    WINRUN_KEY_EVENT_UP = 1
+} winrun_key_event_type;
+
+typedef struct {
+    uint64_t window_id;
+    winrun_key_event_type event_type;
+    uint32_t key_code;
+    uint32_t scan_code;
+    bool is_extended_key;
+    int32_t modifiers;
+    const char *character;
+} winrun_keyboard_event;
+
+/// Send a mouse event to the guest
+/// Returns true on success, false on failure
+bool winrun_spice_send_mouse_event(
+    winrun_spice_stream_handle stream,
+    const winrun_mouse_event *event
+);
+
+/// Send a keyboard event to the guest
+/// Returns true on success, false on failure
+bool winrun_spice_send_keyboard_event(
+    winrun_spice_stream_handle stream,
+    const winrun_keyboard_event *event
+);
+
+// MARK: - Clipboard
+
+typedef enum {
+    WINRUN_CLIPBOARD_FORMAT_TEXT = 0,
+    WINRUN_CLIPBOARD_FORMAT_RTF = 1,
+    WINRUN_CLIPBOARD_FORMAT_HTML = 2,
+    WINRUN_CLIPBOARD_FORMAT_PNG = 3,
+    WINRUN_CLIPBOARD_FORMAT_TIFF = 4,
+    WINRUN_CLIPBOARD_FORMAT_FILE_URL = 5
+} winrun_clipboard_format;
+
+typedef struct {
+    winrun_clipboard_format format;
+    const uint8_t *data;
+    size_t data_length;
+    uint64_t sequence_number;
+} winrun_clipboard_data;
+
+typedef void (*winrun_clipboard_cb)(const winrun_clipboard_data *clipboard, void *user_data);
+
+/// Set clipboard content callback for receiving guest clipboard updates
+void winrun_spice_set_clipboard_callback(
+    winrun_spice_stream_handle stream,
+    winrun_clipboard_cb clipboard_cb,
+    void *user_data
+);
+
+/// Send clipboard data to the guest
+/// Returns true on success, false on failure
+bool winrun_spice_send_clipboard(
+    winrun_spice_stream_handle stream,
+    const winrun_clipboard_data *clipboard
+);
+
+/// Request clipboard content from the guest in the specified format
+void winrun_spice_request_clipboard(
+    winrun_spice_stream_handle stream,
+    winrun_clipboard_format format
+);
+
+// MARK: - Drag and Drop
+
+typedef enum {
+    WINRUN_DRAG_OP_NONE = 0,
+    WINRUN_DRAG_OP_COPY = 1,
+    WINRUN_DRAG_OP_MOVE = 2,
+    WINRUN_DRAG_OP_LINK = 3
+} winrun_drag_operation;
+
+typedef enum {
+    WINRUN_DRAG_EVENT_ENTER = 0,
+    WINRUN_DRAG_EVENT_MOVE = 1,
+    WINRUN_DRAG_EVENT_LEAVE = 2,
+    WINRUN_DRAG_EVENT_DROP = 3
+} winrun_drag_event_type;
+
+typedef struct {
+    const char *host_path;
+    const char *guest_path;
+    uint64_t file_size;
+    bool is_directory;
+} winrun_dragged_file;
+
+typedef struct {
+    uint64_t window_id;
+    winrun_drag_event_type event_type;
+    double x;
+    double y;
+    const winrun_dragged_file *files;
+    size_t file_count;
+    winrun_drag_operation allowed_operations;
+    winrun_drag_operation selected_operation;
+} winrun_drag_event;
+
+/// Send a drag and drop event to the guest
+/// Returns true on success, false on failure
+bool winrun_spice_send_drag_event(
+    winrun_spice_stream_handle stream,
+    const winrun_drag_event *event
+);
+
 #ifdef __cplusplus
 }
 #endif

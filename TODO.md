@@ -14,7 +14,7 @@
     - [X] Automate LaunchDaemon install/upgrade in bootstrap script { infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/development.md>
   - [ ] WinRun.app window shell { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
     - [X] Render Spice frames via Metal layer + support Retina scaling { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
+    - [X] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/spice-bridge.md>
     - [ ] Handle window lifecycle + reconnection to streams { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunSpiceBridge/SpiceBridge.swift } <docs/decisions/spice-bridge.md>
   - [ ] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, apps/launchers/ } <docs/decisions/protocols.md, docs/development.md>
     - [ ] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>

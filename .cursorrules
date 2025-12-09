@@ -176,7 +176,7 @@ When CI pipelines are added (`host.yml`, `guest.yml`), all tests must pass befor
 ```
 host/                     Swift Package (macOS)
   Sources/
-    WinRunShared/         Config, logging, error types
+    WinRunShared/         Config, logging, error types, input models
     WinRunXPC/            IPC contracts
     WinRunVirtualMachine/ VM lifecycle
     WinRunSpiceBridge/    Spice C shim wrapper
@@ -194,5 +194,52 @@ infrastructure/launchd/   LaunchDaemon plist
 scripts/                  Bootstrap, build, packaging
 docs/                     Architecture, decisions
 ```
+
+## File Size Guidelines
+
+Keep source files focused and manageable:
+
+### Target Limits
+- **Swift files**: ~300 lines ideal, 500 lines maximum
+- **C# files**: ~300 lines ideal, 500 lines maximum  
+- **C files**: ~400 lines ideal, 600 lines maximum
+
+### When to Split Files
+
+Split a file when:
+1. It exceeds the size guidelines above
+2. It contains multiple unrelated concerns (e.g., VM config + input models + authentication)
+3. A logical group of types/functions could be reused independently
+4. The file name no longer accurately describes all its contents
+
+### How to Split (Swift)
+Swift modules automatically export all public types from all files in the module. Simply:
+1. Create new files with focused names (e.g., `InputModels.swift`, `VMConfiguration.swift`)
+2. Move related types to each file
+3. Keep imports minimal—don't add unnecessary dependencies between files
+4. The original file can become a documentation comment or be deleted
+
+### How to Split (C#)
+C# uses namespaces and partial classes:
+1. Create new files with focused names
+2. Use `partial class` if splitting a single large class
+3. Keep the same namespace across related files
+4. Consider extracting interfaces for better testability
+
+### Module Structure Conventions
+
+**WinRunShared** (shared types library):
+- `VMConfiguration.swift` - VM config, validation, state
+- `Logging.swift` - Logger protocol and implementations
+- `Errors.swift` - Error types and descriptions
+- `XPCAuth.swift` - XPC authentication and throttling
+- `InputModels.swift` - Mouse, keyboard, clipboard, drag/drop
+- `SpiceMetrics.swift` - Spice stream metrics
+
+**WinRunApp** (macOS app):
+- `AppMain.swift` - Entry point, app delegate, menu setup
+- `MetalContentView.swift` - GPU rendering and input handling
+- `SpiceFrameRenderer.swift` - Metal frame rendering
+- `ClipboardManager.swift` - Clipboard synchronization
 
 

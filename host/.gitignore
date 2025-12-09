@@ -1,0 +1,23 @@
+# Swift Package Manager build output
+.build/
+.swiftpm/
+DerivedData/
+Package.resolved
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcworkspace
+*.xcodeproj
+
+# Stray compilation artifacts (should be in .build/, but just in case)
+*.o
+*.d
+*.swiftdeps
+*.swiftsourceinfo
+*.swiftmodule
+*.swiftdoc
+
+# macOS
+.DS_Store
+
