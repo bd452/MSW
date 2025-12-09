@@ -65,6 +65,60 @@ host/.build/debug/winrun create-launcher "C:\\Windows\\System32\\calc.exe"
 4. Ensure Spice guest tools are installed so virtio-serial channels are available.
 
 ## Testing Strategy
-- **Unit tests** cover configuration helpers, CLI utilities, and guest data types.
+
+### What Requires Tests
+
+Tests are required for:
+1. **Code with downstream impact** — APIs used by other components, protocol contracts, shared data models
+2. **Non-trivial logic** — State machines, parsers, serializers, validation, retry logic
+
+#### Always Test
+- Protocol message serialization/deserialization (the host↔guest contract)
+- Configuration parsing and schema validation
+- VM lifecycle state transitions
+- Public APIs in `WinRunShared` and `WinRunXPC`
+- Error handling for Spice/XPC operations
+
+#### Usually Test
+- Multi-branch business logic
+- Data transformations (icon conversion, path translation)
+- Timeout/backoff/reconnection logic
+
+#### Skip Tests For
+- Thin wrappers over platform APIs
+- Build scripts and one-off tooling
+- UI glue code with no logic
+
+### Test Types
+
+- **Unit tests** cover configuration helpers, CLI utilities, protocol messages, and guest data types. These run without external dependencies.
 - **Integration tests** (future) will spin up a headless Windows VM locally by leveraging Virtualization.framework + qemu-img created disks.
 - **End-to-end tests** (future) will run inside CI on macOS runners with nested virtualization enabled to validate Spice streaming.
+
+### Running Tests
+
+```bash
+# All platforms (from repo root)
+make test-host test-guest
+
+# Host only (macOS, requires Xcode)
+cd host && swift test
+
+# Guest only (Windows or cross-platform .NET SDK)
+cd guest && dotnet test WinRunAgent.sln
+```
+
+### Test Organization
+
+| Platform | Framework | Test Location | Naming |
+|----------|-----------|---------------|--------|
+| Host (Swift) | XCTest | `host/Tests/<Module>Tests/` | `*Tests.swift` |
+| Guest (C#) | xUnit | `guest/WinRunAgent.Tests/` | `*Tests.cs` |
+
+### CI Integration
+
+When GitHub Actions workflows are added:
+- `host.yml` runs `swift test` on macOS runners
+- `guest.yml` runs `dotnet test` on Windows runners
+- All tests must pass for PR merge
+- Test results and coverage are published as artifacts

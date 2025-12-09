@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: bootstrap build build-host build-guest test-host test-guest
+.PHONY: bootstrap build build-host build-guest test test-host test-guest
 
 bootstrap:
 	$(REPO_ROOT)/scripts/bootstrap.sh
@@ -22,8 +22,18 @@ else
 	fi
 endif
 
+test: test-host test-guest
+
 test-host:
 	cd $(REPO_ROOT)/host && swift test
 
 test-guest:
+ifdef DOTNET_ROOT
 	cd $(REPO_ROOT)/guest && dotnet test WinRunAgent.sln
+else
+	@if command -v dotnet >/dev/null 2>&1; then \
+		cd $(REPO_ROOT)/guest && dotnet test WinRunAgent.sln; \
+	else \
+		echo "dotnet CLI not found; skipping guest tests"; \
+	fi
+endif
