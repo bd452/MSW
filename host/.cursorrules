@@ -36,8 +36,10 @@ WinRunCLI ────┬─→ WinRunXPC
 ## Swift Conventions
 
 ### Conditional Compilation
+See also: global principle in root `.cursorrules` under "Platform Targeting & Conditional Compilation".
+
 - **Do NOT use `#if canImport()` for required frameworks.** WinRunApp is a macOS app — AppKit, Metal, MetalKit are always available. If they're not, that's a real build failure we want to see.
-- **Do NOT write code for platforms we don't target.** This codebase targets macOS only. Don't add `#if os(macOS)` / `#else` branches, portable abstractions, or fallback paths for iOS, Linux, or other platforms. That's dead code that adds noise and hides the real implementation.
+- **Do NOT write code for platforms we don't target.** This codebase targets macOS only. Don't add `#if os(macOS)` / `#else` branches, portable abstractions, or fallback paths for iOS, Linux, or other platforms. That's dead code.
 - If a compiler error or warning is "platform-specific" but that platform is macOS — fix it properly, don't suppress it with conditional compilation.
 - Never silence compiler errors/warnings with platform guards unless the failing code exists only on a non-target platform; the macOS build must fail loudly.
 - Only use conditional compilation when code genuinely needs to run on multiple platforms (e.g., `WinRunSpiceBridge` has a mock transport for non-macOS test hosts).
