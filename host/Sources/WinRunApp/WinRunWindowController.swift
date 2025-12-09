@@ -82,6 +82,11 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         stream.sendDragDropEvent(event)
     }
 
+    func metalContentViewDidRequestRetry(_ view: MetalContentView) {
+        logger.info("User requested connection retry")
+        stream.reconnect()
+    }
+
     // MARK: - SpiceWindowStreamDelegate
 
     func windowStream(_ stream: SpiceWindowStream, didUpdateFrame frame: Data) {
@@ -147,6 +152,11 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         }
     }
 
+    func windowStream(_ stream: SpiceWindowStream, didChangeState state: SpiceConnectionState) {
+        logger.debug("Spice stream state changed: \(state)")
+        metalContentView?.updateConnectionState(state)
+    }
+
     func windowStreamDidClose(_ stream: SpiceWindowStream) {
         logger.info("Spice stream closed, closing window")
         clipboardManager.stopMonitoring()
@@ -180,6 +190,31 @@ extension WinRunWindowController: NSWindowDelegate {
     func windowDidBecomeKey(_ notification: Notification) {
         // Request clipboard from guest when window becomes active
         stream.requestClipboard(format: .plainText)
+    }
+
+    // MARK: - Window Visibility
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        logger.debug("Window minimized, pausing stream")
+        stream.pause()
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        logger.debug("Window restored from dock, resuming stream")
+        stream.resume()
+    }
+
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+
+        // Pause stream when window is fully occluded (covered by other windows)
+        if window.occlusionState.contains(.visible) {
+            logger.debug("Window became visible, resuming stream")
+            stream.resume()
+        } else {
+            logger.debug("Window fully occluded, pausing stream")
+            stream.pause()
+        }
     }
 }
 
