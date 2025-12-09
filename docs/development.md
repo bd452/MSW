@@ -91,6 +91,31 @@ host/.build/debug/winrun vm status
 host/.build/debug/winrun create-launcher "C:\\Windows\\System32\\calc.exe"
 ```
 
+## Git Workflow
+
+### Branch Strategy
+
+- **`main`** — Always deployable; PRs merge here after review
+- **Feature branches** — Created from `main` for each unit of work
+
+### AI-Assisted Development
+
+When using AI assistants (Cursor, etc.) to complete TODO.md items:
+
+1. **One branch per chat session** — The AI creates a feature branch at session start and commits all work there
+2. **Multiple TODO items → multiple commits** — Sequential TODO items within a session become separate commits on the same branch
+3. **Session end** — Branch is ready for PR or manual review
+
+This keeps history clean while allowing the AI to make incremental progress without branch sprawl.
+
+### Manual Development
+
+For human contributors:
+1. Create a branch from `main`: `git checkout -b feat-my-feature`
+2. Make commits with clear messages
+3. Open a PR when ready for review
+4. Squash-merge or rebase as appropriate
+
 ## Windows Agent Deployment
 1. Build the solution on Windows: `dotnet publish -c Release -r win-x64`.
 2. Copy published bits to `C:\Program Files\WinRun`.
