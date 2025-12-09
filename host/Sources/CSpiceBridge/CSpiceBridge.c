@@ -166,16 +166,20 @@ winrun_spice_stream *winrun_spice_stream_open_tcp(
     snprintf(port_string, sizeof(port_string), "%u", port);
 
     stream->session = spice_session_new();
-    if (stream->session) {
-        g_object_set(stream->session,
-                     "host", host,
-                     use_tls ? "tls-port" : "port", port_string,
-                     NULL);
-        if (ticket) {
-            g_object_set(stream->session, "password", ticket, NULL);
-        }
-        spice_session_connect(stream->session);
+    if (!stream->session) {
+        winrun_write_error(error_buffer, error_buffer_length, "Unable to create Spice session");
+        winrun_spice_stream_free(stream);
+        return NULL;
     }
+
+    g_object_set(stream->session,
+                 "host", host,
+                 use_tls ? "tls-port" : "port", port_string,
+                 NULL);
+    if (ticket) {
+        g_object_set(stream->session, "password", ticket, NULL);
+    }
+    spice_session_connect(stream->session);
 #else
     (void)host;
     (void)port;
