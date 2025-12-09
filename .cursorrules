@@ -75,9 +75,55 @@ After completing a task:
 - Update `architecture.md` and `development.md` for user-facing changes
 
 ### Testing
-- Unit tests for all non-trivial logic
-- Integration tests for cross-component flows
-- Host tests via XCTest, guest tests via xUnit
+
+Tests are required for code that meets either criterion:
+1. **Would normally require tests** — Non-trivial logic, state machines, parsers, serialization
+2. **Has downstream impact** — APIs consumed by other components, protocol contracts, data models
+
+#### What to Test
+
+**Always test:**
+- Protocol message serialization/deserialization (host↔guest contracts)
+- Configuration parsing and validation
+- State machine transitions (VM lifecycle, connection states)
+- Public APIs in shared libraries (`WinRunShared`, `WinRunXPC`)
+- Error handling paths for critical operations
+
+**Usually test:**
+- Complex business logic with multiple code paths
+- Data transformations and format conversions
+- Retry/backoff/timeout logic
+
+**Skip tests for:**
+- Simple wrappers or pass-through code
+- Platform-provided functionality (Virtualization.framework, Win32 APIs)
+- One-off scripts and build tooling
+
+#### Test Infrastructure
+
+| Platform | Framework | Command | Location |
+|----------|-----------|---------|----------|
+| Host (macOS) | XCTest | `swift test` or `make test-host` | `host/Tests/` |
+| Guest (Windows) | xUnit | `dotnet test` or `make test-guest` | `guest/WinRunAgent.Tests/` |
+
+#### Naming Conventions
+- Host: `<Module>Tests/` directories with `*Tests.swift` files
+- Guest: `<ClassName>Tests.cs` files in `WinRunAgent.Tests/`
+
+#### Running Tests
+```bash
+# All tests
+make test-host test-guest
+
+# Host only
+cd host && swift test
+
+# Guest only (requires .NET 8 SDK)
+cd guest && dotnet test WinRunAgent.sln
+```
+
+#### CI Requirements
+When CI pipelines are added (`host.yml`, `guest.yml`), all tests must pass before merge. Test failures block PR approval.
 
 ## File Organization
 
