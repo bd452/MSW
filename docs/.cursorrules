@@ -118,3 +118,4 @@ See [Spice Bridge Integration](decisions/spice-bridge.md) for details.
 Implemented in `host/Sources/WinRunSpiceBridge/SpiceBridge.swift`
 ```
 
+

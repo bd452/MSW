@@ -247,7 +247,7 @@ public final class SpiceWindowStream {
             switch reason.code {
             case .remoteClosed where !wasUserInitiated:
                 self.finishDisconnect()
-            case .transportError where !wasUserInitiated,
+            case .transportError where !wasUserInitiated:
                 self.scheduleReconnect(reason: reason)
             case .authenticationFailed:
                 self.finishDisconnect()
