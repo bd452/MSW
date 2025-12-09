@@ -6,8 +6,8 @@
     - [X] Switch host transport to shared memory (vhost-user) { host/Sources/WinRunSpiceBridge/SpiceBridge.swift, host/Sources/CSpiceBridge/CSpiceBridge.c, docs/decisions/spice-bridge.md } <docs/decisions/spice-bridge.md>
   - [ ] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions/virtualization.md>
     - [X] Drive Virtualization.framework boot/stop/snapshot flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
-    - [ ] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
-    - [ ] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
+    - [X] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
+    - [X] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/virtualization.md>
   - [ ] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions/protocols.md>
     - [ ] Stand up XPC listener + connect CLI/app clients { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
     - [ ] Enforce authentication + request throttling { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunShared/WinRunShared.swift } <docs/decisions/protocols.md>

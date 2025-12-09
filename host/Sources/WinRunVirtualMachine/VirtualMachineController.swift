@@ -30,6 +30,10 @@ public actor VirtualMachineController {
     private let logger: Logger
     private var uptimeStart: Date?
     private var suspendedStateURL: URL?
+    private var configurationValidated = false
+    private var bootCount: Int = 0
+    private var suspendCount: Int = 0
+    private var totalSessionsLaunched: Int = 0
 
 #if canImport(Virtualization)
     @available(macOS 13, *)
@@ -66,6 +70,12 @@ public actor VirtualMachineController {
     public func registerSession(delta: Int) {
         let updated = max(0, state.activeSessions + delta)
         state = VMState(status: state.status, uptime: uptime(), activeSessions: updated)
+        if delta > 0 {
+            totalSessionsLaunched += delta
+            logMetrics(event: "session_opened")
+        } else if delta < 0 {
+            logMetrics(event: "session_closed")
+        }
     }
 
     public func currentState() -> VMState {
@@ -99,8 +109,10 @@ public actor VirtualMachineController {
         suspendedStateURL = snapshotURL
         clearNativeVM()
         let uptimeSeconds = uptime()
+        suspendCount += 1
         uptimeStart = nil
         state = VMState(status: .suspended, uptime: uptimeSeconds, activeSessions: 0)
+        logMetrics(event: "vm_suspended")
     }
 
     @discardableResult
@@ -124,6 +136,7 @@ public actor VirtualMachineController {
         clearNativeVM()
         uptimeStart = nil
         state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
+        logMetrics(event: "vm_shutdown")
         return state
     }
 
@@ -146,12 +159,19 @@ public actor VirtualMachineController {
             return try await waitForReady()
         }
 
+        try validateConfigurationIfNeeded()
+
         state.status = .starting
         logger.info(resumeFromSnapshot ? "Resuming Windows VM from snapshot" : "Booting Windows VM")
 
 #if canImport(Virtualization)
         if #available(macOS 13, *) {
-            try await bootNativeVirtualMachine(resumeFromSnapshot: resumeFromSnapshot)
+            do {
+                try await bootNativeVirtualMachine(resumeFromSnapshot: resumeFromSnapshot)
+            } catch let validationError as VMConfigurationValidationError {
+                logger.error("Failed to build VM configuration: \(validationError.description)")
+                throw VirtualMachineLifecycleError.virtualizationUnavailable(validationError.description)
+            }
         } else {
             try await simulateBoot()
         }
@@ -161,6 +181,9 @@ public actor VirtualMachineController {
 
         uptimeStart = Date()
         state = VMState(status: .running, uptime: 0, activeSessions: state.activeSessions)
+        bootCount += 1
+        let event = resumeFromSnapshot ? "vm_resumed" : "vm_started"
+        logMetrics(event: event)
         return state
     }
 
@@ -223,6 +246,33 @@ public actor VirtualMachineController {
         try await Task.sleep(nanoseconds: 150_000_000)
     }
 
+    private func validateConfigurationIfNeeded() throws {
+        guard !configurationValidated else { return }
+        do {
+            try configuration.validate()
+            configurationValidated = true
+            logger.debug("Validated VM configuration for disk \(configuration.disk.imagePath.path)")
+        } catch let validationError as VMConfigurationValidationError {
+            logger.error("VM configuration invalid: \(validationError.description)")
+            throw VirtualMachineLifecycleError.virtualizationUnavailable(validationError.description)
+        } catch {
+            logger.error("VM configuration validation hit unexpected error: \(error)")
+            throw VirtualMachineLifecycleError.virtualizationUnavailable(error.localizedDescription)
+        }
+    }
+
+    private func logMetrics(event: String) {
+        let snapshot = VMMetricsSnapshot(
+            event: event,
+            uptimeSeconds: uptime(),
+            activeSessions: state.activeSessions,
+            totalSessions: totalSessionsLaunched,
+            bootCount: bootCount,
+            suspendCount: suspendCount
+        )
+        logger.info("VM metrics: \(snapshot.description)")
+    }
+
 #if canImport(Virtualization)
     @available(macOS 13, *)
     private func bootNativeVirtualMachine(resumeFromSnapshot: Bool) async throws {
@@ -260,7 +310,7 @@ public actor VirtualMachineController {
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
         vmConfig.storageDevices = [blockDevice]
 
-        let networkAttachment = VZNATNetworkDeviceAttachment()
+        let networkAttachment = try makeNetworkAttachment()
         let networkDevice = VZVirtioNetworkDeviceConfiguration()
         networkDevice.attachment = networkAttachment
         vmConfig.networkDevices = [networkDevice]
@@ -276,6 +326,24 @@ public actor VirtualMachineController {
 
         try vmConfig.validate()
         return vmConfig
+    }
+
+    @available(macOS 13, *)
+    private func makeNetworkAttachment() throws -> VZNetworkDeviceAttachment {
+        switch configuration.network.mode {
+        case .nat:
+            return VZNATNetworkDeviceAttachment()
+        case .bridged:
+            guard let identifier = configuration.network.interfaceIdentifier else {
+                throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
+            }
+            guard let interface = VZBridgedNetworkInterface.networkInterfaces().first(where: {
+                $0.identifier == identifier || $0.localizedDisplayName == identifier
+            }) else {
+                throw VMConfigurationValidationError.bridgedInterfaceUnavailable(identifier)
+            }
+            return VZBridgedNetworkDeviceAttachment(interface: interface)
+        }
     }
 #endif
 }
