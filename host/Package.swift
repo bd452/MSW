@@ -85,6 +85,16 @@ var targets: [Target] = [
         name: "WinRunSharedTests",
         dependencies: ["WinRunShared"],
         path: "Tests/WinRunSharedTests"
+    ),
+    .testTarget(
+        name: "WinRunSpiceBridgeTests",
+        dependencies: ["WinRunSpiceBridge", "WinRunShared"],
+        path: "Tests/WinRunSpiceBridgeTests"
+    ),
+    .testTarget(
+        name: "WinRunVirtualMachineTests",
+        dependencies: ["WinRunVirtualMachine", "WinRunShared"],
+        path: "Tests/WinRunVirtualMachineTests"
     )
 ]
 

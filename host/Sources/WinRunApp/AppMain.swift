@@ -122,10 +122,11 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
 struct WinRunAppMain {
     static func main() {
         if #available(macOS 13, *) {
-            let delegate = WinRunApplicationDelegate()
-            delegate.start(arguments: CommandLine.arguments)
             let app = NSApplication.shared
+            let delegate = WinRunApplicationDelegate()
+            app.delegate = delegate
             app.setActivationPolicy(.regular)
+            delegate.start(arguments: CommandLine.arguments)
             app.run()
         } else {
             print("WinRun requires macOS 13 or newer.")

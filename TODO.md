@@ -25,7 +25,7 @@
     - [X] Provide structured logging sinks (os_log, file, telemetry) { host/Sources/WinRunShared/Logging.swift } <docs/architecture.md>
     - [X] Expose reusable error types + localization { host/Sources/WinRunShared/Errors.swift } <docs/architecture.md>
   - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunSpiceBridgeTests/, new:host/Tests/WinRunVirtualMachineTests/ } <docs/development.md>
-    - [ ] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
+    - [X] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [ ] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
 
 - [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
@@ -59,7 +59,7 @@
   - [ ] Documentation updates { README.md, docs/architecture.md, docs/development.md, docs/decisions/operations.md }
     - [ ] Reflect production architecture + workflows { docs/architecture.md, docs/development.md, docs/decisions/operations.md }
     - [ ] Update README with installation + usage once stable { README.md }
-  - [ ] Continuous integration { scripts/build-all.sh, scripts/bootstrap.sh, new:.github/workflows/host.yml, new:.github/workflows/guest.yml } <docs/decisions/operations.md>
-    - [ ] Add macOS CI pipeline for Swift targets { new:.github/workflows/host.yml } <docs/decisions/operations.md>
-    - [ ] Add Windows CI pipeline for dotnet agent { new:.github/workflows/guest.yml } <docs/decisions/operations.md>
-    - [ ] Publish artifacts + aggregated test results { new:.github/workflows/host.yml, new:.github/workflows/guest.yml } <docs/decisions/operations.md>
+  - [X] Continuous integration { scripts/build-all.sh, scripts/bootstrap.sh, .github/workflows/host.yml, .github/workflows/guest.yml } <docs/decisions/operations.md>
+    - [X] Add macOS CI pipeline for Swift targets { .github/workflows/host.yml } <docs/decisions/operations.md>
+    - [X] Add Windows CI pipeline for dotnet agent { .github/workflows/guest.yml } <docs/decisions/operations.md>
+    - [ ] Publish artifacts + aggregated test results { .github/workflows/host.yml, .github/workflows/guest.yml } <docs/decisions/operations.md>
