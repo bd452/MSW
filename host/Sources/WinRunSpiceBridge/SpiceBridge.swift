@@ -245,6 +245,12 @@ public final class SpiceWindowStream {
         guard let windowID = state.windowID else { return }
         metrics.reconnectAttempts += 1
         let attempt = metrics.reconnectAttempts
+        if let maxAttempts = reconnectPolicy.maxAttempts, attempt > maxAttempts {
+            logger.error("Spice reconnect limit (\(maxAttempts)) reached due to \(reason.code); giving up")
+            metrics.lastErrorDescription = reason.message
+            finishDisconnect()
+            return
+        }
         let delay = reconnectPolicy.delay(for: attempt)
         state.lifecycle = .reconnecting
 
@@ -301,11 +307,18 @@ public struct ReconnectPolicy {
     public var initialDelay: TimeInterval
     public var multiplier: Double
     public var maxDelay: TimeInterval
+    public var maxAttempts: Int?
 
-    public init(initialDelay: TimeInterval = 0.5, multiplier: Double = 1.8, maxDelay: TimeInterval = 15) {
+    public init(
+        initialDelay: TimeInterval = 0.5,
+        multiplier: Double = 1.8,
+        maxDelay: TimeInterval = 15,
+        maxAttempts: Int? = 5
+    ) {
         self.initialDelay = initialDelay
         self.multiplier = multiplier
         self.maxDelay = maxDelay
+        self.maxAttempts = maxAttempts
     }
 
     func delay(for attempt: Int) -> TimeInterval {
