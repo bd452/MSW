@@ -24,9 +24,9 @@
     - [X] Implement persisted config store + schema validation { host/Sources/WinRunShared/VMConfiguration.swift, new:host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
     - [X] Provide structured logging sinks (os_log, file, telemetry) { host/Sources/WinRunShared/Logging.swift } <docs/architecture.md>
     - [X] Expose reusable error types + localization { host/Sources/WinRunShared/Errors.swift } <docs/architecture.md>
-  - [ ] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunSpiceBridgeTests/, new:host/Tests/WinRunVirtualMachineTests/ } <docs/development.md>
+  - [X] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunSpiceBridgeTests/, new:host/Tests/WinRunVirtualMachineTests/ } <docs/development.md>
     - [X] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
-    - [ ] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
+    - [X] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
 
 - [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
   - [ ] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, new:guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>

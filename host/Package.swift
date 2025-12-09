@@ -95,6 +95,11 @@ var targets: [Target] = [
         name: "WinRunVirtualMachineTests",
         dependencies: ["WinRunVirtualMachine", "WinRunShared"],
         path: "Tests/WinRunVirtualMachineTests"
+    ),
+    .testTarget(
+        name: "WinRunXPCTests",
+        dependencies: ["WinRunXPC", "WinRunShared"],
+        path: "Tests/WinRunXPCTests"
     )
 ]
 
