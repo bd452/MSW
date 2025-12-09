@@ -73,7 +73,7 @@ extension WinRunCLI {
                         let state = try await client.status()
                         print("Status: \(state.status.rawValue), sessions: \(state.activeSessions)")
                     default:
-                        throw WinRunError.launchFailed(reason: "Unsupported action \(actionValue)")
+                        throw WinRunError.notSupported(feature: "vm \(actionValue)")
                     }
                 } catch {
                     WinRunCLI.exit(withError: error)

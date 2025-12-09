@@ -125,7 +125,7 @@ public final class WinRunDaemonClient {
                 continuation.resume(throwing: error)
                 connection.invalidate()
             }) as? WinRunDaemonXPC else {
-                continuation.resume(throwing: WinRunError.ipcFailure)
+                continuation.resume(throwing: WinRunError.daemonUnreachable)
                 connection.invalidate()
                 return
             }
@@ -134,7 +134,7 @@ public final class WinRunDaemonClient {
                 continuation.resume(with: result)
             }
             #else
-            continuation.resume(throwing: WinRunError.ipcFailure)
+            continuation.resume(throwing: WinRunError.notSupported(feature: "XPC"))
             #endif
         }
     }
@@ -148,7 +148,7 @@ public final class WinRunDaemonClient {
             return .failure(error)
         }
         guard let data else {
-            return .failure(WinRunError.ipcFailure)
+            return .failure(WinRunError.daemonUnreachable)
         }
         do {
             let decoded = try decoder.decode(T.self, from: data as Data)
