@@ -124,3 +124,4 @@ swift build --target WinRunDaemon
 - `docs/decisions/virtualization.md` — VM lifecycle, boot/suspend policies
 - `docs/decisions/protocols.md` — XPC contracts, Spice payload schemas
 
+
