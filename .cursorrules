@@ -97,6 +97,19 @@ Skip branch creation if:
 
 ## General Coding Standards
 
+### Platform Targeting & Conditional Compilation
+Each sub-codebase targets exactly one platform:
+- `host/` → **macOS only**
+- `guest/` → **Windows only**
+
+**Core principle:** Never use conditional compilation (`#if`, `#ifdef`, platform checks) to silence or work around compiler errors/warnings when that platform is your target. If an error is "platform-specific" but that platform IS your target, it's a real error — fix it properly, don't suppress it.
+
+- Don't write code for platforms you don't target. Dead fallback branches add noise and hide the real implementation.
+- Conditional compilation is only appropriate when code genuinely needs to run on multiple platforms (rare — e.g., test mocks that run on CI hosts).
+- Silent degradation via `#else` fallbacks hides real problems. Prefer loud build failures over quiet misbehavior.
+
+See platform-specific rules in `host/.cursorrules` (Swift) and `guest/.cursorrules` (C#) for language-specific details.
+
 ### Error Handling
 - Use idiomatic error handling for each platform (Result/throws in Swift, exceptions in C#)
 - All Spice/XPC operations need timeout handling
