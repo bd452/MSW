@@ -15,7 +15,10 @@ let spiceBridgeHelperTargets: [Target] = [
         name: "CSpiceBridge",
         dependencies: ["CSpiceGlib"],
         path: "Sources/CSpiceBridge",
-        publicHeadersPath: "include"
+        publicHeadersPath: "include",
+        cSettings: [
+            .headerSearchPath("../CSpiceGlib")
+        ]
     )
 ]
 let spiceBridgeDependencies: [Target.Dependency] = ["WinRunShared", "CSpiceBridge"]

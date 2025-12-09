@@ -32,7 +32,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate {
         window.makeKeyAndOrderFront(nil)
         self.window = window
         #else
-        print(\"[WinRunApp] Would open window titled \\(title)\")
+        print("[WinRunApp] Would open window titled \(title)")
         #endif
         stream.connect(toWindowID: 0)
     }
@@ -46,7 +46,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate {
         #if canImport(AppKit)
         window?.title = metadata.title
         #else
-        print(\"[WinRunApp] Metadata update -> \\(metadata)\")
+        print("[WinRunApp] Metadata update -> \(metadata)")
         #endif
     }
 
@@ -54,7 +54,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate {
         #if canImport(AppKit)
         window?.close()
         #else
-        print(\"[WinRunApp] Stream closed\")
+        print("[WinRunApp] Stream closed")
         #endif
     }
 }
@@ -94,7 +94,7 @@ struct WinRunAppMain {
             RunLoop.current.run()
             #endif
         } else {
-            print(\"WinRun requires macOS 13 or newer.\")
+            print("WinRun requires macOS 13 or newer.")
         }
     }
 }

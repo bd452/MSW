@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-typedef struct winrun_spice_stream winrun_spice_stream;
+typedef void *winrun_spice_stream_handle;
 
 typedef struct {
     uint64_t window_id;
@@ -31,7 +31,7 @@ typedef void (*winrun_spice_frame_cb)(const uint8_t *data, size_t length, void *
 typedef void (*winrun_spice_metadata_cb)(const winrun_spice_window_metadata *metadata, void *user_data);
 typedef void (*winrun_spice_closed_cb)(winrun_spice_close_reason reason, const char *message, void *user_data);
 
-winrun_spice_stream *winrun_spice_stream_open_tcp(
+winrun_spice_stream_handle winrun_spice_stream_open_tcp(
     const char *host,
     uint16_t port,
     bool use_tls,
@@ -45,7 +45,7 @@ winrun_spice_stream *winrun_spice_stream_open_tcp(
     size_t error_buffer_length
 );
 
-winrun_spice_stream *winrun_spice_stream_open_shared(
+winrun_spice_stream_handle winrun_spice_stream_open_shared(
     int shared_fd,
     uint64_t window_id,
     void *user_data,
@@ -57,7 +57,7 @@ winrun_spice_stream *winrun_spice_stream_open_shared(
     size_t error_buffer_length
 );
 
-void winrun_spice_stream_close(winrun_spice_stream *stream);
+void winrun_spice_stream_close(winrun_spice_stream_handle stream);
 
 #ifdef __cplusplus
 }
