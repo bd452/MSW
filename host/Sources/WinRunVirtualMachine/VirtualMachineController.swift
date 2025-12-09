@@ -34,6 +34,7 @@ public actor VirtualMachineController {
     private var bootCount: Int = 0
     private var suspendCount: Int = 0
     private var totalSessionsLaunched: Int = 0
+    private var idleSuspendTask: Task<Void, Never>?
 
 #if canImport(Virtualization)
     @available(macOS 13, *)
@@ -73,8 +74,12 @@ public actor VirtualMachineController {
         if delta > 0 {
             totalSessionsLaunched += delta
             logMetrics(event: "session_opened")
+            cancelIdleSuspendTimer()
         } else if delta < 0 {
             logMetrics(event: "session_closed")
+            if updated == 0 {
+                scheduleIdleSuspendTimer(reason: "no active sessions remain")
+            }
         }
     }
 
@@ -92,6 +97,7 @@ public actor VirtualMachineController {
             return
         }
 
+        cancelIdleSuspendTimer()
         state.status = .suspending
         logger.info("Suspending Windows VM after idle timeout")
         let snapshotURL = try await saveSnapshotInternal(to: defaultSnapshotURL())
@@ -120,6 +126,7 @@ public actor VirtualMachineController {
         guard state.status == .running || state.status == .suspended || state.status == .starting else {
             throw VirtualMachineLifecycleError.alreadyStopped
         }
+        cancelIdleSuspendTimer()
         logger.info("Stopping Windows VM")
         state.status = .stopping
 
@@ -184,6 +191,11 @@ public actor VirtualMachineController {
         bootCount += 1
         let event = resumeFromSnapshot ? "vm_resumed" : "vm_started"
         logMetrics(event: event)
+        if state.activeSessions == 0 {
+            scheduleIdleSuspendTimer(reason: "no active sessions after start")
+        } else {
+            cancelIdleSuspendTimer()
+        }
         return state
     }
 
@@ -211,6 +223,37 @@ public actor VirtualMachineController {
 
     private func defaultSnapshotURL() -> URL {
         configuration.diskImagePath.deletingPathExtension().appendingPathExtension("vmstate")
+    }
+
+    private func scheduleIdleSuspendTimer(reason: String) {
+        guard configuration.suspendOnIdleAfterSeconds > 0 else {
+            return
+        }
+        guard state.status == .running, state.activeSessions == 0 else {
+            return
+        }
+
+        idleSuspendTask?.cancel()
+        let delayNanos = UInt64(configuration.suspendOnIdleAfterSeconds * 1_000_000_000)
+        logger.info("Scheduling VM suspend in \(Int(configuration.suspendOnIdleAfterSeconds))s (\(reason))")
+        idleSuspendTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: delayNanos)
+            guard !Task.isCancelled else { return }
+            await self?.handleIdleTimeout()
+        }
+    }
+
+    private func cancelIdleSuspendTimer() {
+        idleSuspendTask?.cancel()
+        idleSuspendTask = nil
+    }
+
+    private func handleIdleTimeout() async {
+        do {
+            try await suspendIfIdle()
+        } catch {
+            logger.warn("Idle suspend skipped: \(error)")
+        }
     }
 
     private func clearNativeVM() {
@@ -316,7 +359,7 @@ public actor VirtualMachineController {
         vmConfig.networkDevices = [networkDevice]
 
         let graphics = VZVirtioGraphicsDeviceConfiguration()
-        graphics.scanouts = [VZVirtioGraphicsScanoutConfiguration(width: 1920, height: 1200)]
+        graphics.scanouts = [VZVirtioGraphicsScanoutConfiguration(widthInPixels: 1920, heightInPixels: 1200)]
         vmConfig.graphicsDevices = [graphics]
 
         vmConfig.pointingDevices = [VZUSBScreenCoordinatePointingDeviceConfiguration()]
@@ -337,7 +380,7 @@ public actor VirtualMachineController {
             guard let identifier = configuration.network.interfaceIdentifier else {
                 throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
             }
-            guard let interface = VZBridgedNetworkInterface.networkInterfaces().first(where: {
+            guard let interface = VZBridgedNetworkInterface.networkInterfaces.first(where: {
                 $0.identifier == identifier || $0.localizedDisplayName == identifier
             }) else {
                 throw VMConfigurationValidationError.bridgedInterfaceUnavailable(identifier)
@@ -352,19 +395,20 @@ public actor VirtualMachineController {
 @available(macOS 13, *)
 private enum NativeVirtualMachineBridge {
     static func start(_ vm: VZVirtualMachine) async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            vm.start { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            vm.start { result in
+                switch result {
+                case .success:
                     continuation.resume(returning: ())
+                case .failure(let error):
+                    continuation.resume(throwing: error)
                 }
             }
         }
     }
 
     static func stop(_ vm: VZVirtualMachine) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             vm.stop { error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -376,27 +420,11 @@ private enum NativeVirtualMachineBridge {
     }
 
     static func saveMachineState(_ vm: VZVirtualMachine, to url: URL) async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            vm.saveMachineState(to: url) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-        }
+        throw VirtualMachineLifecycleError.virtualizationUnavailable("Saving VM state is not supported on this macOS SDK.")
     }
 
     static func restoreMachineState(_ vm: VZVirtualMachine, from url: URL) async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            vm.restoreMachineState(from: url) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-        }
+        throw VirtualMachineLifecycleError.virtualizationUnavailable("Restoring VM state is not supported on this macOS SDK.")
     }
 }
 #endif

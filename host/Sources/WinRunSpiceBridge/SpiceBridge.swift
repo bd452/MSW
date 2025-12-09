@@ -3,6 +3,7 @@ import CoreGraphics
 import WinRunShared
 #if os(macOS)
 import CSpiceBridge
+typealias SpiceStreamHandle = winrun_spice_stream_handle
 #endif
 
 public protocol SpiceWindowStreamDelegate: AnyObject {
@@ -103,11 +104,26 @@ public final class SpiceWindowStream {
     private var reconnectWorkItem: DispatchWorkItem?
     private var metrics = SpiceStreamMetrics()
 
-    public init(
+    public convenience init(
         configuration: SpiceStreamConfiguration = SpiceStreamConfiguration.environmentDefault(),
         delegateQueue: DispatchQueue = .main,
         logger: Logger = StandardLogger(subsystem: "SpiceWindowStream"),
-        transport: SpiceStreamTransport? = nil,
+        reconnectPolicy: ReconnectPolicy = ReconnectPolicy()
+    ) {
+        self.init(
+            configuration: configuration,
+            delegateQueue: delegateQueue,
+            logger: logger,
+            transport: nil,
+            reconnectPolicy: reconnectPolicy
+        )
+    }
+
+    init(
+        configuration: SpiceStreamConfiguration = SpiceStreamConfiguration.environmentDefault(),
+        delegateQueue: DispatchQueue = .main,
+        logger: Logger = StandardLogger(subsystem: "SpiceWindowStream"),
+        transport: SpiceStreamTransport?,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy()
     ) {
         self.configuration = configuration
@@ -327,7 +343,7 @@ public struct ReconnectPolicy {
     }
 }
 
-private struct SpiceStreamCloseReason: CustomStringConvertible {
+struct SpiceStreamCloseReason: CustomStringConvertible {
     enum Code {
         case remoteClosed
         case transportError
@@ -343,13 +359,13 @@ private struct SpiceStreamCloseReason: CustomStringConvertible {
     }
 }
 
-private struct SpiceStreamCallbacks {
+struct SpiceStreamCallbacks {
     let onFrame: (Data) -> Void
     let onMetadata: (WindowMetadata) -> Void
     let onClosed: (SpiceStreamCloseReason) -> Void
 }
 
-private struct SpiceStreamSubscription {
+struct SpiceStreamSubscription {
     private let cleanupHandler: () -> Void
 
     init(cleanup: @escaping () -> Void) {
@@ -361,7 +377,7 @@ private struct SpiceStreamSubscription {
     }
 }
 
-private protocol SpiceStreamTransport {
+protocol SpiceStreamTransport {
     func openStream(
         configuration: SpiceStreamConfiguration,
         windowID: UInt64,
@@ -393,7 +409,7 @@ private final class LibSpiceStreamTransport: SpiceStreamTransport {
         let unmanaged = Unmanaged.passRetained(trampoline)
         var errorBuffer = [CChar](repeating: 0, count: 512)
 
-        let handle: UnsafeMutablePointer<winrun_spice_stream>?
+        let handle: SpiceStreamHandle?
 
         switch configuration.transport {
         case let .tcp(host, port, security, ticket):

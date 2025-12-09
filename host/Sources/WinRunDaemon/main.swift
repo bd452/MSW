@@ -3,63 +3,97 @@ import WinRunShared
 import WinRunVirtualMachine
 import WinRunXPC
 
-final class WinRunDaemonService: WinRunDaemonXPC {
+@objc final class WinRunDaemonService: NSObject, WinRunDaemonXPC {
     private let vmController: VirtualMachineController
     private let logger: Logger
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
 
     init(configuration: VMConfiguration = VMConfiguration(), logger: Logger = StandardLogger(subsystem: "winrund")) {
         self.vmController = VirtualMachineController(configuration: configuration, logger: logger)
         self.logger = logger
     }
 
-    func ensureVMRunning(reply: @escaping (Result<VMState, Error>) -> Void) {
-        Task { [vmController] in
+    func ensureVMRunning(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        Task { [self] in
             do {
                 let state = try await vmController.ensureRunning()
-                reply(.success(state))
+                reply(try encode(state), nil)
             } catch {
-                reply(.failure(error))
+                reply(nil, nsError(error))
             }
         }
     }
 
-    func executeProgram(_ request: ProgramLaunchRequest, reply: @escaping (Result<Void, Error>) -> Void) {
-        Task { [weak self] in
-            guard let strongSelf = self else {
-                reply(.failure(WinRunError.ipcFailure))
-                return
-            }
+    func executeProgram(_ requestData: NSData, reply: @escaping (NSError?) -> Void) {
+        Task { [self] in
             do {
-                _ = try await strongSelf.vmController.ensureRunning()
-                strongSelf.logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
-                await strongSelf.vmController.registerSession(delta: 1)
-                reply(.success(()))
+                let request = try decode(ProgramLaunchRequest.self, from: requestData)
+                _ = try await vmController.ensureRunning()
+                logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
+                await vmController.registerSession(delta: 1)
+                reply(nil)
             } catch {
-                reply(.failure(error))
+                reply(nsError(error))
             }
         }
     }
 
-    func getStatus(reply: @escaping (Result<VMState, Error>) -> Void) {
-        Task { [vmController] in
+    func getStatus(_ reply: @escaping (NSData?, NSError?) -> Void) {
+        Task { [self] in
             let status = await vmController.currentState()
-            reply(.success(status))
+            do {
+                reply(try encode(status), nil)
+            } catch {
+                reply(nil, nsError(error))
+            }
         }
     }
 
-    func suspendIfIdle(reply: @escaping (Result<Void, Error>) -> Void) {
-        Task { [vmController] in
+    func suspendIfIdle(_ reply: @escaping (NSError?) -> Void) {
+        Task { [self] in
             do {
                 try await vmController.suspendIfIdle()
-                reply(.success(()))
+                reply(nil)
             } catch {
-                reply(.failure(error))
+                reply(nsError(error))
             }
         }
     }
 
-    func snapshot() async -> VMState {
-        await vmController.currentState()
+    private func encode<T: Encodable>(_ value: T) throws -> NSData {
+        try NSData(data: encoder.encode(value))
+    }
+
+    private func decode<T: Decodable>(_ type: T.Type, from data: NSData) throws -> T {
+        try decoder.decode(T.self, from: data as Data)
+    }
+
+    private func nsError(_ error: Error) -> NSError {
+        if let nsError = error as NSError? {
+            return nsError
+        }
+        return NSError(domain: "com.winrun.daemon", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: error.localizedDescription
+        ])
+    }
+}
+
+final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
+    private let logger: Logger
+    private let service: WinRunDaemonService
+
+    init(service: WinRunDaemonService, logger: Logger) {
+        self.service = service
+        self.logger = logger
+    }
+
+    func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+        connection.exportedInterface = NSXPCInterface(with: WinRunDaemonXPC.self)
+        connection.exportedObject = service
+        connection.resume()
+        logger.info("Accepted new XPC connection \(connection)")
+        return true
     }
 }
 
@@ -67,15 +101,14 @@ final class WinRunDaemonService: WinRunDaemonXPC {
 struct WinRunDaemonMain {
     static func main() {
         let logger = StandardLogger(subsystem: "winrund-main")
-        logger.info("Starting winrund mock service (XPC not active in this environment)")
-        let service = WinRunDaemonService()
-        let runLoop = RunLoop.current
-        Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
-            Task {
-                let status = await service.snapshot()
-                logger.debug("VM status: \(status.status.rawValue), sessions: \(status.activeSessions)")
-            }
-        }
-        runLoop.run()
+        logger.info("Starting winrund XPC service")
+
+        let service = WinRunDaemonService(logger: logger)
+        let listenerDelegate = WinRunDaemonListener(service: service, logger: logger)
+        let listener = NSXPCListener(machServiceName: "com.winrun.daemon")
+        listener.delegate = listenerDelegate
+        listener.resume()
+
+        RunLoop.main.run()
     }
 }

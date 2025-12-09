@@ -1,0 +1,5 @@
+module CSpiceGlib [system] {
+  header "shim.h"
+  export *
+}
+

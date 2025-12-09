@@ -10,8 +10,7 @@
 #include <unistd.h>
 
 #if __APPLE__
-#include <glib.h>
-#include <spice-client.h>
+#include "shim.h"
 #endif
 
 typedef struct winrun_spice_stream {
@@ -26,6 +25,8 @@ typedef struct winrun_spice_stream {
     SpiceSession *session;
 #endif
 } winrun_spice_stream;
+
+static void *winrun_mock_worker(void *context);
 
 static void winrun_write_error(char *buffer, size_t length, const char *message) {
     if (!buffer || length == 0 || !message) {
@@ -135,7 +136,7 @@ static void *winrun_mock_worker(void *context) {
     return NULL;
 }
 
-winrun_spice_stream *winrun_spice_stream_open_tcp(
+winrun_spice_stream_handle winrun_spice_stream_open_tcp(
     const char *host,
     uint16_t port,
     bool use_tls,
@@ -194,7 +195,7 @@ winrun_spice_stream *winrun_spice_stream_open_tcp(
     return stream;
 }
 
-winrun_spice_stream *winrun_spice_stream_open_shared(
+winrun_spice_stream_handle winrun_spice_stream_open_shared(
     int shared_fd,
     uint64_t window_id,
     void *user_data,
@@ -224,18 +225,10 @@ winrun_spice_stream *winrun_spice_stream_open_shared(
     }
 
 #if __APPLE__
-    int fd_dup = dup(shared_fd);
-    if (fd_dup < 0) {
-        winrun_write_error(error_buffer, error_buffer_length, strerror(errno));
-        winrun_spice_stream_free(stream);
-        return NULL;
-    }
-
     stream->session = spice_session_new();
     if (!stream->session) {
-        close(fd_dup);
-        winrun_spice_stream_free(stream);
         winrun_write_error(error_buffer, error_buffer_length, "Unable to create Spice session");
+        winrun_spice_stream_free(stream);
         return NULL;
     }
 
@@ -243,7 +236,8 @@ winrun_spice_stream *winrun_spice_stream_open_shared(
         g_object_set(stream->session, "password", ticket, NULL);
     }
 
-    spice_session_connect_with_fd(stream->session, fd_dup);
+    g_object_set(stream->session, "host", "spice-shm", NULL);
+    spice_session_connect(stream->session);
 #else
     (void)ticket;
 #endif
@@ -256,7 +250,8 @@ winrun_spice_stream *winrun_spice_stream_open_shared(
     return stream;
 }
 
-void winrun_spice_stream_close(winrun_spice_stream *stream) {
+void winrun_spice_stream_close(winrun_spice_stream_handle streamHandle) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
     if (!stream) {
         return;
     }

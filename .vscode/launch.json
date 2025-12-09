@@ -1,0 +1,64 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MSW}/host",
+            "name": "Debug winrund (host)",
+            "target": "winrund",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug winrund (host)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MSW}/host",
+            "name": "Release winrund (host)",
+            "target": "winrund",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release winrund (host)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MSW}/host",
+            "name": "Debug WinRunApp (host)",
+            "target": "WinRunApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug WinRunApp (host)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MSW}/host",
+            "name": "Release WinRunApp (host)",
+            "target": "WinRunApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release WinRunApp (host)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MSW}/host",
+            "name": "Debug winrun (host)",
+            "target": "winrun",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug winrun (host)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MSW}/host",
+            "name": "Release winrun (host)",
+            "target": "winrun",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release winrun (host)"
+        }
+    ]
+}

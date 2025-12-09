@@ -25,17 +25,19 @@ extension WinRunCLI {
         @Argument(help: "Path to Windows executable")
         var executable: String
 
-        @Argument(help: "Arguments passed to executable", parsing: .unconditionalRemaining)
+        @Argument(parsing: .captureForPassthrough, help: "Arguments passed to executable")
         var args: [String] = []
 
         mutating func run() throws {
-            let client = WinRunDaemonClient()
-            let request = ProgramLaunchRequest(windowsPath: executable, arguments: args)
+            let executablePath = executable
+            let arguments = args
             Task {
+                let client = WinRunDaemonClient()
+                let request = ProgramLaunchRequest(windowsPath: executablePath, arguments: arguments)
                 do {
                     _ = try await client.ensureVMRunning()
                     try await client.executeProgram(request)
-                    print("Launched \(executable)")
+                    print("Launched \(executablePath)")
                 } catch {
                     WinRunCLI.exit(withError: error)
                 }
@@ -51,10 +53,11 @@ extension WinRunCLI {
         var action: String
 
         mutating func run() throws {
-            let client = WinRunDaemonClient()
+            let actionValue = action
             Task {
+                let client = WinRunDaemonClient()
                 do {
-                    switch action {
+                    switch actionValue {
                     case "start":
                         let state = try await client.ensureVMRunning()
                         print("VM status: \(state.status.rawValue)")
@@ -65,7 +68,7 @@ extension WinRunCLI {
                         let state = try await client.status()
                         print("Status: \(state.status.rawValue), sessions: \(state.activeSessions)")
                     default:
-                        throw WinRunError.launchFailed(reason: "Unsupported action \(action)")
+                        throw WinRunError.launchFailed(reason: "Unsupported action \(actionValue)")
                     }
                 } catch {
                     WinRunCLI.exit(withError: error)
