@@ -62,6 +62,39 @@ After completing a task:
 4. If all children complete, mark parent `[X]`
 5. Move to next incomplete task per the algorithm
 
+## Branch Workflow
+
+When **both** of the following conditions are true:
+1. This is a **new chat session** (no prior conversation context)
+2. Working on a **new todo item** from `TODO.md`
+
+**Before making any code changes**, create a new feature branch:
+
+```bash
+git checkout -b <branch-name>
+```
+
+### Branch Naming Convention
+
+Use kebab-case names that clearly describe the work being done:
+- Derive the name from the todo item's description
+- Keep it concise but descriptive (3-5 words typical)
+- Prefix with category if helpful (e.g., `feat-`, `fix-`, `refactor-`)
+
+**Examples:**
+- `add-vm-lifecycle-states`
+- `feat-spice-message-serialization`
+- `fix-xpc-timeout-handling`
+- `refactor-window-tracker-events`
+
+### When NOT to Create a Branch
+
+Skip branch creation if:
+- Continuing work from a previous chat session (branch likely exists)
+- Making quick fixes unrelated to TODO.md tasks
+- User explicitly requests working on an existing branch
+- The current branch already matches the work being done
+
 ## General Coding Standards
 
 ### Error Handling
