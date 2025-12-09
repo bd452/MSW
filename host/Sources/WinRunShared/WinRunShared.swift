@@ -10,20 +10,165 @@ public struct VMResources: Codable, Hashable {
     }
 }
 
+public struct VMDiskConfiguration: Codable, Hashable {
+    public var imagePath: URL
+    public var sizeGB: Int
+
+    public init(
+        imagePath: URL = VMDiskConfiguration.defaultImagePath,
+        sizeGB: Int = 64
+    ) {
+        self.imagePath = imagePath
+        self.sizeGB = sizeGB
+    }
+
+    public static var defaultImagePath: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/WinRun/windows.img")
+    }
+}
+
+public enum VMNetworkAttachmentMode: String, Codable, CaseIterable, Hashable {
+    case nat
+    case bridged
+}
+
+public struct VMNetworkConfiguration: Codable, Hashable {
+    public var mode: VMNetworkAttachmentMode
+    public var interfaceIdentifier: String?
+    public var macAddress: String?
+
+    public init(
+        mode: VMNetworkAttachmentMode = .nat,
+        interfaceIdentifier: String? = nil,
+        macAddress: String? = nil
+    ) {
+        self.mode = mode
+        self.interfaceIdentifier = interfaceIdentifier
+        self.macAddress = macAddress
+    }
+}
+
 public struct VMConfiguration: Codable, Hashable {
     public var resources: VMResources
-    public var diskImagePath: URL
+    public var disk: VMDiskConfiguration
+    public var network: VMNetworkConfiguration
     public var suspendOnIdleAfterSeconds: TimeInterval
 
     public init(
         resources: VMResources = VMResources(),
-        diskImagePath: URL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/WinRun/windows.img"),
+        disk: VMDiskConfiguration = VMDiskConfiguration(),
+        network: VMNetworkConfiguration = VMNetworkConfiguration(),
         suspendOnIdleAfterSeconds: TimeInterval = 300
     ) {
         self.resources = resources
-        self.diskImagePath = diskImagePath
+        self.disk = disk
+        self.network = network
         self.suspendOnIdleAfterSeconds = suspendOnIdleAfterSeconds
+    }
+
+    public var diskImagePath: URL {
+        get { disk.imagePath }
+        set { disk.imagePath = newValue }
+    }
+}
+
+public enum VMConfigurationValidationError: Error, CustomStringConvertible {
+    case cpuCountOutOfRange(actual: Int, allowed: ClosedRange<Int>)
+    case memoryOutOfRange(actual: Int, allowed: ClosedRange<Int>)
+    case diskDirectoryUnavailable(URL)
+    case diskImageMissing(URL)
+    case diskImageIsDirectory(URL)
+    case diskSizeTooSmall(actual: Int)
+    case bridgedInterfaceNotSpecified
+    case bridgedInterfaceUnavailable(String)
+
+    public var description: String {
+        switch self {
+        case .cpuCountOutOfRange(let actual, let allowed):
+            return "CPU count \(actual) is outside of supported range \(allowed.lowerBound)-\(allowed.upperBound)."
+        case .memoryOutOfRange(let actual, let allowed):
+            return "Memory \(actual)GB falls outside of supported range \(allowed.lowerBound)-\(allowed.upperBound)GB."
+        case .diskDirectoryUnavailable(let url):
+            return "Disk directory \(url.path) is unavailable or cannot be created."
+        case .diskImageMissing(let url):
+            return "Disk image \(url.path) is missing. Run winrun init to provision Windows."
+        case .diskImageIsDirectory(let url):
+            return "Disk image path \(url.path) points to a directory, expected file."
+        case .diskSizeTooSmall(let actual):
+            return "Configured disk size \(actual)GB is below the minimum of 32GB."
+        case .bridgedInterfaceNotSpecified:
+            return "Bridged networking requires an interface identifier."
+        case .bridgedInterfaceUnavailable(let identifier):
+            return "Bridged interface \(identifier) was not found on this host."
+        }
+    }
+}
+
+public extension VMResources {
+    static let supportedCPURange = 2...32
+    static let supportedMemoryRangeGB = 4...64
+
+    func validate() throws {
+        if !VMResources.supportedCPURange.contains(cpuCount) {
+            throw VMConfigurationValidationError.cpuCountOutOfRange(
+                actual: cpuCount,
+                allowed: VMResources.supportedCPURange
+            )
+        }
+        if !VMResources.supportedMemoryRangeGB.contains(memorySizeGB) {
+            throw VMConfigurationValidationError.memoryOutOfRange(
+                actual: memorySizeGB,
+                allowed: VMResources.supportedMemoryRangeGB
+            )
+        }
+    }
+}
+
+public extension VMDiskConfiguration {
+    private var minimumSizeGB: Int { 32 }
+
+    func validate(fileManager: FileManager = .default) throws {
+        guard sizeGB >= minimumSizeGB else {
+            throw VMConfigurationValidationError.diskSizeTooSmall(actual: sizeGB)
+        }
+
+        let directoryURL = imagePath.deletingLastPathComponent()
+        var isDirectory: ObjCBool = false
+        if !fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory) {
+            do {
+                try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            } catch {
+                throw VMConfigurationValidationError.diskDirectoryUnavailable(directoryURL)
+            }
+        } else if !isDirectory.boolValue {
+            throw VMConfigurationValidationError.diskDirectoryUnavailable(directoryURL)
+        }
+
+        var isImageDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: imagePath.path, isDirectory: &isImageDirectory) else {
+            throw VMConfigurationValidationError.diskImageMissing(imagePath)
+        }
+
+        if isImageDirectory.boolValue {
+            throw VMConfigurationValidationError.diskImageIsDirectory(imagePath)
+        }
+    }
+}
+
+public extension VMNetworkConfiguration {
+    func validate() throws {
+        if mode == .bridged, (interfaceIdentifier?.isEmpty ?? true) {
+            throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
+        }
+    }
+}
+
+public extension VMConfiguration {
+    func validate(fileManager: FileManager = .default) throws {
+        try resources.validate()
+        try disk.validate(fileManager: fileManager)
+        try network.validate()
     }
 }
 
