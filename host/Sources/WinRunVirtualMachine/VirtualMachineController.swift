@@ -31,6 +31,9 @@ public actor VirtualMachineController {
     private var uptimeStart: Date?
     private var suspendedStateURL: URL?
     private var configurationValidated = false
+    private var bootCount: Int = 0
+    private var suspendCount: Int = 0
+    private var totalSessionsLaunched: Int = 0
 
 #if canImport(Virtualization)
     @available(macOS 13, *)
@@ -67,6 +70,12 @@ public actor VirtualMachineController {
     public func registerSession(delta: Int) {
         let updated = max(0, state.activeSessions + delta)
         state = VMState(status: state.status, uptime: uptime(), activeSessions: updated)
+        if delta > 0 {
+            totalSessionsLaunched += delta
+            logMetrics(event: "session_opened")
+        } else if delta < 0 {
+            logMetrics(event: "session_closed")
+        }
     }
 
     public func currentState() -> VMState {
@@ -101,7 +110,9 @@ public actor VirtualMachineController {
         clearNativeVM()
         uptimeStart = nil
         let uptimeSeconds = uptime()
+        suspendCount += 1
         state = VMState(status: .suspended, uptime: uptimeSeconds, activeSessions: 0)
+        logMetrics(event: "vm_suspended")
     }
 
     @discardableResult
@@ -125,6 +136,7 @@ public actor VirtualMachineController {
         clearNativeVM()
         uptimeStart = nil
         state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
+        logMetrics(event: "vm_shutdown")
         return state
     }
 
@@ -169,6 +181,9 @@ public actor VirtualMachineController {
 
         uptimeStart = Date()
         state = VMState(status: .running, uptime: 0, activeSessions: state.activeSessions)
+        bootCount += 1
+        let event = resumeFromSnapshot ? "vm_resumed" : "vm_started"
+        logMetrics(event: event)
         return state
     }
 
@@ -244,6 +259,18 @@ public actor VirtualMachineController {
             logger.error("VM configuration validation hit unexpected error: \(error)")
             throw VirtualMachineLifecycleError.virtualizationUnavailable(error.localizedDescription)
         }
+    }
+
+    private func logMetrics(event: String) {
+        let snapshot = VMMetricsSnapshot(
+            event: event,
+            uptimeSeconds: uptime(),
+            activeSessions: state.activeSessions,
+            totalSessions: totalSessionsLaunched,
+            bootCount: bootCount,
+            suspendCount: suspendCount
+        )
+        logger.info("VM metrics: \(snapshot.description)")
     }
 
 #if canImport(Virtualization)

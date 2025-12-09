@@ -225,6 +225,36 @@ public struct VMState: Codable {
     }
 }
 
+public struct VMMetricsSnapshot: Codable, CustomStringConvertible {
+    public let event: String
+    public let uptimeSeconds: TimeInterval
+    public let activeSessions: Int
+    public let totalSessions: Int
+    public let bootCount: Int
+    public let suspendCount: Int
+
+    public init(
+        event: String,
+        uptimeSeconds: TimeInterval,
+        activeSessions: Int,
+        totalSessions: Int,
+        bootCount: Int,
+        suspendCount: Int
+    ) {
+        self.event = event
+        self.uptimeSeconds = uptimeSeconds
+        self.activeSessions = activeSessions
+        self.totalSessions = totalSessions
+        self.bootCount = bootCount
+        self.suspendCount = suspendCount
+    }
+
+    public var description: String {
+        let uptimeString = String(format: "%.2fs", uptimeSeconds)
+        return "event=\(event) uptime=\(uptimeString) activeSessions=\(activeSessions) totalSessions=\(totalSessions) boots=\(bootCount) suspends=\(suspendCount)"
+    }
+}
+
 public struct SpiceStreamMetrics: Codable, Hashable {
     public var framesReceived: Int
     public var metadataUpdates: Int
