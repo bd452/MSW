@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: bootstrap build build-host build-guest test test-host test-guest
+.PHONY: bootstrap build build-host build-guest test test-host test-guest install-daemon uninstall-daemon
 
 bootstrap:
 	$(REPO_ROOT)/scripts/bootstrap.sh
@@ -37,3 +37,9 @@ else
 		echo "dotnet CLI not found; skipping guest tests"; \
 	fi
 endif
+
+install-daemon:
+	$(REPO_ROOT)/scripts/bootstrap.sh --install-daemon
+
+uninstall-daemon:
+	$(REPO_ROOT)/scripts/bootstrap.sh --uninstall-daemon

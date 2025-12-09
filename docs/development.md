@@ -44,9 +44,40 @@
 ```
 
 ## LaunchDaemon Installation
+
+### Automated (Recommended)
+
+After building the host components, run:
+```bash
+./scripts/bootstrap.sh --install-daemon
+```
+
+This will:
+1. Copy the plist to `/Library/LaunchDaemons/`
+2. Copy the `winrund` binary to `/usr/local/bin/`
+3. Load (or reload) the daemon
+
+To upgrade after rebuilding:
+```bash
+./scripts/bootstrap.sh --install-daemon  # Handles unload/reload automatically
+```
+
+To uninstall:
+```bash
+./scripts/bootstrap.sh --uninstall-daemon
+```
+
+### Manual Installation
+
+If you prefer manual control:
 1. Copy `infrastructure/launchd/com.winrun.daemon.plist` to `/Library/LaunchDaemons/`.
 2. Copy the compiled `winrund` binary into `/usr/local/bin/`.
 3. Load the daemon: `sudo launchctl bootstrap system /Library/LaunchDaemons/com.winrun.daemon.plist`.
+
+To check daemon status:
+```bash
+sudo launchctl print system/com.winrun.daemon
+```
 
 ## CLI Usage Examples
 ```
