@@ -57,10 +57,12 @@ Before starting any task:
 
 After completing a task:
 1. Verify implementation matches documentation
-2. Mark the task `[X]` in `TODO.md`
-3. Check if parent task is now complete
-4. If all children complete, mark parent `[X]`
-5. Move to next incomplete task per the algorithm
+2. **Write tests** if the new code meets testing criteria (see [Testing](#testing) section)
+3. Run `make check` to verify lint and tests pass
+4. Mark the task `[X]` in `TODO.md`
+5. Check if parent task is now complete
+6. If all children complete, mark parent `[X]`
+7. Move to next incomplete task per the algorithm
 
 ## Branch Workflow
 
@@ -122,9 +124,11 @@ See platform-specific rules in `host/.cursorrules` (Swift) and `guest/.cursorrul
 
 ### Testing
 
-Tests are required for code that meets either criterion:
+**When implementing new code, write tests alongside the implementation** if the code meets either criterion:
 1. **Would normally require tests** — Non-trivial logic, state machines, parsers, serialization
 2. **Has downstream impact** — APIs consumed by other components, protocol contracts, data models
+
+Tests are not optional for qualifying code — CI will enforce this by requiring all tests to pass before merge.
 
 #### What to Test
 
@@ -156,20 +160,29 @@ Tests are required for code that meets either criterion:
 - Host: `<Module>Tests/` directories with `*Tests.swift` files
 - Guest: `<ClassName>Tests.cs` files in `WinRunAgent.Tests/`
 
-#### Running Tests
+#### Running Tests & Checks
 ```bash
-# All tests
-make test-host test-guest
+# Full CI check (lint + build + test) — run before pushing
+make check
+
+# All tests only
+make test
 
 # Host only
-cd host && swift test
+make check-host   # lint + build + test
+make test-host    # test only
 
 # Guest only (requires .NET 8 SDK)
-cd guest && dotnet test WinRunAgent.sln
+make check-guest  # lint + build + test
+make test-guest   # test only
 ```
 
 #### CI Requirements
-When CI pipelines are added (`host.yml`, `guest.yml`), all tests must pass before merge. Test failures block PR approval.
+GitHub Actions enforces quality gates on every PR:
+- `.github/workflows/host.yml` — Runs SwiftLint + `swift test` on macOS
+- `.github/workflows/guest.yml` — Runs `dotnet format --verify-no-changes` + `dotnet test` on Windows
+
+All checks must pass before merge. Run `make check` locally before pushing to catch issues early.
 
 ## File Organization
 
