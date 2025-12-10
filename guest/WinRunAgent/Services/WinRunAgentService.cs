@@ -195,25 +195,27 @@ public sealed class WinRunAgentService : IDisposable
     {
         _logger.Debug($"Icon request for: {iconRequest.ExecutablePath}");
 
-        var iconBytes = await _iconService.ExtractIconAsync(iconRequest.ExecutablePath, token);
+        var result = await _iconService.ExtractIconAsync(
+            iconRequest.ExecutablePath,
+            iconRequest.PreferredSize,
+            token);
 
-        if (iconBytes.Length > 0)
+        if (result.IsSuccess)
         {
-            // Create IconDataMessage from extracted bytes
-            // For now, assume it's a 256x256 PNG (the service will provide real dimensions)
             var iconMessage = new IconDataMessage
             {
                 ExecutablePath = iconRequest.ExecutablePath,
-                Width = iconRequest.PreferredSize,
-                Height = iconRequest.PreferredSize,
-                PngData = iconBytes
+                Width = result.Width,
+                Height = result.Height,
+                PngData = result.PngData
             };
             await SendMessageAsync(iconMessage);
             await SendAckAsync(iconRequest.MessageId, success: true);
         }
         else
         {
-            await SendAckAsync(iconRequest.MessageId, success: false, "Failed to extract icon");
+            _logger.Warn($"Icon extraction failed: {result.ErrorMessage}");
+            await SendAckAsync(iconRequest.MessageId, success: false, result.ErrorMessage ?? "Failed to extract icon");
         }
     }
 
