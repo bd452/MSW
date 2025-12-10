@@ -116,6 +116,27 @@ public struct WindowMetadata: Codable, Hashable {
     }
 }
 
+public extension WindowMetadata {
+    static func == (lhs: WindowMetadata, rhs: WindowMetadata) -> Bool {
+        lhs.windowID == rhs.windowID &&
+        lhs.title == rhs.title &&
+        lhs.isResizable == rhs.isResizable &&
+        lhs.scaleFactor == rhs.scaleFactor &&
+        lhs.frame.equalTo(rhs.frame)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(windowID)
+        hasher.combine(title)
+        hasher.combine(isResizable)
+        hasher.combine(scaleFactor)
+        hasher.combine(Double(frame.origin.x))
+        hasher.combine(Double(frame.origin.y))
+        hasher.combine(Double(frame.size.width))
+        hasher.combine(Double(frame.size.height))
+    }
+}
+
 // MARK: - Reconnect Policy
 
 /// Policy for automatic reconnection attempts after stream disconnection.
