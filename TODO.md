@@ -37,10 +37,10 @@
     - [X] Launch Windows processes with arguments/env/working dirs { guest/WinRunAgent/Services/ProgramLauncher.cs } <docs/decisions/protocols.md>
     - [X] Track active sessions, heartbeats, and idle timeouts { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
     - [X] Expose control-channel handlers for host commands { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-  - [ ] Icon extraction + shortcut sync { guest/WinRunAgent/Services/IconExtractionService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
-    - [ ] Extract & cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs } <docs/decisions/protocols.md>
-    - [ ] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
-    - [ ] Transfer icon blobs + metadata via Spice payloads { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
+  - [X] Icon extraction + shortcut sync { guest/WinRunAgent/Services/IconExtractionService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
+    - [X] Extract & cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs } <docs/decisions/protocols.md>
+    - [X] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
+    - [X] Transfer icon blobs + metadata via Spice payloads { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
   - [ ] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [ ] Replace mock logger with structured sinks + ETW providers { guest/WinRunAgent/Services/Logging.cs } <docs/development.md>
     - [ ] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
