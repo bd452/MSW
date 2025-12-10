@@ -32,7 +32,7 @@
   - [ ] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, new:guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-    - [ ] Report capability flags + DPI info to host { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
+    - [X] Report capability flags + DPI info to host { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
   - [ ] Program launch + session management { guest/WinRunAgent/Services/ProgramLauncher.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
     - [ ] Launch Windows processes with arguments/env/working dirs { guest/WinRunAgent/Services/ProgramLauncher.cs } <docs/decisions/protocols.md>
     - [ ] Track active sessions, heartbeats, and idle timeouts { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
