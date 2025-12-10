@@ -797,7 +797,7 @@ public sealed class MessagesTests
 
         Assert.Equal(bytes.Length, consumed);
         Assert.NotNull(message);
-        Assert.IsType<LaunchProgramMessage>(message);
+        _ = Assert.IsType<LaunchProgramMessage>(message);
     }
 
     [Fact]
