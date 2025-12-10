@@ -95,7 +95,7 @@ public sealed class SpiceChannelTests
         var bytes = SerializeHostMessage(SpiceMessageType.RequestIcon, message);
 
         // Construct a buffer that has full header but not full payload
-        var partialLength = 5 + (bytes.Length - 5) / 2;
+        var partialLength = 5 + ((bytes.Length - 5) / 2);
         var incomplete = bytes[..partialLength];
 
         var consumed = SpiceMessageSerializer.TryReadMessage(incomplete, out var parsed);

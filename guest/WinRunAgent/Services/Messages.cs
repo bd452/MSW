@@ -531,17 +531,6 @@ public static class SpiceMessageSerializer
             SpiceMessageType.KeyboardInput => JsonSerializer.Deserialize<KeyboardInputMessage>(payload, JsonOptions),
             SpiceMessageType.DragDropEvent => JsonSerializer.Deserialize<DragDropMessage>(payload, JsonOptions),
             SpiceMessageType.Shutdown => JsonSerializer.Deserialize<ShutdownMessage>(payload, JsonOptions),
-            SpiceMessageType.WindowMetadata => throw new NotImplementedException(),
-            SpiceMessageType.FrameData => throw new NotImplementedException(),
-            SpiceMessageType.CapabilityFlags => throw new NotImplementedException(),
-            SpiceMessageType.DpiInfo => throw new NotImplementedException(),
-            SpiceMessageType.IconData => throw new NotImplementedException(),
-            SpiceMessageType.ShortcutDetected => throw new NotImplementedException(),
-            SpiceMessageType.ClipboardChanged => throw new NotImplementedException(),
-            SpiceMessageType.Heartbeat => throw new NotImplementedException(),
-            SpiceMessageType.TelemetryReport => throw new NotImplementedException(),
-            SpiceMessageType.Error => throw new NotImplementedException(),
-            SpiceMessageType.Ack => throw new NotImplementedException(),
             // Guest-to-host message types (0x80-0xFF) are not deserialized here
             // Unknown or invalid message types return null
             _ => null
