@@ -24,6 +24,7 @@ public sealed class WinRunAgentService : IDisposable
         IconExtractionService iconService,
         InputInjectionService inputService,
         ClipboardSyncService clipboardService,
+        ShortcutSyncService shortcutService,
         Channel<HostMessage> inboundChannel,
         Channel<GuestMessage> outboundChannel,
         IAgentLogger logger)
@@ -33,6 +34,7 @@ public sealed class WinRunAgentService : IDisposable
         _iconService = iconService;
         _inputService = inputService;
         _clipboardService = clipboardService;
+        ShortcutService = shortcutService;
         _inboundChannel = inboundChannel;
         _outboundChannel = outboundChannel;
         _logger = logger;
@@ -59,22 +61,44 @@ public sealed class WinRunAgentService : IDisposable
         IconExtractionService iconService,
         Channel<HostMessage> inboundChannel,
         IAgentLogger logger)
-        : this(
-            windowTracker,
-            launcher,
-            iconService,
-            new InputInjectionService(logger),
-            new ClipboardSyncService(logger),
-            inboundChannel,
-            Channel.CreateUnbounded<GuestMessage>(),
-            logger)
     {
+        _windowTracker = windowTracker;
+        _launcher = launcher;
+        _iconService = iconService;
+        _inputService = new InputInjectionService(logger);
+        _clipboardService = new ClipboardSyncService(logger);
+        _inboundChannel = inboundChannel;
+        _outboundChannel = Channel.CreateUnbounded<GuestMessage>();
+        _logger = logger;
+
+        // Create shortcut service with callback to send messages
+        ShortcutService = new ShortcutSyncService(
+            logger,
+            iconService,
+            msg => _ = SendMessageAsync(msg));
+
+        SessionManager = new SessionManager(
+            logger,
+            launcher,
+            windowTracker,
+            SendMessageAsync);
+
+        // Subscribe to session state changes
+        SessionManager.SessionStateChanged += OnSessionStateChanged;
+
+        // Subscribe to clipboard changes
+        _clipboardService.ClipboardChanged += OnClipboardChanged;
     }
 
     /// <summary>
     /// Gets the session manager for external access.
     /// </summary>
     public SessionManager SessionManager { get; }
+
+    /// <summary>
+    /// Gets the shortcut sync service for external access (e.g., manual rescan).
+    /// </summary>
+    public ShortcutSyncService ShortcutService { get; }
 
     /// <summary>
     /// Runs the agent service, processing messages until cancelled.
@@ -89,6 +113,9 @@ public sealed class WinRunAgentService : IDisposable
         // Start session management (heartbeats, idle detection)
         SessionManager.Start();
 
+        // Start shortcut monitoring
+        ShortcutService.Start();
+
         try
         {
             // Send initial capability announcement
@@ -99,6 +126,7 @@ public sealed class WinRunAgentService : IDisposable
         }
         finally
         {
+            ShortcutService.Stop();
             SessionManager.Stop();
             _windowTracker.Stop();
             _logger.Info("WinRun guest agent shut down");
@@ -195,25 +223,23 @@ public sealed class WinRunAgentService : IDisposable
     {
         _logger.Debug($"Icon request for: {iconRequest.ExecutablePath}");
 
-        var iconBytes = await _iconService.ExtractIconAsync(iconRequest.ExecutablePath, token);
+        var result = await _iconService.ExtractIconAsync(
+            iconRequest.ExecutablePath,
+            iconRequest.PreferredSize,
+            token);
 
-        if (iconBytes.Length > 0)
+        if (result.IsSuccess)
         {
-            // Create IconDataMessage from extracted bytes
-            // For now, assume it's a 256x256 PNG (the service will provide real dimensions)
-            var iconMessage = new IconDataMessage
-            {
-                ExecutablePath = iconRequest.ExecutablePath,
-                Width = iconRequest.PreferredSize,
-                Height = iconRequest.PreferredSize,
-                PngData = iconBytes
-            };
+            var iconMessage = SpiceMessageSerializer.CreateIconMessage(
+                iconRequest.ExecutablePath,
+                result);
             await SendMessageAsync(iconMessage);
             await SendAckAsync(iconRequest.MessageId, success: true);
         }
         else
         {
-            await SendAckAsync(iconRequest.MessageId, success: false, "Failed to extract icon");
+            _logger.Warn($"Icon extraction failed: {result.ErrorMessage}");
+            await SendAckAsync(iconRequest.MessageId, success: false, result.ErrorMessage ?? "Failed to extract icon");
         }
     }
 
@@ -288,6 +314,7 @@ public sealed class WinRunAgentService : IDisposable
             GuestCapabilities.WindowTracking |
             GuestCapabilities.IconExtraction |
             GuestCapabilities.ClipboardSync |
+            GuestCapabilities.ShortcutDetection |
             GuestCapabilities.HighDpiSupport;
 
         var message = SpiceMessageSerializer.CreateCapabilityMessage(capabilities);
@@ -340,6 +367,7 @@ public sealed class WinRunAgentService : IDisposable
             return;
         }
 
+        ShortcutService.Dispose();
         SessionManager.Dispose();
         _clipboardService.Dispose();
         _launcher.Dispose();

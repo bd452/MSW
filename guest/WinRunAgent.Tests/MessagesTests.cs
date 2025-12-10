@@ -334,6 +334,153 @@ public sealed class MessagesTests
         Assert.True(header.IsKeyFrame);
     }
 
+    [Fact]
+    public void CreateIconMessage_FromExtractionResult_SetsAllFields()
+    {
+        var pngData = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        var result = IconExtractionResult.Success(pngData, 256, 256);
+
+        var message = SpiceMessageSerializer.CreateIconMessage(
+            @"C:\App\app.exe",
+            result,
+            iconIndex: 0);
+
+        Assert.Equal(@"C:\App\app.exe", message.ExecutablePath);
+        Assert.Equal(256, message.Width);
+        Assert.Equal(256, message.Height);
+        Assert.Equal(pngData, message.PngData);
+        Assert.NotEmpty(message.IconHash!);
+        Assert.Equal(0, message.IconIndex);
+    }
+
+    [Fact]
+    public void CreateIconMessage_FromRawData_SetsAllFields()
+    {
+        var pngData = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+
+        var message = SpiceMessageSerializer.CreateIconMessage(
+            @"C:\App\app.exe",
+            pngData,
+            width: 128,
+            height: 128,
+            iconIndex: 1,
+            wasScaled: true);
+
+        Assert.Equal(@"C:\App\app.exe", message.ExecutablePath);
+        Assert.Equal(128, message.Width);
+        Assert.Equal(128, message.Height);
+        Assert.Equal(pngData, message.PngData);
+        Assert.NotEmpty(message.IconHash!);
+        Assert.Equal(1, message.IconIndex);
+        Assert.True(message.WasScaled);
+    }
+
+    [Fact]
+    public void CreateIconMessage_SameData_SameHash()
+    {
+        var pngData = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+
+        var message1 = SpiceMessageSerializer.CreateIconMessage(@"C:\App1\app.exe", pngData, 64, 64);
+        var message2 = SpiceMessageSerializer.CreateIconMessage(@"C:\App2\other.exe", pngData, 64, 64);
+
+        Assert.Equal(message1.IconHash, message2.IconHash);
+    }
+
+    [Fact]
+    public void CreateIconMessage_DifferentData_DifferentHash()
+    {
+        var data1 = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        var data2 = new byte[] { 0x89, 0x50, 0x4E, 0x48 };
+
+        var message1 = SpiceMessageSerializer.CreateIconMessage(@"C:\App\app.exe", data1, 64, 64);
+        var message2 = SpiceMessageSerializer.CreateIconMessage(@"C:\App\app.exe", data2, 64, 64);
+
+        Assert.NotEqual(message1.IconHash, message2.IconHash);
+    }
+
+    [Fact]
+    public void CreateShortcutMessage_SetsAllFields()
+    {
+        var info = new ShortcutInfo
+        {
+            ShortcutPath = @"C:\Users\Test\Desktop\App.lnk",
+            TargetPath = @"C:\Program Files\App\app.exe",
+            DisplayName = "My Application",
+            IconPath = @"C:\Program Files\App\app.exe",
+            IconIndex = 2,
+            Arguments = "--config test.cfg",
+            WorkingDirectory = @"C:\Program Files\App"
+        };
+
+        var message = SpiceMessageSerializer.CreateShortcutMessage(info, isNew: true);
+
+        Assert.Equal(info.ShortcutPath, message.ShortcutPath);
+        Assert.Equal(info.TargetPath, message.TargetPath);
+        Assert.Equal(info.DisplayName, message.DisplayName);
+        Assert.Equal(info.IconPath, message.IconPath);
+        Assert.Equal(2, message.IconIndex);
+        Assert.Equal("--config test.cfg", message.Arguments);
+        Assert.Equal(@"C:\Program Files\App", message.WorkingDirectory);
+        Assert.True(message.IsNew);
+    }
+
+    [Fact]
+    public void CreateShortcutMessage_ExistingShortcut_SetsIsNewFalse()
+    {
+        var info = new ShortcutInfo
+        {
+            ShortcutPath = @"C:\Test\app.lnk",
+            TargetPath = @"C:\App\app.exe",
+            DisplayName = "App",
+            IconPath = @"C:\App\app.exe"
+        };
+
+        var message = SpiceMessageSerializer.CreateShortcutMessage(info, isNew: false);
+
+        Assert.False(message.IsNew);
+    }
+
+    [Fact]
+    public void SerializeIconDataMessage()
+    {
+        var message = new IconDataMessage
+        {
+            ExecutablePath = @"C:\App\app.exe",
+            Width = 256,
+            Height = 256,
+            PngData = [0x89, 0x50, 0x4E, 0x47],
+            IconHash = "ABCD1234",
+            IconIndex = 0,
+            WasScaled = false
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.IconData, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeShortcutDetectedMessage()
+    {
+        var message = new ShortcutDetectedMessage
+        {
+            ShortcutPath = @"C:\Test\app.lnk",
+            TargetPath = @"C:\App\app.exe",
+            DisplayName = "Test App",
+            IconPath = @"C:\App\app.exe",
+            IconIndex = 0,
+            Arguments = "--test",
+            WorkingDirectory = @"C:\App",
+            IsNew = true
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.ShortcutDetected, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
     private static byte[] SerializeHostMessage<T>(SpiceMessageType type, T message) where T : HostMessage
     {
         var options = new System.Text.Json.JsonSerializerOptions

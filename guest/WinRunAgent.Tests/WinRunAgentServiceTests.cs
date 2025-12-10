@@ -42,6 +42,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var iconService = new IconExtractionService(_logger);
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, iconService, _ => { });
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -51,6 +52,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             iconService,
             inputService,
             clipboardService,
+            shortcutService,
             inbound,
             outbound,
             _logger);
@@ -83,6 +85,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var iconService = new IconExtractionService(_logger);
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, iconService, _ => { });
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -92,6 +95,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             iconService,
             inputService,
             clipboardService,
+            shortcutService,
             inbound,
             outbound,
             _logger);
@@ -104,7 +108,8 @@ public sealed class WinRunAgentServiceTests : IDisposable
         };
         await inbound.Writer.WriteAsync(launchMessage);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        // Allow enough time for shortcut scanning + message processing on CI
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
 
         try
         {
@@ -140,6 +145,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var iconService = new IconExtractionService(_logger);
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, iconService, _ => { });
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -149,6 +155,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             iconService,
             inputService,
             clipboardService,
+            shortcutService,
             inbound,
             outbound,
             _logger);
@@ -161,7 +168,8 @@ public sealed class WinRunAgentServiceTests : IDisposable
         };
         await inbound.Writer.WriteAsync(iconRequest);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        // Allow enough time for shortcut scanning + message processing on CI
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
 
         try
         {
