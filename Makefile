@@ -110,19 +110,21 @@ test-guest-remote:
 	echo "🔗 Run ID: $$RUN_ID"; \
 	echo "🌐 Live logs: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 	echo ""; \
-	echo "📺 Waiting for workflow to complete..."; \
+	echo "📺 Watching workflow progress..."; \
 	if gh run watch "$$RUN_ID" --exit-status; then \
 		echo ""; \
 		echo "✅ All tests passed!"; \
+		echo ""; \
+		echo "📋 Test summary:"; \
+		gh run view "$$RUN_ID" --log 2>/dev/null | grep -E '(Passed|Failed|Total tests|Test Run)' | tail -20; \
 	else \
 		EXIT_CODE=$$?; \
 		echo ""; \
-		echo "❌ Tests failed!"; \
-	fi; \
-	echo ""; \
-	echo "📋 Test output:"; \
-	gh run view "$$RUN_ID" --log 2>/dev/null | grep -E 'Test\s' | grep -v 'Testhost\|Starting test\|Test run for\|test files matched' || true; \
-	if [ "$${EXIT_CODE:-0}" -ne 0 ]; then exit 1; fi
+		echo "❌ Tests failed! Showing failed step logs:"; \
+		echo ""; \
+		gh run view "$$RUN_ID" --log-failed; \
+		exit $$EXIT_CODE; \
+	fi
 
 # ============================================================================
 # Lint
