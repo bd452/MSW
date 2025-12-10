@@ -286,6 +286,8 @@ make check-host
 
 # For guest code changes
 make check-guest          # Local lint + build (catches most issues)
+# Ensure your branch is pushed/up to date before running remote tests
+git push
 make test-guest-remote    # REQUIRED: Tests on Windows CI (catches platform-specific issues)
 ```
 
@@ -293,6 +295,8 @@ make test-guest-remote    # REQUIRED: Tests on Windows CI (catches platform-spec
 - Line ending issues (CRLF enforcement on Windows)
 - Windows-specific test failures
 - Platform-specific linting differences
+
+**Remote tests run against the remote branch**: if you have local-only changes, push them first or the remote workflow won’t see them.
 
 The `.gitattributes` file automatically normalizes line endings, but remote testing is still required to validate Windows-specific behavior.
 
