@@ -7,12 +7,43 @@
 - Swift 5.9 toolchain
 - Homebrew packages (`scripts/bootstrap.sh` handles install)
 - libspice-glib development headers (installed via brew)
-- (Optional) .NET SDK for running guest linting locally: `brew install dotnet`
+- (Optional) .NET 8 SDK for running guest linting locally: `brew install dotnet@8`
 
 ### Windows Guest
 - Windows Server 2022 (Desktop Experience disabled)
-- .NET 8 SDK
+- .NET 8 SDK (pinned via `guest/global.json`)
 - Visual Studio Build Tools (for testing the agent)
+
+### SDK Version Pinning
+
+The guest project uses `guest/global.json` to pin the .NET SDK version to **8.0.x**. This ensures:
+- **Consistent analyzer behavior** between local development and CI
+- **Reproducible builds** regardless of which SDKs are installed on the system
+- **LTS stability** — .NET 8 is Long Term Support (through November 2026)
+
+#### Installing .NET 8 SDK
+
+**macOS:**
+```bash
+# Install .NET 8 SDK specifically
+brew install dotnet@8
+
+# Add to PATH (add to ~/.zshrc for persistence)
+export PATH="/opt/homebrew/opt/dotnet@8/bin:$PATH"
+```
+
+**Windows:**
+Download from https://dotnet.microsoft.com/download/dotnet/8.0
+
+#### Verifying the SDK Version
+
+From the `guest/` directory:
+```bash
+dotnet --version
+# Should output 8.0.xxx
+```
+
+If you see a "compatible SDK not found" error, you need to install .NET 8 SDK.
 
 ## Common Tasks
 
