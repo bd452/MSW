@@ -35,7 +35,11 @@ public sealed class WinRunAgentService
             switch (message)
             {
                 case LaunchProgramMessage launch:
-                    _ = await _launcher.LaunchAsync(launch.Path, launch.Arguments, token);
+                    var launchResult = await _launcher.LaunchAsync(launch, token);
+                    if (!launchResult.Success)
+                    {
+                        _logger.Error($"Failed to launch {launch.Path}: {launchResult.ErrorMessage}");
+                    }
                     break;
                 case RequestIconMessage iconRequest:
                     _ = await _iconService.ExtractIconAsync(iconRequest.ExecutablePath, token);
