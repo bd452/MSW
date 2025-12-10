@@ -41,9 +41,9 @@
     - [X] Extract & cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs } <docs/decisions/protocols.md>
     - [X] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [X] Transfer icon blobs + metadata via Spice payloads { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-  - [ ] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
+  - [X] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [X] Replace mock logger with structured sinks + ETW providers { guest/WinRunAgent/Services/Logging.cs } <docs/development.md>
-    - [ ] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+    - [X] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
   - [ ] Guest test coverage { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, guest/WinRunAgent.Tests/DesktopDuplicationBridgeTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [ ] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [ ] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
