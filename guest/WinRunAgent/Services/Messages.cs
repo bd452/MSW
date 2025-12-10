@@ -41,6 +41,7 @@ public enum SpiceMessageType : byte
     ShortcutDetected = 0x85,
     ClipboardChanged = 0x86,
     Heartbeat = 0x87,
+    TelemetryReport = 0x88,
     Error = 0xFE,
     Ack = 0xFF
 }
@@ -481,6 +482,7 @@ public static class SpiceMessageSerializer
             ShortcutDetectedMessage => SpiceMessageType.ShortcutDetected,
             GuestClipboardMessage => SpiceMessageType.ClipboardChanged,
             HeartbeatMessage => SpiceMessageType.Heartbeat,
+            TelemetryReportMessage => SpiceMessageType.TelemetryReport,
             ErrorMessage => SpiceMessageType.Error,
             AckMessage => SpiceMessageType.Ack,
             _ => throw new ArgumentException($"Unknown message type: {message.GetType()}")
@@ -539,6 +541,7 @@ public static class SpiceMessageSerializer
             SpiceMessageType.Heartbeat => throw new NotImplementedException(),
             SpiceMessageType.Error => throw new NotImplementedException(),
             SpiceMessageType.Ack => throw new NotImplementedException(),
+            SpiceMessageType.TelemetryReport => throw new NotImplementedException(),
             _ => null
         };
     }
