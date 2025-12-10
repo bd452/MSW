@@ -1,0 +1,49 @@
+name: Test Guest (Remote)
+
+# This workflow is manually triggered to run guest tests on Windows.
+# Use `make test-guest-remote` to trigger and wait for results.
+# This is separate from the main CI workflow and does not run automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to test (branch, tag, or SHA)'
+        required: false
+        default: ''
+
+jobs:
+  test:
+    name: Guest Tests (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: guest/global.json
+
+      - name: Verify SDK version
+        run: dotnet --version
+
+      - name: Restore dependencies
+        working-directory: guest
+        run: dotnet restore WinRunAgent.sln
+
+      - name: Build
+        working-directory: guest
+        run: dotnet build WinRunAgent.sln --no-restore --configuration Release
+
+      - name: Test
+        working-directory: guest
+        run: dotnet test WinRunAgent.sln --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: guest/**/TestResults/*.trx
+          retention-days: 7
