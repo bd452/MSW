@@ -137,4 +137,104 @@ public sealed class WindowTrackerTests
         Assert.Contains(WindowEventType.Updated, eventTypes);
     }
 
+    [Fact]
+    public void WindowTrackerStartCanBeCalledMultipleTimes()
+    {
+        var logger = new TestLogger();
+        using var tracker = new WindowTracker(logger);
+
+        var handler = new EventHandler<WindowEventArgs>((_, _) => { });
+
+        tracker.Start(handler);
+        tracker.Stop();
+
+        // Should be able to start again after stop
+        tracker.Start(handler);
+        tracker.Stop();
+    }
+
+    [Fact]
+    public void WindowTrackerStopClearsTrackedWindows()
+    {
+        var logger = new TestLogger();
+        using var tracker = new WindowTracker(logger);
+
+        tracker.Start((_, _) => { });
+        tracker.Stop();
+
+        Assert.Empty(tracker.TrackedWindows);
+    }
+
+    [Fact]
+    public void WindowTrackerWindowEventCanBeSubscribed()
+    {
+        var logger = new TestLogger();
+        using var tracker = new WindowTracker(logger);
+
+        // Event subscription should not throw
+        tracker.WindowEvent += (_, _) => { };
+
+        tracker.Start((_, _) => { });
+
+        // If we get here, event subscription succeeded
+        Assert.True(true);
+    }
+
+    [Fact]
+    public void WindowTrackerDisposeStopsTracking()
+    {
+        var logger = new TestLogger();
+        var tracker = new WindowTracker(logger);
+
+        tracker.Start((_, _) => { });
+        tracker.Dispose();
+
+        // Should not throw when accessing after dispose
+        _ = tracker.TrackedWindows;
+    }
+
+    [Fact]
+    public void WindowEventArgsAllEventTypes()
+    {
+        var bounds = new Rect(0, 0, 100, 100);
+
+        var created = new WindowEventArgs(1, "Title", bounds, WindowEventType.Created);
+        var destroyed = new WindowEventArgs(2, "Title", bounds, WindowEventType.Destroyed);
+        var moved = new WindowEventArgs(3, "Title", bounds, WindowEventType.Moved);
+        var titleChanged = new WindowEventArgs(4, "Title", bounds, WindowEventType.TitleChanged);
+        var focusChanged = new WindowEventArgs(5, "Title", bounds, WindowEventType.FocusChanged);
+        var minimized = new WindowEventArgs(6, "Title", bounds, WindowEventType.Minimized);
+        var restored = new WindowEventArgs(7, "Title", bounds, WindowEventType.Restored);
+        var updated = new WindowEventArgs(8, "Title", bounds, WindowEventType.Updated);
+
+        Assert.Equal(WindowEventType.Created, created.EventType);
+        Assert.Equal(WindowEventType.Destroyed, destroyed.EventType);
+        Assert.Equal(WindowEventType.Moved, moved.EventType);
+        Assert.Equal(WindowEventType.TitleChanged, titleChanged.EventType);
+        Assert.Equal(WindowEventType.FocusChanged, focusChanged.EventType);
+        Assert.Equal(WindowEventType.Minimized, minimized.EventType);
+        Assert.Equal(WindowEventType.Restored, restored.EventType);
+        Assert.Equal(WindowEventType.Updated, updated.EventType);
+    }
+
+    [Fact]
+    public void RectNegativeValuesAreAllowed()
+    {
+        var rect = new Rect(-100, -200, 50, 75);
+
+        Assert.Equal(-100, rect.X);
+        Assert.Equal(-200, rect.Y);
+        Assert.Equal(50, rect.Width);
+        Assert.Equal(75, rect.Height);
+    }
+
+    [Fact]
+    public void RectZeroDimensionsAreAllowed()
+    {
+        var rect = new Rect(0, 0, 0, 0);
+
+        Assert.Equal(0, rect.Width);
+        Assert.Equal(0, rect.Height);
+    }
+
 }
