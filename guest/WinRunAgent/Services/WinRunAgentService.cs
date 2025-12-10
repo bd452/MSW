@@ -27,7 +27,8 @@ public sealed class WinRunAgentService : IDisposable
         ShortcutSyncService shortcutService,
         Channel<HostMessage> inboundChannel,
         Channel<GuestMessage> outboundChannel,
-        IAgentLogger logger)
+        IAgentLogger logger,
+        SpiceChannelTelemetry? telemetry = null)
     {
         _windowTracker = windowTracker;
         _launcher = launcher;
@@ -38,6 +39,7 @@ public sealed class WinRunAgentService : IDisposable
         _inboundChannel = inboundChannel;
         _outboundChannel = outboundChannel;
         _logger = logger;
+        Telemetry = telemetry ?? new SpiceChannelTelemetry(logger, outboundChannel);
 
         SessionManager = new SessionManager(
             logger,
@@ -70,6 +72,7 @@ public sealed class WinRunAgentService : IDisposable
         _inboundChannel = inboundChannel;
         _outboundChannel = Channel.CreateUnbounded<GuestMessage>();
         _logger = logger;
+        Telemetry = new SpiceChannelTelemetry(logger, _outboundChannel);
 
         // Create shortcut service with callback to send messages
         ShortcutService = new ShortcutSyncService(
@@ -101,6 +104,11 @@ public sealed class WinRunAgentService : IDisposable
     public ShortcutSyncService ShortcutService { get; }
 
     /// <summary>
+    /// Gets the channel telemetry for metrics and diagnostics.
+    /// </summary>
+    public SpiceChannelTelemetry Telemetry { get; }
+
+    /// <summary>
     /// Runs the agent service, processing messages until cancelled.
     /// </summary>
     public async Task RunAsync(CancellationToken token)
@@ -129,7 +137,19 @@ public sealed class WinRunAgentService : IDisposable
             ShortcutService.Stop();
             SessionManager.Stop();
             _windowTracker.Stop();
-            _logger.Info("WinRun guest agent shut down");
+
+            // Send final telemetry report
+            try
+            {
+                await Telemetry.ReportTelemetryAsync();
+            }
+            catch
+            {
+                // Ignore telemetry errors during shutdown
+            }
+
+            // Log final telemetry stats
+            _logger.Info("WinRun guest agent shut down", Telemetry.GetTelemetryMetadata());
         }
     }
 
@@ -141,16 +161,34 @@ public sealed class WinRunAgentService : IDisposable
         {
             try
             {
+                Telemetry.Metrics.RecordReceiveAttempt();
                 var message = await reader.ReadAsync(token);
-                await HandleMessageAsync(message, token);
+                Telemetry.RecordReceiveSuccess();
+
+                try
+                {
+                    await HandleMessageAsync(message, token);
+                }
+                catch (Exception ex)
+                {
+                    Telemetry.RecordMessageProcessingError(ex.Message);
+                    _logger.Error($"Error handling message {message.GetType().Name}: {ex.Message}");
+                }
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
                 break;
             }
+            catch (ChannelClosedException ex)
+            {
+                Telemetry.RecordReceiveFailure($"Channel closed: {ex.Message}");
+                _logger.Error($"Inbound channel closed: {ex.Message}");
+                break;
+            }
             catch (Exception ex)
             {
-                _logger.Error($"Error processing message: {ex.Message}");
+                Telemetry.RecordReceiveFailure(ex.Message);
+                _logger.Error($"Error receiving message: {ex.Message}");
             }
         }
     }
@@ -335,15 +373,14 @@ public sealed class WinRunAgentService : IDisposable
         await SendMessageAsync(ack);
     }
 
-    private async Task SendMessageAsync(GuestMessage message)
+    private async Task SendMessageAsync(GuestMessage message) => await SendMessageAsync(message, RetryPolicy.Default);
+
+    private async Task SendMessageAsync(GuestMessage message, RetryPolicy policy)
     {
-        try
+        var success = await Telemetry.SendWithRetryAsync(_outboundChannel.Writer, message, policy);
+        if (!success)
         {
-            await _outboundChannel.Writer.WriteAsync(message);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Failed to send message: {ex.Message}");
+            _logger.Error($"Failed to send {message.GetType().Name} after all retry attempts");
         }
     }
 
@@ -367,6 +404,7 @@ public sealed class WinRunAgentService : IDisposable
             return;
         }
 
+        Telemetry.Dispose();
         ShortcutService.Dispose();
         SessionManager.Dispose();
         _clipboardService.Dispose();
