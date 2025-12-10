@@ -614,7 +614,7 @@ public sealed class MessagesTests
         Assert.Equal(DragDropEventType.Drop, msg.EventType);
         Assert.Equal(150.0, msg.X);
         Assert.Equal(250.0, msg.Y);
-        _ = Assert.Single(msg.Files);
+        Assert.Single(msg.Files);
         Assert.Equal(2, msg.AllowedOperations.Length);
         Assert.Equal(DragOperation.Copy, msg.SelectedOperation);
     }
@@ -796,8 +796,8 @@ public sealed class MessagesTests
         var consumed = SpiceMessageSerializer.TryReadMessage(bytes, out var message);
 
         Assert.Equal(bytes.Length, consumed);
-        _ = Assert.NotNull(message);
-        _ = Assert.IsType<LaunchProgramMessage>(message);
+        Assert.NotNull(message);
+        Assert.IsType<LaunchProgramMessage>(message);
     }
 
     [Fact]

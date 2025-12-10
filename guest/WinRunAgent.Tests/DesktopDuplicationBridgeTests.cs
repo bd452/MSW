@@ -178,7 +178,7 @@ public sealed class DesktopDuplicationBridgeTests
         var bridge = new DesktopDuplicationBridge(logger);
         bridge.Dispose();
 
-        _ = Assert.Throws<ObjectDisposedException>(() => bridge.CaptureFrame());
+        Assert.Throws<ObjectDisposedException>(() => bridge.CaptureFrame());
     }
 
     [Fact]

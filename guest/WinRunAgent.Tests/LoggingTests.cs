@@ -215,8 +215,8 @@ public sealed class LoggingTests : IDisposable
         var composite = new CompositeLogger(testLogger1, testLogger2);
         composite.Info("Test message");
 
-        _ = Assert.Single(testLogger1.InfoMessages);
-        _ = Assert.Single(testLogger2.InfoMessages);
+        Assert.Single(testLogger1.InfoMessages);
+        Assert.Single(testLogger2.InfoMessages);
         Assert.Equal("Test message", testLogger1.InfoMessages[0]);
         Assert.Equal("Test message", testLogger2.InfoMessages[0]);
     }
@@ -235,7 +235,7 @@ public sealed class LoggingTests : IDisposable
         Assert.Empty(testLogger.DebugMessages);
         Assert.Empty(testLogger.InfoMessages);
         Assert.Empty(testLogger.WarnMessages);
-        _ = Assert.Single(testLogger.ErrorMessages);
+        Assert.Single(testLogger.ErrorMessages);
     }
 
     [Fact]
@@ -280,7 +280,7 @@ public sealed class LoggingTests : IDisposable
         var logger = new TestLogger();
         logger.Debug("test");
 
-        _ = Assert.Single(logger.DebugMessages);
+        Assert.Single(logger.DebugMessages);
         Assert.Equal("test", logger.DebugMessages[0]);
     }
 
@@ -290,7 +290,7 @@ public sealed class LoggingTests : IDisposable
         var logger = new TestLogger();
         logger.Info("test");
 
-        _ = Assert.Single(logger.InfoMessages);
+        Assert.Single(logger.InfoMessages);
         Assert.Equal("test", logger.InfoMessages[0]);
     }
 
@@ -300,7 +300,7 @@ public sealed class LoggingTests : IDisposable
         var logger = new TestLogger();
         logger.Warn("test");
 
-        _ = Assert.Single(logger.WarnMessages);
+        Assert.Single(logger.WarnMessages);
         Assert.Equal("test", logger.WarnMessages[0]);
     }
 
@@ -310,7 +310,7 @@ public sealed class LoggingTests : IDisposable
         var logger = new TestLogger();
         logger.Error("test");
 
-        _ = Assert.Single(logger.ErrorMessages);
+        Assert.Single(logger.ErrorMessages);
         Assert.Equal("test", logger.ErrorMessages[0]);
     }
 
@@ -322,7 +322,7 @@ public sealed class LoggingTests : IDisposable
 
         logger.Error(exception, "Something failed");
 
-        _ = Assert.Single(logger.ErrorMessages);
+        Assert.Single(logger.ErrorMessages);
 
         var entry = logger.Entries[0];
         Assert.Equal(LogLevel.Error, entry.Level);
@@ -374,10 +374,10 @@ public sealed class LoggingTests : IDisposable
         logger.Error("error");
 
         Assert.Equal(4, logger.Entries.Count);
-        _ = Assert.Single(logger.DebugMessages);
-        _ = Assert.Single(logger.InfoMessages);
-        _ = Assert.Single(logger.WarnMessages);
-        _ = Assert.Single(logger.ErrorMessages);
+        Assert.Single(logger.DebugMessages);
+        Assert.Single(logger.InfoMessages);
+        Assert.Single(logger.WarnMessages);
+        Assert.Single(logger.ErrorMessages);
     }
 
     [Fact]
@@ -399,7 +399,7 @@ public sealed class LoggingTests : IDisposable
         var logger = new TestLogger();
 
         logger.Info("test");
-        _ = Assert.Single(logger.Entries);
+        Assert.Single(logger.Entries);
 
         logger.Clear();
         Assert.Empty(logger.Entries);
@@ -412,7 +412,7 @@ public sealed class LoggingTests : IDisposable
 
         logger.Info("test", new LogMetadata { ["key"] = "value" });
 
-        _ = Assert.Single(logger.Entries);
+        Assert.Single(logger.Entries);
         Assert.NotNull(logger.Entries[0].Metadata);
         Assert.Equal("value", logger.Entries[0].Metadata!["key"]);
     }

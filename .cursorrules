@@ -64,6 +64,7 @@ After completing a task:
    - Line ending checks (CRLF) are platform-specific and only enforced on Windows CI
    - Some Windows-specific behaviors can only be validated on Windows
    - This prevents CI failures from platform-specific issues
+   - **Push your branch first** — the workflow runs against the remote branch; if local changes aren’t pushed, the remote tests won’t see them
 5. Mark the task `[X]` in `TODO.md`
 6. Check if parent task is now complete
 7. If all children complete, mark parent `[X]`

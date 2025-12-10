@@ -214,7 +214,7 @@ public sealed class ProgramLauncherTests : IDisposable
             arguments: ["/c", "timeout", "/t", "2"]);
 
         Assert.True(result.Success);
-        _ = Assert.NotNull(result.ProcessId);
+        Assert.NotNull(result.ProcessId);
 
         var tracked = _launcher.GetTrackedProcesses();
         Assert.Contains(tracked, p => p.ProcessId == result.ProcessId);
