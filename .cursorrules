@@ -66,6 +66,21 @@ After completing a task:
 
 ## Branch Workflow
 
+### Scope: One Second-Level Task Per Branch
+
+Each branch/PR corresponds to **one second-level task** in TODO.md. A chat session should complete all third-level subtasks under that second-level task before the branch is merged.
+
+**Example TODO.md structure:**
+```
+- [ ] Guest WinRunAgent                              ← First level (epic)
+  - [ ] Program launch + session management          ← Second level (branch scope)
+    - [ ] Launch Windows processes with args/env     ← Third level (individual work item)
+    - [ ] Track active sessions, heartbeats          ← Third level (individual work item)
+    - [ ] Expose control-channel handlers            ← Third level (individual work item)
+```
+
+For the above, you would create branch `program-launch-session-management` and complete all three third-level tasks (one at a time) within that branch.
+
 ### When to Create a New Branch
 
 Create a new feature branch **only** at the **start of a new chat session** when beginning TODO.md work:
@@ -75,12 +90,12 @@ git checkout main
 git checkout -b <branch-name>
 ```
 
-**Key rule:** One chat session = one branch. When the user asks to continue to the next TODO item within the same session, **stay on the current branch** and keep committing there.
+**Key rule:** One chat session = one second-level task = one branch. When the user asks to continue to the next TODO item within the same session, **stay on the current branch** and keep committing there until all third-level subtasks under the current second-level task are complete.
 
 ### When to Stay on Current Branch
 
 Stay on the current branch when:
-- Continuing to the next TODO item in the **same chat session**
+- Continuing to the next **third-level** TODO item under the same second-level task
 - The user says "next", "continue", or similar without explicitly requesting a new branch
 - Fixing issues or making follow-up changes to recent work
 - The current branch isn't `main` (you're already on a feature branch)
@@ -95,31 +110,32 @@ Skip branch creation if:
 
 ### Branch Naming Convention
 
-Use kebab-case names that clearly describe the work being done:
-- Derive the name from the first todo item's description in that session
+Use kebab-case names derived from the **second-level task description**:
+- Convert the second-level task name to kebab-case
 - Keep it concise but descriptive (3-5 words typical)
 - Prefix with category if helpful (e.g., `feat-`, `fix-`, `refactor-`)
 
-**Examples:**
-- `add-vm-lifecycle-states`
-- `feat-spice-message-serialization`
-- `fix-xpc-timeout-handling`
-- `refactor-window-tracker-events`
+**Examples (from second-level tasks):**
+- `program-launch-session-management`
+- `icon-extraction-shortcut-sync`
+- `window-tracking-metadata-streaming`
+- `host-guest-protocol-contracts`
 
 ### Session Workflow Example
 
 ```
-New chat session starts
+New chat session starts (second-level task: "Program launch + session management")
 ├── User: "do the next todo item"
-├── AI: git checkout -b feat-config-store  ← Creates branch (new session)
-├── AI: implements config store, commits
+├── AI: git checkout -b program-launch-session-management  ← Creates branch from 2nd-level task
+├── AI: implements "Launch Windows processes...", commits
 ├── User: "next"
-├── AI: stays on feat-config-store         ← Same session, same branch
-├── AI: implements logging, commits
+├── AI: stays on program-launch-session-management         ← Same session, same branch
+├── AI: implements "Track active sessions...", commits
 ├── User: "next"  
-├── AI: stays on feat-config-store         ← Same session, same branch
-├── AI: implements errors, commits
-└── Session ends with multiple commits on one branch
+├── AI: stays on program-launch-session-management         ← Same session, same branch
+├── AI: implements "Expose control-channel handlers", commits
+├── AI: marks second-level task [X] (all children complete)
+└── Session ends, branch ready for PR
 ```
 
 ## General Coding Standards
@@ -176,10 +192,10 @@ Tests are not optional for qualifying code — CI will enforce this by requiring
 
 #### Test Infrastructure
 
-| Platform | Framework | Command | Location |
-|----------|-----------|---------|----------|
-| Host (macOS) | XCTest | `swift test` or `make test-host` | `host/Tests/` |
-| Guest (Windows) | xUnit | `dotnet test` or `make test-guest` | `guest/WinRunAgent.Tests/` |
+| Platform        | Framework | Command                            | Location                   |
+| --------------- | --------- | ---------------------------------- | -------------------------- |
+| Host (macOS)    | XCTest    | `swift test` or `make test-host`   | `host/Tests/`              |
+| Guest (Windows) | xUnit     | `dotnet test` or `make test-guest` | `guest/WinRunAgent.Tests/` |
 
 #### Naming Conventions
 - Host: `<Module>Tests/` directories with `*Tests.swift` files
