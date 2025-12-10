@@ -121,7 +121,7 @@ public sealed class ProgramLauncher : IDisposable
     /// <summary>
     /// Gets all currently tracked processes.
     /// </summary>
-    public IReadOnlyCollection<LaunchedProcessInfo> GetTrackedProcesses() => _launchedProcesses.Values.Where(p => !p.HasExited).ToList();
+    public IReadOnlyCollection<LaunchedProcessInfo> GetTrackedProcesses() => [.. _launchedProcesses.Values.Where(p => !p.HasExited)];
 
     private async Task<LaunchResult> LaunchCoreAsync(
         string path,

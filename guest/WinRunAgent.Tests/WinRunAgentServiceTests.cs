@@ -11,7 +11,6 @@ public sealed class WinRunAgentServiceTests : IDisposable
     private readonly ProgramLauncher _launcher;
     private readonly IconExtractionService _iconService;
     private readonly Channel<HostMessage> _inboundChannel;
-    private readonly Channel<GuestMessage> _outboundChannel;
     private readonly WinRunAgentService _service;
 
     public WinRunAgentServiceTests()
@@ -20,7 +19,6 @@ public sealed class WinRunAgentServiceTests : IDisposable
         _launcher = new ProgramLauncher(_logger);
         _iconService = new IconExtractionService(_logger);
         _inboundChannel = Channel.CreateUnbounded<HostMessage>();
-        _outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         _service = new WinRunAgentService(
             _windowTracker,

@@ -266,9 +266,8 @@ public sealed class SessionManager : IDisposable
     /// <summary>
     /// Gets all active sessions.
     /// </summary>
-    public IReadOnlyCollection<ProgramSession> GetActiveSessions() => _sessions.Values
-            .Where(s => s.State != SessionState.Exited)
-            .ToList();
+    public IReadOnlyCollection<ProgramSession> GetActiveSessions() =>
+        [.. _sessions.Values.Where(s => s.State != SessionState.Exited)];
 
     /// <summary>
     /// Gets a session by process ID.
