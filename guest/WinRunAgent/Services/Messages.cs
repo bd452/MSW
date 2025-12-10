@@ -554,6 +554,16 @@ public static class SpiceMessageSerializer
     };
 
     /// <summary>
+    /// Creates a DPI info message from gathered display information.
+    /// </summary>
+    public static DpiInfoMessage CreateDpiInfoMessage(int primaryDpi, double scaleFactor, IReadOnlyList<MonitorInfo> monitors) => new()
+    {
+        PrimaryDpi = primaryDpi,
+        ScaleFactor = scaleFactor,
+        Monitors = [.. monitors]
+    };
+
+    /// <summary>
     /// Creates a window metadata message from WindowTracker event args.
     /// </summary>
     public static WindowMetadataMessage CreateWindowMetadata(WindowEventArgs args, bool isResizable = true, double scaleFactor = 1.0) => new()
