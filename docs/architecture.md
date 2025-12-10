@@ -38,10 +38,15 @@ docs/                    Additional documentation
 
 1. **IPC Contracts** — `WinRunXPC` contains strongly-typed request/response models reused by CLI, App, and daemon.
 2. **Shared Resources** — `WinRunShared` defines config, logging, error types, authentication policies, and rate limiting consumed by every host target.
-3. **Spice Streaming** — `WinRunSpiceBridge` abstracts the binding to libspice-glib. Current code provides a mock so development on Linux is still possible; replace with actual bridging before release.
+3. **Spice Streaming** — `WinRunSpiceBridge` abstracts the binding to libspice-glib and defines the host↔guest protocol:
+   - `SpiceProtocol.swift`: Protocol version constants, message types enum, guest capabilities flags
+   - `SpiceGuestMessages.swift`: Guest→host message types (metadata, frames, heartbeat, etc.)
+   - `SpiceHostMessages.swift`: Host→guest message types (launch, input, clipboard, etc.)
+   - `SpiceMessageSerializer.swift`: Binary envelope serialization `[Type:1][Length:4][Payload:N]`
 4. **Virtual Machine Management** — `WinRunVirtualMachine` owns state transitions (start, stop, suspend) and resource accounting.
 5. **Launcher Generation** — CLI exposes an ergonomic way to translate Windows shortcuts to `.app` bundles, mirroring the automation performed by the daemon when shortcuts are detected inside the guest.
 6. **XPC Security** — The daemon authenticates all XPC connections via code signature verification and Unix group membership, then applies per-client request throttling to prevent abuse. See `docs/decisions/protocols.md` for implementation details.
+7. **Protocol Versioning** — Host and guest negotiate protocol compatibility during initial handshake via `CapabilityFlags` message. Version 1.0 is current; see `docs/decisions/protocols.md` for version compatibility rules.
 
 ## Build Flow
 
@@ -55,4 +60,3 @@ docs/                    Additional documentation
 - Complete the Windows guest agent (Win32 hooks, Desktop Duplication, Spice protocol extensions).
 - Expand host test coverage for VM controller and Spice bridge.
 - Add macOS pkg and Windows MSI packaging scripts.
-- Finalize host↔guest protocol schemas and version negotiation.

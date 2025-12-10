@@ -110,7 +110,7 @@ public struct GuestCapabilities: OptionSet, Codable, Hashable, CustomStringConve
 
     /// All core capabilities expected from a fully-featured guest
     public static let allCore: GuestCapabilities = [
-        .windowTracking, .desktopDuplication, .clipboardSync, .iconExtraction
+        .windowTracking, .desktopDuplication, .clipboardSync, .iconExtraction,
     ]
 
     /// Description of enabled capabilities
@@ -173,7 +173,8 @@ public struct VersionNegotiationResult: CustomStringConvertible {
     public init(from capabilityMessage: CapabilityFlagsMessage) {
         self.hostVersion = SpiceProtocolVersion.combined
         self.guestVersion = capabilityMessage.protocolVersion
-        self.isCompatible = SpiceProtocolVersion.isCompatible(with: capabilityMessage.protocolVersion)
+        self.isCompatible = SpiceProtocolVersion.isCompatible(
+            with: capabilityMessage.protocolVersion)
         self.guestCapabilities = capabilityMessage.capabilities
         self.guestAgentVersion = capabilityMessage.agentVersion
         self.guestOsVersion = capabilityMessage.osVersion
@@ -183,13 +184,13 @@ public struct VersionNegotiationResult: CustomStringConvertible {
         let hostStr = SpiceProtocolVersion.format(hostVersion)
         let guestStr = SpiceProtocolVersion.format(guestVersion)
         return """
-        Version Negotiation:
-          Host: \(hostStr)
-          Guest: \(guestStr)
-          Compatible: \(isCompatible)
-          Agent: \(guestAgentVersion)
-          OS: \(guestOsVersion)
-          Capabilities: \(guestCapabilities.description)
-        """
+            Version Negotiation:
+              Host: \(hostStr)
+              Guest: \(guestStr)
+              Compatible: \(isCompatible)
+              Agent: \(guestAgentVersion)
+              OS: \(guestOsVersion)
+              Capabilities: \(guestCapabilities.description)
+            """
     }
 }
