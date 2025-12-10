@@ -52,10 +52,11 @@ import Security
     }
 
     func executeProgram(_ requestData: NSData, reply: @escaping (NSError?) -> Void) {
+        let data = Data(referencing: requestData)
         Task { [self] in
             do {
                 try await checkThrottle()
-                let request = try decode(ProgramLaunchRequest.self, from: requestData)
+                let request = try decode(ProgramLaunchRequest.self, from: data)
                 _ = try await vmController.ensureRunning()
                 logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
                 await vmController.registerSession(delta: 1)
@@ -119,10 +120,10 @@ import Security
     }
 
     func closeSession(_ sessionId: NSString, reply: @escaping (NSError?) -> Void) {
+        let id = sessionId as String
         Task { [self] in
             do {
                 try await checkThrottle()
-                let id = sessionId as String
                 logger.info("Would close session \(id)")
                 // TODO: Send close command to guest agent
                 // For now, just acknowledge the request
@@ -150,10 +151,10 @@ import Security
     }
 
     func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void) {
+        let path = destinationPath as String
         Task { [self] in
             do {
                 try await checkThrottle()
-                let path = destinationPath as String
                 logger.info("Would sync shortcuts to \(path)")
                 // TODO: Fetch shortcuts from guest, create launchers
                 // For now, return empty result
@@ -169,8 +170,8 @@ import Security
         try NSData(data: encoder.encode(value))
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, from data: NSData) throws -> T {
-        try decoder.decode(T.self, from: data as Data)
+    private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        try decoder.decode(T.self, from: data)
     }
 
     private func nsError(_ error: Error) -> NSError {
