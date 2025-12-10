@@ -150,7 +150,10 @@ public sealed class SessionManager : IDisposable
             _ = TrackSession(info.ProcessId, info.ExecutablePath);
         }
 
-        // Start timers
+        // Fire an immediate heartbeat to announce we're alive
+        OnHeartbeatTimer(null);
+
+        // Start timers for subsequent periodic heartbeats
         _ = _heartbeatTimer.Change(HeartbeatInterval, HeartbeatInterval);
         _ = _idleCheckTimer.Change(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
 

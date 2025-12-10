@@ -97,6 +97,7 @@ test-guest-remote:
 		exit 1; \
 	fi
 	@BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
+	REPO=$$(gh repo view --json nameWithOwner --jq '.nameWithOwner'); \
 	echo "📍 Testing branch: $$BRANCH"; \
 	gh workflow run test-guest-remote.yml --ref "$$BRANCH" -f ref="$$BRANCH"; \
 	echo "⏳ Waiting for workflow to start..."; \
@@ -107,8 +108,23 @@ test-guest-remote:
 		exit 1; \
 	fi; \
 	echo "🔗 Run ID: $$RUN_ID"; \
+	echo "🌐 Live logs: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
+	echo ""; \
 	echo "📺 Watching workflow progress..."; \
-	gh run watch "$$RUN_ID" --exit-status
+	if gh run watch "$$RUN_ID" --exit-status; then \
+		echo ""; \
+		echo "✅ All tests passed!"; \
+		echo ""; \
+		echo "📋 Test summary:"; \
+		gh run view "$$RUN_ID" --log 2>/dev/null | grep -E '(Passed|Failed|Total tests|Test Run)' | tail -20; \
+	else \
+		EXIT_CODE=$$?; \
+		echo ""; \
+		echo "❌ Tests failed! Showing failed step logs:"; \
+		echo ""; \
+		gh run view "$$RUN_ID" --log-failed; \
+		exit $$EXIT_CODE; \
+	fi
 
 # ============================================================================
 # Lint
