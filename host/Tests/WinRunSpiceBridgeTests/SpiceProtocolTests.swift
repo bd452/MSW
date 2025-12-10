@@ -1,167 +1,187 @@
 import Foundation
-import XCTest
+import Testing
 
 @testable import WinRunShared
 @testable import WinRunSpiceBridge
 
 // MARK: - Protocol Version Tests
 
-final class SpiceProtocolVersionTests: XCTestCase {
-    func testCombinedVersionFormat() {
+@Suite("SpiceProtocolVersion")
+struct SpiceProtocolVersionTests {
+    @Test("Combined version format is correct")
+    func combinedVersionFormat() {
         let combined = SpiceProtocolVersion.combined
         let major = UInt16(combined >> 16)
         let minor = UInt16(combined & 0xFFFF)
 
-        XCTAssertEqual(major, SpiceProtocolVersion.major)
-        XCTAssertEqual(minor, SpiceProtocolVersion.minor)
+        #expect(major == SpiceProtocolVersion.major)
+        #expect(minor == SpiceProtocolVersion.minor)
     }
 
-    func testParseVersion() {
+    @Test("Parse extracts major and minor correctly")
+    func parseVersion() {
         let version: UInt32 = (2 << 16) | 5
         let (major, minor) = SpiceProtocolVersion.parse(version)
 
-        XCTAssertEqual(major, 2)
-        XCTAssertEqual(minor, 5)
+        #expect(major == 2)
+        #expect(minor == 5)
     }
 
-    func testFormatVersion() {
+    @Test("Format produces correct string")
+    func formatVersion() {
         let version: UInt32 = (1 << 16) | 0
         let formatted = SpiceProtocolVersion.format(version)
 
-        XCTAssertEqual(formatted, "1.0")
+        #expect(formatted == "1.0")
     }
 
-    func testCompatibleSameMajor() {
+    @Test("Compatible with same major version")
+    func compatibleSameMajor() {
         let guestVersion = SpiceProtocolVersion.combined
-        XCTAssertTrue(SpiceProtocolVersion.isCompatible(with: guestVersion))
+        #expect(SpiceProtocolVersion.isCompatible(with: guestVersion))
     }
 
-    func testCompatibleOlderMinor() {
+    @Test("Compatible with older minor version")
+    func compatibleOlderMinor() {
         // Guest has older minor version (0), host is 1.0
         let guestVersion: UInt32 = (1 << 16) | 0
-        XCTAssertTrue(SpiceProtocolVersion.isCompatible(with: guestVersion))
+        #expect(SpiceProtocolVersion.isCompatible(with: guestVersion))
     }
 
-    func testIncompatibleDifferentMajor() {
+    @Test("Incompatible with different major version")
+    func incompatibleDifferentMajor() {
         let guestVersion: UInt32 = (2 << 16) | 0  // Version 2.0
-        XCTAssertFalse(SpiceProtocolVersion.isCompatible(with: guestVersion))
+        #expect(!SpiceProtocolVersion.isCompatible(with: guestVersion))
     }
 
-    func testIncompatibleNewerMinor() {
+    @Test("Incompatible with newer minor version")
+    func incompatibleNewerMinor() {
         // Guest has minor version 1, host is 1.0
         let guestVersion: UInt32 = (1 << 16) | 1
-        XCTAssertFalse(SpiceProtocolVersion.isCompatible(with: guestVersion))
+        #expect(!SpiceProtocolVersion.isCompatible(with: guestVersion))
     }
 
-    func testVersionString() {
+    @Test("Version string is formatted correctly")
+    func versionString() {
         let expected = "\(SpiceProtocolVersion.major).\(SpiceProtocolVersion.minor)"
-        XCTAssertEqual(SpiceProtocolVersion.versionString, expected)
+        #expect(SpiceProtocolVersion.versionString == expected)
     }
 }
 
 // MARK: - Message Type Tests
 
-final class SpiceMessageTypeTests: XCTestCase {
-    func testHostToGuestRange() {
+@Suite("SpiceMessageType")
+struct SpiceMessageTypeTests {
+    @Test("Host to guest types have correct range")
+    func hostToGuestRange() {
         let hostTypes: [SpiceMessageType] = [
             .launchProgram, .requestIcon, .clipboardData,
-            .mouseInput, .keyboardInput, .dragDropEvent, .shutdown
+            .mouseInput, .keyboardInput, .dragDropEvent, .shutdown,
         ]
 
         for type in hostTypes {
-            XCTAssertTrue(type.isHostToGuest, "\(type) should be host→guest")
-            XCTAssertFalse(type.isGuestToHost, "\(type) should not be guest→host")
-            XCTAssertLessThan(type.rawValue, 0x80, "\(type) raw value should be < 0x80")
+            #expect(type.isHostToGuest)
+            #expect(!type.isGuestToHost)
+            #expect(type.rawValue < 0x80)
         }
     }
 
-    func testGuestToHostRange() {
+    @Test("Guest to host types have correct range")
+    func guestToHostRange() {
         let guestTypes: [SpiceMessageType] = [
             .windowMetadata, .frameData, .capabilityFlags, .dpiInfo,
             .iconData, .shortcutDetected, .clipboardChanged,
-            .heartbeat, .telemetryReport, .error, .ack
+            .heartbeat, .telemetryReport, .error, .ack,
         ]
 
         for type in guestTypes {
-            XCTAssertTrue(type.isGuestToHost, "\(type) should be guest→host")
-            XCTAssertFalse(type.isHostToGuest, "\(type) should not be host→guest")
-            XCTAssertGreaterThanOrEqual(type.rawValue, 0x80, "\(type) raw value should be >= 0x80")
+            #expect(type.isGuestToHost)
+            #expect(!type.isHostToGuest)
+            #expect(type.rawValue >= 0x80)
         }
     }
 
-    func testRawValuesMatchGuest() {
+    @Test("Raw values match guest C# enum")
+    func rawValuesMatchGuest() {
         // Verify key message types match the C# SpiceMessageType enum
-        XCTAssertEqual(SpiceMessageType.launchProgram.rawValue, 0x01)
-        XCTAssertEqual(SpiceMessageType.requestIcon.rawValue, 0x02)
-        XCTAssertEqual(SpiceMessageType.clipboardData.rawValue, 0x03)
-        XCTAssertEqual(SpiceMessageType.mouseInput.rawValue, 0x04)
-        XCTAssertEqual(SpiceMessageType.keyboardInput.rawValue, 0x05)
-        XCTAssertEqual(SpiceMessageType.dragDropEvent.rawValue, 0x06)
-        XCTAssertEqual(SpiceMessageType.shutdown.rawValue, 0x0F)
+        #expect(SpiceMessageType.launchProgram.rawValue == 0x01)
+        #expect(SpiceMessageType.requestIcon.rawValue == 0x02)
+        #expect(SpiceMessageType.clipboardData.rawValue == 0x03)
+        #expect(SpiceMessageType.mouseInput.rawValue == 0x04)
+        #expect(SpiceMessageType.keyboardInput.rawValue == 0x05)
+        #expect(SpiceMessageType.dragDropEvent.rawValue == 0x06)
+        #expect(SpiceMessageType.shutdown.rawValue == 0x0F)
 
-        XCTAssertEqual(SpiceMessageType.windowMetadata.rawValue, 0x80)
-        XCTAssertEqual(SpiceMessageType.frameData.rawValue, 0x81)
-        XCTAssertEqual(SpiceMessageType.capabilityFlags.rawValue, 0x82)
-        XCTAssertEqual(SpiceMessageType.dpiInfo.rawValue, 0x83)
-        XCTAssertEqual(SpiceMessageType.iconData.rawValue, 0x84)
-        XCTAssertEqual(SpiceMessageType.shortcutDetected.rawValue, 0x85)
-        XCTAssertEqual(SpiceMessageType.clipboardChanged.rawValue, 0x86)
-        XCTAssertEqual(SpiceMessageType.heartbeat.rawValue, 0x87)
-        XCTAssertEqual(SpiceMessageType.telemetryReport.rawValue, 0x88)
-        XCTAssertEqual(SpiceMessageType.error.rawValue, 0xFE)
-        XCTAssertEqual(SpiceMessageType.ack.rawValue, 0xFF)
+        #expect(SpiceMessageType.windowMetadata.rawValue == 0x80)
+        #expect(SpiceMessageType.frameData.rawValue == 0x81)
+        #expect(SpiceMessageType.capabilityFlags.rawValue == 0x82)
+        #expect(SpiceMessageType.dpiInfo.rawValue == 0x83)
+        #expect(SpiceMessageType.iconData.rawValue == 0x84)
+        #expect(SpiceMessageType.shortcutDetected.rawValue == 0x85)
+        #expect(SpiceMessageType.clipboardChanged.rawValue == 0x86)
+        #expect(SpiceMessageType.heartbeat.rawValue == 0x87)
+        #expect(SpiceMessageType.telemetryReport.rawValue == 0x88)
+        #expect(SpiceMessageType.error.rawValue == 0xFE)
+        #expect(SpiceMessageType.ack.rawValue == 0xFF)
     }
 }
 
 // MARK: - Guest Capabilities Tests
 
-final class GuestCapabilitiesTests: XCTestCase {
-    func testRawValuesMatchGuest() {
-        XCTAssertEqual(GuestCapabilities.windowTracking.rawValue, 1 << 0)
-        XCTAssertEqual(GuestCapabilities.desktopDuplication.rawValue, 1 << 1)
-        XCTAssertEqual(GuestCapabilities.clipboardSync.rawValue, 1 << 2)
-        XCTAssertEqual(GuestCapabilities.dragDrop.rawValue, 1 << 3)
-        XCTAssertEqual(GuestCapabilities.iconExtraction.rawValue, 1 << 4)
-        XCTAssertEqual(GuestCapabilities.shortcutDetection.rawValue, 1 << 5)
-        XCTAssertEqual(GuestCapabilities.highDpiSupport.rawValue, 1 << 6)
-        XCTAssertEqual(GuestCapabilities.multiMonitor.rawValue, 1 << 7)
+@Suite("GuestCapabilities")
+struct GuestCapabilitiesTests {
+    @Test("Raw values match guest C# enum")
+    func rawValuesMatchGuest() {
+        #expect(GuestCapabilities.windowTracking.rawValue == 1 << 0)
+        #expect(GuestCapabilities.desktopDuplication.rawValue == 1 << 1)
+        #expect(GuestCapabilities.clipboardSync.rawValue == 1 << 2)
+        #expect(GuestCapabilities.dragDrop.rawValue == 1 << 3)
+        #expect(GuestCapabilities.iconExtraction.rawValue == 1 << 4)
+        #expect(GuestCapabilities.shortcutDetection.rawValue == 1 << 5)
+        #expect(GuestCapabilities.highDpiSupport.rawValue == 1 << 6)
+        #expect(GuestCapabilities.multiMonitor.rawValue == 1 << 7)
     }
 
-    func testAllCoreCapabilities() {
+    @Test("All core contains expected capabilities")
+    func allCoreCapabilities() {
         let core = GuestCapabilities.allCore
 
-        XCTAssertTrue(core.contains(.windowTracking))
-        XCTAssertTrue(core.contains(.desktopDuplication))
-        XCTAssertTrue(core.contains(.clipboardSync))
-        XCTAssertTrue(core.contains(.iconExtraction))
+        #expect(core.contains(.windowTracking))
+        #expect(core.contains(.desktopDuplication))
+        #expect(core.contains(.clipboardSync))
+        #expect(core.contains(.iconExtraction))
     }
 
-    func testDescriptionFormat() {
+    @Test("Description lists enabled capabilities")
+    func descriptionFormat() {
         let caps: GuestCapabilities = [.windowTracking, .clipboardSync]
         let desc = caps.description
 
-        XCTAssertTrue(desc.contains("windowTracking"))
-        XCTAssertTrue(desc.contains("clipboardSync"))
-        XCTAssertFalse(desc.contains("desktopDuplication"))
+        #expect(desc.contains("windowTracking"))
+        #expect(desc.contains("clipboardSync"))
+        #expect(!desc.contains("desktopDuplication"))
     }
 
-    func testOptionSetOperations() {
+    @Test("OptionSet operations work correctly")
+    func optionSetOperations() {
         var caps: GuestCapabilities = [.windowTracking]
         caps.insert(.clipboardSync)
 
-        XCTAssertTrue(caps.contains(.windowTracking))
-        XCTAssertTrue(caps.contains(.clipboardSync))
-        XCTAssertFalse(caps.contains(.dragDrop))
+        #expect(caps.contains(.windowTracking))
+        #expect(caps.contains(.clipboardSync))
+        #expect(!caps.contains(.dragDrop))
 
         let combined = GuestCapabilities.windowTracking.union(.clipboardSync)
-        XCTAssertEqual(combined, caps)
+        #expect(combined == caps)
     }
 }
 
 // MARK: - Message Serialization Tests
 
-final class SpiceMessageSerializerTests: XCTestCase {
-    func testSerializeLaunchProgram() throws {
+@Suite("SpiceMessageSerializer")
+struct SpiceMessageSerializerTests {
+    @Test("Serialize launch program message")
+    func serializeLaunchProgram() throws {
         let message = LaunchProgramSpiceMessage(
             messageId: 42,
             path: "C:\\Windows\\notepad.exe",
@@ -172,18 +192,18 @@ final class SpiceMessageSerializerTests: XCTestCase {
         let data = try SpiceMessageSerializer.serialize(message)
 
         // Check envelope format: [Type:1][Length:4][Payload:N]
-        XCTAssertGreaterThanOrEqual(data.count, 5)
-        XCTAssertEqual(data[0], SpiceMessageType.launchProgram.rawValue)
+        #expect(data.count >= 5)
+        #expect(data[0] == SpiceMessageType.launchProgram.rawValue)
 
         // Read length bytes individually to avoid alignment issues
-        let length = UInt32(data[1]) |
-            (UInt32(data[2]) << 8) |
-            (UInt32(data[3]) << 16) |
-            (UInt32(data[4]) << 24)
-        XCTAssertEqual(data.count, 5 + Int(length))
+        let length =
+            UInt32(data[1]) | (UInt32(data[2]) << 8) | (UInt32(data[3]) << 16)
+            | (UInt32(data[4]) << 24)
+        #expect(data.count == 5 + Int(length))
     }
 
-    func testSerializeMouseInput() throws {
+    @Test("Serialize mouse input message")
+    func serializeMouseInput() throws {
         let message = MouseInputSpiceMessage(
             messageId: 1,
             windowId: 12345,
@@ -196,10 +216,11 @@ final class SpiceMessageSerializerTests: XCTestCase {
 
         let data = try SpiceMessageSerializer.serialize(message)
 
-        XCTAssertEqual(data[0], SpiceMessageType.mouseInput.rawValue)
+        #expect(data[0] == SpiceMessageType.mouseInput.rawValue)
     }
 
-    func testSerializeKeyboardInput() throws {
+    @Test("Serialize keyboard input message")
+    func serializeKeyboardInput() throws {
         let message = KeyboardInputSpiceMessage(
             messageId: 2,
             windowId: 12345,
@@ -211,18 +232,20 @@ final class SpiceMessageSerializerTests: XCTestCase {
 
         let data = try SpiceMessageSerializer.serialize(message)
 
-        XCTAssertEqual(data[0], SpiceMessageType.keyboardInput.rawValue)
+        #expect(data[0] == SpiceMessageType.keyboardInput.rawValue)
     }
 
-    func testSerializeShutdown() throws {
+    @Test("Serialize shutdown message")
+    func serializeShutdown() throws {
         let message = ShutdownSpiceMessage(messageId: 99, timeoutMs: 10000)
 
         let data = try SpiceMessageSerializer.serialize(message)
 
-        XCTAssertEqual(data[0], SpiceMessageType.shutdown.rawValue)
+        #expect(data[0] == SpiceMessageType.shutdown.rawValue)
     }
 
-    func testDeserializeCapabilityFlags() throws {
+    @Test("Deserialize capability flags message")
+    func deserializeCapabilityFlags() throws {
         let capabilities: GuestCapabilities = [.windowTracking, .clipboardSync]
         let original = CapabilityFlagsMessage(
             capabilities: capabilities,
@@ -244,29 +267,31 @@ final class SpiceMessageSerializerTests: XCTestCase {
 
         let result = try SpiceMessageSerializer.deserialize(envelope)
 
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.0, .capabilityFlags)
+        #expect(result != nil)
+        #expect(result?.0 == .capabilityFlags)
 
         if let message = result?.1 as? CapabilityFlagsMessage {
-            XCTAssertEqual(message.capabilities, capabilities)
-            XCTAssertEqual(message.protocolVersion, SpiceProtocolVersion.combined)
-            XCTAssertEqual(message.agentVersion, "1.0.0")
+            #expect(message.capabilities == capabilities)
+            #expect(message.protocolVersion == SpiceProtocolVersion.combined)
+            #expect(message.agentVersion == "1.0.0")
         } else {
-            XCTFail("Expected CapabilityFlagsMessage")
+            Issue.record("Expected CapabilityFlagsMessage")
         }
     }
 
-    func testTryReadIncomplete() throws {
+    @Test("Try read message from incomplete buffer")
+    func tryReadIncomplete() throws {
         // Only 3 bytes, need at least 5
         let buffer = Data([0x80, 0x00, 0x00])
 
         let result = try SpiceMessageSerializer.tryReadMessage(from: buffer)
 
-        XCTAssertFalse(result.isComplete)
-        XCTAssertEqual(result.bytesConsumed, 0)
+        #expect(!result.isComplete)
+        #expect(result.bytesConsumed == 0)
     }
 
-    func testTryReadIncompletePayload() throws {
+    @Test("Try read message with incomplete payload")
+    func tryReadIncompletePayload() throws {
         // Header says 100 bytes but only 5 total provided
         var buffer = Data()
         buffer.append(SpiceMessageType.heartbeat.rawValue)
@@ -275,32 +300,36 @@ final class SpiceMessageSerializerTests: XCTestCase {
 
         let result = try SpiceMessageSerializer.tryReadMessage(from: buffer)
 
-        XCTAssertFalse(result.isComplete)
-        XCTAssertEqual(result.bytesConsumed, 0)
+        #expect(!result.isComplete)
+        #expect(result.bytesConsumed == 0)
     }
 
-    func testDeserializeIncomplete() throws {
+    @Test("Deserialize returns nil for incomplete data")
+    func deserializeIncomplete() throws {
         let result = try SpiceMessageSerializer.deserialize(Data([0x80, 0x00]))
 
-        XCTAssertNil(result)
+        #expect(result == nil)
     }
 
-    func testInvalidMessageType() {
+    @Test("Invalid message type throws error")
+    func invalidMessageType() {
         var buffer = Data()
         buffer.append(0x50)  // Invalid type not in enum
         var length = UInt32(0).littleEndian
         withUnsafeBytes(of: &length) { buffer.append(contentsOf: $0) }
 
-        XCTAssertThrowsError(try SpiceMessageSerializer.deserialize(buffer)) { error in
-            XCTAssertTrue(error is SpiceProtocolError)
+        #expect(throws: SpiceProtocolError.self) {
+            _ = try SpiceMessageSerializer.deserialize(buffer)
         }
     }
 }
 
 // MARK: - Version Negotiation Tests
 
-final class VersionNegotiationResultTests: XCTestCase {
-    func testCreateFromCapabilityMessage() {
+@Suite("VersionNegotiationResult")
+struct VersionNegotiationResultTests {
+    @Test("Creates from capability message")
+    func createFromCapabilityMessage() {
         let capabilities: GuestCapabilities = [.windowTracking, .desktopDuplication]
         let message = CapabilityFlagsMessage(
             capabilities: capabilities,
@@ -311,15 +340,16 @@ final class VersionNegotiationResultTests: XCTestCase {
 
         let result = VersionNegotiationResult(from: message)
 
-        XCTAssertTrue(result.isCompatible)
-        XCTAssertEqual(result.hostVersion, SpiceProtocolVersion.combined)
-        XCTAssertEqual(result.guestVersion, SpiceProtocolVersion.combined)
-        XCTAssertEqual(result.guestCapabilities, capabilities)
-        XCTAssertEqual(result.guestAgentVersion, "1.2.3")
-        XCTAssertEqual(result.guestOsVersion, "Windows 11 Pro")
+        #expect(result.isCompatible)
+        #expect(result.hostVersion == SpiceProtocolVersion.combined)
+        #expect(result.guestVersion == SpiceProtocolVersion.combined)
+        #expect(result.guestCapabilities == capabilities)
+        #expect(result.guestAgentVersion == "1.2.3")
+        #expect(result.guestOsVersion == "Windows 11 Pro")
     }
 
-    func testDetectsIncompatibleVersion() {
+    @Test("Detects incompatible version")
+    func detectsIncompatibleVersion() {
         let message = CapabilityFlagsMessage(
             capabilities: .allCore,
             protocolVersion: (2 << 16) | 0,  // Version 2.0
@@ -329,10 +359,11 @@ final class VersionNegotiationResultTests: XCTestCase {
 
         let result = VersionNegotiationResult(from: message)
 
-        XCTAssertFalse(result.isCompatible)
+        #expect(!result.isCompatible)
     }
 
-    func testDescriptionFormat() {
+    @Test("Description includes all fields")
+    func descriptionFormat() {
         let message = CapabilityFlagsMessage(
             capabilities: [.windowTracking],
             protocolVersion: SpiceProtocolVersion.combined,
@@ -343,26 +374,29 @@ final class VersionNegotiationResultTests: XCTestCase {
         let result = VersionNegotiationResult(from: message)
         let desc = result.description
 
-        XCTAssertTrue(desc.contains("Version Negotiation"))
-        XCTAssertTrue(desc.contains("Host:"))
-        XCTAssertTrue(desc.contains("Guest:"))
-        XCTAssertTrue(desc.contains("Compatible:"))
+        #expect(desc.contains("Version Negotiation"))
+        #expect(desc.contains("Host:"))
+        #expect(desc.contains("Guest:"))
+        #expect(desc.contains("Compatible:"))
     }
 }
 
 // MARK: - RectInfo Tests
 
-final class RectInfoTests: XCTestCase {
-    func testInitialization() {
+@Suite("RectInfo")
+struct RectInfoTests {
+    @Test("Initializes with correct values")
+    func initialization() {
         let rect = RectInfo(x: 10, y: 20, width: 100, height: 200)
 
-        XCTAssertEqual(rect.x, 10)
-        XCTAssertEqual(rect.y, 20)
-        XCTAssertEqual(rect.width, 100)
-        XCTAssertEqual(rect.height, 200)
+        #expect(rect.x == 10)
+        #expect(rect.y == 20)
+        #expect(rect.width == 100)
+        #expect(rect.height == 200)
     }
 
-    func testCodableRoundTrip() throws {
+    @Test("Codable round trip")
+    func codableRoundTrip() throws {
         let original = RectInfo(x: -10, y: -20, width: 1920, height: 1080)
 
         let encoder = JSONEncoder()
@@ -371,22 +405,23 @@ final class RectInfoTests: XCTestCase {
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(RectInfo.self, from: data)
 
-        XCTAssertEqual(decoded, original)
+        #expect(decoded == original)
     }
 
-    func testHashable() {
+    @Test("Hashable for use in collections")
+    func hashable() {
         let rect1 = RectInfo(x: 0, y: 0, width: 100, height: 100)
         let rect2 = RectInfo(x: 0, y: 0, width: 100, height: 100)
         let rect3 = RectInfo(x: 1, y: 0, width: 100, height: 100)
 
-        XCTAssertEqual(rect1.hashValue, rect2.hashValue)
-        XCTAssertNotEqual(rect1.hashValue, rect3.hashValue)
+        #expect(rect1.hashValue == rect2.hashValue)
+        #expect(rect1.hashValue != rect3.hashValue)
 
         var set: Set<RectInfo> = [rect1]
         set.insert(rect2)
-        XCTAssertEqual(set.count, 1)
+        #expect(set.count == 1)
 
         set.insert(rect3)
-        XCTAssertEqual(set.count, 2)
+        #expect(set.count == 2)
     }
 }
