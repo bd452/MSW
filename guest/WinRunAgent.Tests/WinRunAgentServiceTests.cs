@@ -71,9 +71,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         // Check that a capability message was sent
         var reader = outbound.Reader;
         Assert.True(reader.TryRead(out var message));
-        Assert.IsType<CapabilityFlagsMessage>(message);
-
-        var capabilities = (CapabilityFlagsMessage)message;
+        var capabilities = Assert.IsType<CapabilityFlagsMessage>(message);
         Assert.True(capabilities.Capabilities.HasFlag(GuestCapabilities.WindowTracking));
     }
 

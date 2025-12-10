@@ -106,7 +106,7 @@ public sealed class SpiceChannelTests
         var complete = bytes;
         consumed = SpiceMessageSerializer.TryReadMessage(complete, out parsed);
         Assert.Equal(bytes.Length, consumed);
-        Assert.IsType<RequestIconMessage>(parsed);
+        _ = Assert.IsType<RequestIconMessage>(parsed);
     }
 
     private static byte[] SerializeHostMessage<T>(SpiceMessageType type, T message) where T : HostMessage

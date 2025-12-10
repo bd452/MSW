@@ -614,7 +614,7 @@ public sealed class MessagesTests
         Assert.Equal(DragDropEventType.Drop, msg.EventType);
         Assert.Equal(150.0, msg.X);
         Assert.Equal(250.0, msg.Y);
-        Assert.Single(msg.Files);
+        _ = Assert.Single(msg.Files);
         Assert.Equal(2, msg.AllowedOperations.Length);
         Assert.Equal(DragOperation.Copy, msg.SelectedOperation);
     }
