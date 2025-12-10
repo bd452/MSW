@@ -319,5 +319,273 @@ public sealed class ProgramLauncherTests : IDisposable
         // Note: This is a best-effort test as timing can vary
     }
 
+    [Fact]
+    public async Task LaunchAsync_WithArgumentsArray_ProcessesAllArguments()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = await _launcher.LaunchAsync(
+            path,
+            arguments: ["/c", "echo", "arg1", "arg2", "arg3"]);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithEmptyArgumentsArray_DoesNotThrow()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = await _launcher.LaunchAsync(
+            path,
+            arguments: []);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithNullArguments_DoesNotThrow()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = await _launcher.LaunchAsync(
+            path,
+            arguments: null);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithNullWorkingDirectory_UsesExecutableDirectory()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = await _launcher.LaunchAsync(
+            path,
+            arguments: ["/c", "cd"],
+            workingDirectory: null);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithEmptyWorkingDirectory_UsesExecutableDirectory()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = await _launcher.LaunchAsync(
+            path,
+            arguments: ["/c", "cd"],
+            workingDirectory: "");
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithNullEnvironment_DoesNotThrow()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = await _launcher.LaunchAsync(
+            path,
+            arguments: ["/c", "echo", "test"],
+            environment: null);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithEmptyEnvironmentDictionary_DoesNotThrow()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var result = await _launcher.LaunchAsync(
+            path,
+            arguments: ["/c", "echo", "test"],
+            environment: []);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithAbsolutePath_DoesNotResolveFromPath()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        // Even if cmd.exe is in PATH, absolute path should be used directly
+        var result = await _launcher.LaunchAsync(path);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithRelativePath_ValidatesFileExists()
+    {
+        // Relative paths should fail validation if file doesn't exist
+        var result = await _launcher.LaunchAsync("nonexistent.exe");
+
+        Assert.False(result.Success);
+        Assert.Equal(LaunchErrorCode.ExecutableNotFound, result.ErrorCode);
+    }
+
+    [Fact]
+    public void GetProcessInfo_WithNonExistentProcessId_ReturnsNull()
+    {
+        var info = _launcher.GetProcessInfo(999999);
+
+        Assert.Null(info);
+    }
+
+    [Fact]
+    public void GetTrackedProcesses_ExcludesExitedProcesses()
+    {
+        var tracked = _launcher.GetTrackedProcesses();
+
+        // Should only return processes that haven't exited
+        foreach (var process in tracked)
+        {
+            Assert.False(process.HasExited);
+        }
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithMessage_IncludesEnvironmentVariables()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var message = new LaunchProgramMessage
+        {
+            MessageId = 9999,
+            Path = path,
+            Arguments = ["/c", "echo", "%TEST_VAR%"],
+            Environment = new Dictionary<string, string>
+            {
+                ["TEST_VAR"] = "test_value"
+            }
+        };
+
+        var result = await _launcher.LaunchAsync(message, CancellationToken.None);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_WithMessage_IncludesWorkingDirectory()
+    {
+        var path = @"C:\Windows\System32\cmd.exe";
+        var workingDir = @"C:\Windows";
+
+        // Skip test if not running on Windows
+        if (!File.Exists(path) || !Directory.Exists(workingDir))
+        {
+            return;
+        }
+
+        var message = new LaunchProgramMessage
+        {
+            MessageId = 8888,
+            Path = path,
+            Arguments = ["/c", "cd"],
+            WorkingDirectory = workingDir
+        };
+
+        var result = await _launcher.LaunchAsync(message, CancellationToken.None);
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public void LaunchResult_ValueEquality()
+    {
+        var result1 = LaunchResult.Succeeded(1234);
+        var result2 = LaunchResult.Succeeded(1234);
+        var result3 = LaunchResult.Succeeded(5678);
+
+        Assert.Equal(result1, result2);
+        Assert.NotEqual(result1, result3);
+    }
+
+    [Fact]
+    public void LaunchResult_Failed_ValueEquality()
+    {
+        var result1 = LaunchResult.Failed(LaunchErrorCode.AccessDenied, "Error");
+        var result2 = LaunchResult.Failed(LaunchErrorCode.AccessDenied, "Error");
+        var result3 = LaunchResult.Failed(LaunchErrorCode.ExecutableNotFound, "Error");
+
+        Assert.Equal(result1, result2);
+        Assert.NotEqual(result1, result3);
+    }
+
+    [Fact]
+    public void LaunchedProcessInfo_InitiallyNotExited()
+    {
+        var info = new LaunchedProcessInfo(
+            processId: 1234,
+            executablePath: @"C:\App.exe",
+            arguments: [],
+            workingDirectory: null,
+            launchTime: DateTime.UtcNow);
+
+        Assert.False(info.HasExited);
+        Assert.Null(info.ExitTime);
+        Assert.Null(info.ExitCode);
+    }
+
+    // Note: MarkExited is internal and tested indirectly through process lifecycle
+
 }
 

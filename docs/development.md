@@ -18,10 +18,10 @@
 
 The project uses a **split strategy** for maximum stability:
 
-| Component | Version | Why |
-|-----------|---------|-----|
-| **SDK** (build tools) | .NET 9 | Latest stable tooling, C# 13 features, faster builds |
-| **Target Framework** (runtime) | net8.0-windows | LTS runtime (supported until Nov 2026) |
+| Component                      | Version        | Why                                                  |
+| ------------------------------ | -------------- | ---------------------------------------------------- |
+| **SDK** (build tools)          | .NET 9         | Latest stable tooling, C# 13 features, faster builds |
+| **Target Framework** (runtime) | net8.0-windows | LTS runtime (supported until Nov 2026)               |
 
 This gives us modern development tooling while targeting a stable, long-term-supported runtime.
 
@@ -218,19 +218,19 @@ cd guest && dotnet test WinRunAgent.sln
 
 ### Test Organization
 
-| Platform | Framework | Test Location | Naming |
-|----------|-----------|---------------|--------|
-| Host (Swift) | XCTest | `host/Tests/<Module>Tests/` | `*Tests.swift` |
-| Guest (C#) | xUnit | `guest/WinRunAgent.Tests/` | `*Tests.cs` |
+| Platform     | Framework | Test Location               | Naming         |
+| ------------ | --------- | --------------------------- | -------------- |
+| Host (Swift) | XCTest    | `host/Tests/<Module>Tests/` | `*Tests.swift` |
+| Guest (C#)   | xUnit     | `guest/WinRunAgent.Tests/`  | `*Tests.cs`    |
 
 ### CI Integration
 
 GitHub Actions enforces code quality on every PR:
 
-| Workflow | Platform | Checks |
-|----------|----------|--------|
-| `host.yml` | macOS 14 | Build, Test, SwiftLint |
-| `guest.yml` | Windows | Build, Test, `dotnet format` |
+| Workflow    | Platform | Checks                       |
+| ----------- | -------- | ---------------------------- |
+| `host.yml`  | macOS 14 | Build, Test, SwiftLint       |
+| `guest.yml` | Windows  | Build, Test, `dotnet format` |
 
 All checks must pass before merge. See [Branch Protection](#branch-protection) below.
 
@@ -272,19 +272,33 @@ dotnet tool list -g
 
 ### Configuration Files
 
-| Platform | Config File | Tool |
-|----------|-------------|------|
-| Host (Swift) | `host/.swiftlint.yml` | SwiftLint |
-| Guest (C#) | `guest/.editorconfig` | dotnet format |
+| Platform     | Config File           | Tool          |
+| ------------ | --------------------- | ------------- |
+| Host (Swift) | `host/.swiftlint.yml` | SwiftLint     |
+| Guest (C#)   | `guest/.editorconfig` | dotnet format |
 
 ### Pre-Commit Workflow
 
 Before pushing changes, run:
 ```bash
-make check
+# For host code changes
+make check-host
+
+# For guest code changes
+make check-guest          # Local lint + build (catches most issues)
+# Ensure your branch is pushed/up to date before running remote tests
+git push
+make test-guest-remote    # REQUIRED: Tests on Windows CI (catches platform-specific issues)
 ```
 
-This runs the same checks as CI, catching issues before they reach GitHub.
+**Important for Guest Code**: Always run `make test-guest-remote` after modifying guest code. This catches:
+- Line ending issues (CRLF enforcement on Windows)
+- Windows-specific test failures
+- Platform-specific linting differences
+
+**Remote tests run against the remote branch**: if you have local-only changes, push them first or the remote workflow won’t see them.
+
+The `.gitattributes` file automatically normalizes line endings, but remote testing is still required to validate Windows-specific behavior.
 
 ## Branch Protection
 

@@ -481,6 +481,438 @@ public sealed class MessagesTests
         Assert.True(bytes.Length > 5);
     }
 
+    [Fact]
+    public void DeserializeRequestIconMessage()
+    {
+        var request = new RequestIconMessage
+        {
+            MessageId = 200,
+            ExecutablePath = @"C:\Program Files\App\app.exe",
+            PreferredSize = 512
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.RequestIcon, request);
+        var result = SpiceMessageSerializer.Deserialize(bytes);
+
+        Assert.NotNull(result);
+        var msg = Assert.IsType<RequestIconMessage>(result);
+        Assert.Equal(200u, msg.MessageId);
+        Assert.Equal(@"C:\Program Files\App\app.exe", msg.ExecutablePath);
+        Assert.Equal(512, msg.PreferredSize);
+    }
+
+    [Fact]
+    public void DeserializeHostClipboardMessage()
+    {
+        var clipboard = new HostClipboardMessage
+        {
+            MessageId = 300,
+            Format = ClipboardFormat.PlainText,
+            Data = System.Text.Encoding.UTF8.GetBytes("Hello, World!"),
+            SequenceNumber = 42
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.ClipboardData, clipboard);
+        var result = SpiceMessageSerializer.Deserialize(bytes);
+
+        Assert.NotNull(result);
+        var msg = Assert.IsType<HostClipboardMessage>(result);
+        Assert.Equal(300u, msg.MessageId);
+        Assert.Equal(ClipboardFormat.PlainText, msg.Format);
+        Assert.Equal("Hello, World!", System.Text.Encoding.UTF8.GetString(msg.Data));
+        Assert.Equal(42UL, msg.SequenceNumber);
+    }
+
+    [Fact]
+    public void DeserializeMouseInputMessage()
+    {
+        var mouse = new MouseInputMessage
+        {
+            MessageId = 400,
+            WindowId = 12345,
+            EventType = MouseEventType.Press,
+            Button = MouseButton.Left,
+            X = 100.5,
+            Y = 200.75,
+            ScrollDeltaX = 0.0,
+            ScrollDeltaY = 0.0,
+            Modifiers = KeyModifiers.Control | KeyModifiers.Shift
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.MouseInput, mouse);
+        var result = SpiceMessageSerializer.Deserialize(bytes);
+
+        Assert.NotNull(result);
+        var msg = Assert.IsType<MouseInputMessage>(result);
+        Assert.Equal(400u, msg.MessageId);
+        Assert.Equal(12345UL, msg.WindowId);
+        Assert.Equal(MouseEventType.Press, msg.EventType);
+        Assert.Equal(MouseButton.Left, msg.Button);
+        Assert.Equal(100.5, msg.X);
+        Assert.Equal(200.75, msg.Y);
+        Assert.Equal(KeyModifiers.Control | KeyModifiers.Shift, msg.Modifiers);
+    }
+
+    [Fact]
+    public void DeserializeKeyboardInputMessage()
+    {
+        var keyboard = new KeyboardInputMessage
+        {
+            MessageId = 500,
+            WindowId = 67890,
+            EventType = KeyEventType.KeyDown,
+            KeyCode = 65, // 'A'
+            ScanCode = 30,
+            IsExtendedKey = false,
+            Modifiers = KeyModifiers.None,
+            Character = "A"
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.KeyboardInput, keyboard);
+        var result = SpiceMessageSerializer.Deserialize(bytes);
+
+        Assert.NotNull(result);
+        var msg = Assert.IsType<KeyboardInputMessage>(result);
+        Assert.Equal(500u, msg.MessageId);
+        Assert.Equal(67890UL, msg.WindowId);
+        Assert.Equal(KeyEventType.KeyDown, msg.EventType);
+        Assert.Equal(65u, msg.KeyCode);
+        Assert.Equal("A", msg.Character);
+    }
+
+    [Fact]
+    public void DeserializeDragDropMessage()
+    {
+        var dragDrop = new DragDropMessage
+        {
+            MessageId = 600,
+            WindowId = 11111,
+            EventType = DragDropEventType.Drop,
+            X = 150.0,
+            Y = 250.0,
+            Files =
+            [
+                new DraggedFileInfo
+                {
+                    HostPath = "/Users/test/file.txt",
+                    GuestPath = @"C:\Users\test\file.txt",
+                    FileSize = 1024,
+                    IsDirectory = false
+                }
+            ],
+            AllowedOperations = [DragOperation.Copy, DragOperation.Move],
+            SelectedOperation = DragOperation.Copy
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.DragDropEvent, dragDrop);
+        var result = SpiceMessageSerializer.Deserialize(bytes);
+
+        Assert.NotNull(result);
+        var msg = Assert.IsType<DragDropMessage>(result);
+        Assert.Equal(600u, msg.MessageId);
+        Assert.Equal(11111UL, msg.WindowId);
+        Assert.Equal(DragDropEventType.Drop, msg.EventType);
+        Assert.Equal(150.0, msg.X);
+        Assert.Equal(250.0, msg.Y);
+        _ = Assert.Single(msg.Files);
+        Assert.Equal(2, msg.AllowedOperations.Length);
+        Assert.Equal(DragOperation.Copy, msg.SelectedOperation);
+    }
+
+    [Fact]
+    public void DeserializeReturnsNullForUnknownMessageType()
+    {
+        var data = new byte[] { 0xFF, 0x00, 0x00, 0x00, 0x00 }; // Invalid type
+
+        var result = SpiceMessageSerializer.Deserialize(data);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void DeserializeReturnsNullForIncompleteEnvelope()
+    {
+        var data = new byte[] { 0x01 }; // Only type byte
+
+        var result = SpiceMessageSerializer.Deserialize(data);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void DeserializeReturnsNullForIncompletePayload()
+    {
+        // Type + length (100 bytes) but only 10 bytes of payload
+        var data = new byte[15];
+        data[0] = (byte)SpiceMessageType.LaunchProgram;
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(1), 100);
+
+        var result = SpiceMessageSerializer.Deserialize(data);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void SerializeWindowMetadataMessage()
+    {
+        var message = new WindowMetadataMessage
+        {
+            WindowId = 99999,
+            Title = "Test Window",
+            Bounds = new RectInfo(10, 20, 800, 600),
+            EventType = WindowEventType.Created,
+            ProcessId = 1234,
+            ClassName = "TestClass",
+            IsMinimized = false,
+            IsResizable = true,
+            ScaleFactor = 1.5
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.WindowMetadata, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeFrameDataMessage()
+    {
+        var message = new FrameDataMessage
+        {
+            WindowId = 55555,
+            Width = 1920,
+            Height = 1080,
+            Stride = 7680,
+            Format = PixelFormatType.Bgra32,
+            DataLength = 8294400,
+            FrameNumber = 100,
+            IsKeyFrame = true
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.FrameData, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeFrameWithSeparateData()
+    {
+        var header = new FrameDataMessage
+        {
+            WindowId = 77777,
+            Width = 640,
+            Height = 480,
+            Stride = 2560,
+            Format = PixelFormatType.Bgra32,
+            DataLength = 1228800,
+            FrameNumber = 1,
+            IsKeyFrame = true
+        };
+
+        var frameData = new byte[640 * 480 * 4]; // BGRA32 = 4 bytes per pixel
+
+        var (headerBytes, dataBytes) = SpiceMessageSerializer.SerializeFrame(header, frameData);
+
+        Assert.Equal((byte)SpiceMessageType.FrameData, headerBytes[0]);
+        Assert.Equal(frameData.Length, dataBytes.Length);
+    }
+
+    [Fact]
+    public void SerializeErrorMessage()
+    {
+        var message = new ErrorMessage
+        {
+            Code = "LAUNCH_FAILED",
+            Message = "Failed to launch application",
+            RelatedMessageId = 12345
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.Error, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeAckMessage()
+    {
+        var message = new AckMessage
+        {
+            MessageId = 999,
+            Success = true,
+            ErrorMessage = null
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.Ack, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeAckMessageWithError()
+    {
+        var message = new AckMessage
+        {
+            MessageId = 1000,
+            Success = false,
+            ErrorMessage = "Process not found"
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.Ack, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeGuestClipboardMessage()
+    {
+        var message = new GuestClipboardMessage
+        {
+            Format = ClipboardFormat.Html,
+            Data = System.Text.Encoding.UTF8.GetBytes("<html><body>Test</body></html>"),
+            SequenceNumber = 100
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.ClipboardChanged, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void TryReadMessageConsumesCompleteMessage()
+    {
+        var launch = new LaunchProgramMessage
+        {
+            MessageId = 42,
+            Path = @"C:\test.exe",
+            Arguments = []
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.LaunchProgram, launch);
+        var consumed = SpiceMessageSerializer.TryReadMessage(bytes, out var message);
+
+        Assert.Equal(bytes.Length, consumed);
+        Assert.NotNull(message);
+        _ = Assert.IsType<LaunchProgramMessage>(message);
+    }
+
+    [Fact]
+    public void TryReadMessageHandlesMultipleMessages()
+    {
+        var msg1 = new LaunchProgramMessage { MessageId = 1, Path = @"C:\test1.exe", Arguments = [] };
+        var msg2 = new ShutdownMessage { MessageId = 2, TimeoutMs = 5000 };
+
+        var bytes1 = SerializeHostMessage(SpiceMessageType.LaunchProgram, msg1);
+        var bytes2 = SerializeHostMessage(SpiceMessageType.Shutdown, msg2);
+        var combined = new byte[bytes1.Length + bytes2.Length];
+        bytes1.CopyTo(combined, 0);
+        bytes2.CopyTo(combined, bytes1.Length);
+
+        var consumed1 = SpiceMessageSerializer.TryReadMessage(combined, out var result1);
+        Assert.True(consumed1 > 0);
+        Assert.NotNull(result1);
+
+        var remaining = combined.AsSpan(consumed1);
+        var consumed2 = SpiceMessageSerializer.TryReadMessage(remaining, out var result2);
+        Assert.True(consumed2 > 0);
+        Assert.NotNull(result2);
+    }
+
+    [Fact]
+    public void CreateIconMessage_EmptyData_HandlesGracefully()
+    {
+        var message = SpiceMessageSerializer.CreateIconMessage(
+            @"C:\App\app.exe",
+            [],
+            width: 0,
+            height: 0);
+
+        Assert.Equal(0, message.Width);
+        Assert.Equal(0, message.Height);
+        Assert.Empty(message.PngData);
+    }
+
+    [Fact]
+    public void AllClipboardFormatsAreDefined()
+    {
+        var formats = Enum.GetValues<ClipboardFormat>();
+
+        Assert.Contains(ClipboardFormat.PlainText, formats);
+        Assert.Contains(ClipboardFormat.Rtf, formats);
+        Assert.Contains(ClipboardFormat.Html, formats);
+        Assert.Contains(ClipboardFormat.Png, formats);
+        Assert.Contains(ClipboardFormat.Tiff, formats);
+        Assert.Contains(ClipboardFormat.FileUrl, formats);
+    }
+
+    [Fact]
+    public void AllMouseEventTypesAreDefined()
+    {
+        var types = Enum.GetValues<MouseEventType>();
+
+        Assert.Contains(MouseEventType.Move, types);
+        Assert.Contains(MouseEventType.Press, types);
+        Assert.Contains(MouseEventType.Release, types);
+        Assert.Contains(MouseEventType.Scroll, types);
+    }
+
+    [Fact]
+    public void AllKeyEventTypesAreDefined()
+    {
+        var types = Enum.GetValues<KeyEventType>();
+
+        Assert.Contains(KeyEventType.KeyDown, types);
+        Assert.Contains(KeyEventType.KeyUp, types);
+    }
+
+    [Fact]
+    public void AllDragDropEventTypesAreDefined()
+    {
+        var types = Enum.GetValues<DragDropEventType>();
+
+        Assert.Contains(DragDropEventType.Enter, types);
+        Assert.Contains(DragDropEventType.Move, types);
+        Assert.Contains(DragDropEventType.Leave, types);
+        Assert.Contains(DragDropEventType.Drop, types);
+    }
+
+    [Fact]
+    public void AllDragOperationsAreDefined()
+    {
+        var operations = Enum.GetValues<DragOperation>();
+
+        Assert.Contains(DragOperation.None, operations);
+        Assert.Contains(DragOperation.Copy, operations);
+        Assert.Contains(DragOperation.Move, operations);
+        Assert.Contains(DragOperation.Link, operations);
+    }
+
+    [Fact]
+    public void KeyModifiersCanBeCombined()
+    {
+        var combined = KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Alt;
+
+        Assert.True(combined.HasFlag(KeyModifiers.Shift));
+        Assert.True(combined.HasFlag(KeyModifiers.Control));
+        Assert.True(combined.HasFlag(KeyModifiers.Alt));
+        Assert.False(combined.HasFlag(KeyModifiers.Command));
+    }
+
+    [Fact]
+    public void GuestCapabilitiesCanBeCombined()
+    {
+        var combined = GuestCapabilities.WindowTracking | GuestCapabilities.ClipboardSync | GuestCapabilities.IconExtraction;
+
+        Assert.True(combined.HasFlag(GuestCapabilities.WindowTracking));
+        Assert.True(combined.HasFlag(GuestCapabilities.ClipboardSync));
+        Assert.True(combined.HasFlag(GuestCapabilities.IconExtraction));
+        Assert.False(combined.HasFlag(GuestCapabilities.DragDrop));
+    }
+
     private static byte[] SerializeHostMessage<T>(SpiceMessageType type, T message) where T : HostMessage
     {
         var options = new System.Text.Json.JsonSerializerOptions

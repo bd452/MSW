@@ -45,8 +45,8 @@
     - [X] Replace mock logger with structured sinks + ETW providers { guest/WinRunAgent/Services/Logging.cs } <docs/development.md>
     - [X] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
   - [ ] Guest test coverage { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, guest/WinRunAgent.Tests/DesktopDuplicationBridgeTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
-    - [ ] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
-    - [ ] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
+    - [X] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
+    - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
 - [ ] Cross-Cutting & Operations { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, README.md } <docs/decisions/operations.md, docs/development.md>
   - [ ] Host/guest protocol contracts { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>

@@ -524,6 +524,7 @@ public static class SpiceMessageSerializer
 
         return type switch
         {
+            // Host → Guest
             SpiceMessageType.LaunchProgram => JsonSerializer.Deserialize<LaunchProgramMessage>(payload, JsonOptions),
             SpiceMessageType.RequestIcon => JsonSerializer.Deserialize<RequestIconMessage>(payload, JsonOptions),
             SpiceMessageType.ClipboardData => JsonSerializer.Deserialize<HostClipboardMessage>(payload, JsonOptions),
@@ -531,17 +532,21 @@ public static class SpiceMessageSerializer
             SpiceMessageType.KeyboardInput => JsonSerializer.Deserialize<KeyboardInputMessage>(payload, JsonOptions),
             SpiceMessageType.DragDropEvent => JsonSerializer.Deserialize<DragDropMessage>(payload, JsonOptions),
             SpiceMessageType.Shutdown => JsonSerializer.Deserialize<ShutdownMessage>(payload, JsonOptions),
-            SpiceMessageType.WindowMetadata => throw new NotImplementedException(),
-            SpiceMessageType.FrameData => throw new NotImplementedException(),
-            SpiceMessageType.CapabilityFlags => throw new NotImplementedException(),
-            SpiceMessageType.DpiInfo => throw new NotImplementedException(),
-            SpiceMessageType.IconData => throw new NotImplementedException(),
-            SpiceMessageType.ShortcutDetected => throw new NotImplementedException(),
-            SpiceMessageType.ClipboardChanged => throw new NotImplementedException(),
-            SpiceMessageType.Heartbeat => throw new NotImplementedException(),
-            SpiceMessageType.Error => throw new NotImplementedException(),
-            SpiceMessageType.Ack => throw new NotImplementedException(),
-            SpiceMessageType.TelemetryReport => throw new NotImplementedException(),
+
+            // Guest → Host (not deserialized on guest side)
+            SpiceMessageType.WindowMetadata => null,
+            SpiceMessageType.FrameData => null,
+            SpiceMessageType.CapabilityFlags => null,
+            SpiceMessageType.DpiInfo => null,
+            SpiceMessageType.IconData => null,
+            SpiceMessageType.ShortcutDetected => null,
+            SpiceMessageType.ClipboardChanged => null,
+            SpiceMessageType.Heartbeat => null,
+            SpiceMessageType.TelemetryReport => null,
+            SpiceMessageType.Error => null,
+            SpiceMessageType.Ack => null,
+
+            // Unknown or invalid message types return null
             _ => null
         };
     }
