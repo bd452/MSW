@@ -18,6 +18,11 @@ public sealed class WindowTracker : IDisposable
     private EventHandler<WindowEventArgs>? _eventHandler;
     private bool _disposed;
 
+    /// <summary>
+    /// Event raised when a window event occurs. Subscribe to this for passive monitoring.
+    /// </summary>
+    public event EventHandler<WindowEventArgs>? WindowEvent;
+
     public WindowTracker(IAgentLogger logger)
     {
         _logger = logger;
@@ -397,7 +402,11 @@ public sealed class WindowTracker : IDisposable
         return processId;
     }
 
-    private void RaiseEvent(WindowEventArgs args) => _eventHandler?.Invoke(this, args);
+    private void RaiseEvent(WindowEventArgs args)
+    {
+        _eventHandler?.Invoke(this, args);
+        WindowEvent?.Invoke(this, args);
+    }
 }
 
 /// <summary>
