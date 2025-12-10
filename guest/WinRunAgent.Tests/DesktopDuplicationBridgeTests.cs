@@ -190,12 +190,5 @@ public sealed class DesktopDuplicationBridgeTests
         Assert.Contains(PixelFormat.RGBA32, formats);
     }
 
-    private sealed class TestLogger : IAgentLogger
-    {
-        public void Debug(string message) { }
-        public void Info(string message) { }
-        public void Warn(string message) { }
-        public void Error(string message) { }
-    }
 }
 

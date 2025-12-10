@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: help bootstrap build build-host build-guest test test-host test-guest \
+.PHONY: help bootstrap build build-host build-guest test test-host test-guest test-guest-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
         install-daemon uninstall-daemon
 
@@ -19,7 +19,8 @@ help:
 	@echo "Test targets:"
 	@echo "  test           Run all tests"
 	@echo "  test-host      Run macOS host tests"
-	@echo "  test-guest     Run Windows guest tests"
+	@echo "  test-guest     Run Windows guest tests (local)"
+	@echo "  test-guest-remote  Run guest tests on Windows via GitHub Actions"
 	@echo ""
 	@echo "Lint targets:"
 	@echo "  lint           Lint both host and guest"
@@ -86,6 +87,28 @@ else
 		echo "⚠️  dotnet CLI not found; skipping guest tests"; \
 	fi
 endif
+
+# Run guest tests remotely on Windows via GitHub Actions
+# Requires: gh CLI authenticated with repo access
+test-guest-remote:
+	@echo "🚀 Triggering remote guest tests on Windows..."
+	@if ! command -v gh >/dev/null 2>&1; then \
+		echo "❌ GitHub CLI (gh) not found. Install with: brew install gh"; \
+		exit 1; \
+	fi
+	@BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
+	echo "📍 Testing branch: $$BRANCH"; \
+	gh workflow run test-guest-remote.yml --ref "$$BRANCH" -f ref="$$BRANCH"; \
+	echo "⏳ Waiting for workflow to start..."; \
+	sleep 5; \
+	RUN_ID=$$(gh run list --workflow=test-guest-remote.yml --branch="$$BRANCH" --limit=1 --json databaseId --jq '.[0].databaseId'); \
+	if [ -z "$$RUN_ID" ]; then \
+		echo "❌ Failed to find workflow run"; \
+		exit 1; \
+	fi; \
+	echo "🔗 Run ID: $$RUN_ID"; \
+	echo "📺 Watching workflow progress..."; \
+	gh run watch "$$RUN_ID" --exit-status
 
 # ============================================================================
 # Lint

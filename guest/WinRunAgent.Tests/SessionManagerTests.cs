@@ -291,12 +291,5 @@ public sealed class SessionManagerTests : IDisposable
         Assert.Equal(3, (int)SessionState.Exited);
     }
 
-    private sealed class TestLogger : IAgentLogger
-    {
-        public void Debug(string message) { }
-        public void Info(string message) { }
-        public void Warn(string message) { }
-        public void Error(string message) { }
-    }
 }
 

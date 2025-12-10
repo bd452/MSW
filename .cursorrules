@@ -59,10 +59,11 @@ After completing a task:
 1. Verify implementation matches documentation
 2. **Write tests** if the new code meets testing criteria (see [Testing](#testing) section)
 3. Run `make check` to verify lint and tests pass
-4. Mark the task `[X]` in `TODO.md`
-5. Check if parent task is now complete
-6. If all children complete, mark parent `[X]`
-7. Move to next incomplete task per the algorithm
+4. **If guest code was modified**: Run `make test-guest-remote` to execute tests on Windows via GitHub Actions (guest tests cannot run locally on macOS)
+5. Mark the task `[X]` in `TODO.md`
+6. Check if parent task is now complete
+7. If all children complete, mark parent `[X]`
+8. Move to next incomplete task per the algorithm
 
 ## Branch Workflow
 
@@ -213,10 +214,13 @@ make test
 make check-host   # lint + build + test
 make test-host    # test only
 
-# Guest only (requires .NET 8 SDK)
-make check-guest  # lint + build + test
-make test-guest   # test only
+# Guest only (requires .NET 8 SDK or use remote)
+make check-guest        # lint + build + test (local)
+make test-guest         # test only (local)
+make test-guest-remote  # test on Windows via GitHub Actions (recommended)
 ```
+
+> **Note**: Guest tests target `net8.0-windows` and may not run locally on macOS. Use `make test-guest-remote` to run tests on a real Windows runner via GitHub Actions. This requires the `gh` CLI to be installed and authenticated.
 
 #### CI Requirements
 GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`:
