@@ -222,6 +222,7 @@ make test-guest-remote  # test on Windows via GitHub Actions (recommended)
 
 > **Note**: Guest tests target `net8.0-windows` and may not run locally on macOS. Use `make test-guest-remote` to run tests on a real Windows runner via GitHub Actions. This requires the `gh` CLI to be installed and authenticated.
 
+> **Note (Cursor)**: Host tests (`swift test`) require write access to cache directories outside the workspace (e.g., `~/.cache/clang/ModuleCache`). When running tests via Cursor's shell tool, use `required_permissions: ["all"]` to disable sandboxing.
 #### CI Requirements
 GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`:
 - **Host Build & Test** — `swift build` + `swift test` on macOS

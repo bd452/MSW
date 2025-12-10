@@ -115,6 +115,9 @@ public sealed class WinRunAgentService : IDisposable
     {
         _logger.Info("WinRun guest agent starting up");
 
+        // Send initial capability announcement first, before any other messages
+        await SendCapabilityAnnouncementAsync();
+
         // Start window tracking
         _windowTracker.Start(OnWindowEvent);
 
@@ -126,9 +129,6 @@ public sealed class WinRunAgentService : IDisposable
 
         try
         {
-            // Send initial capability announcement
-            await SendCapabilityAnnouncementAsync();
-
             // Process incoming messages
             await ProcessMessagesAsync(token);
         }
