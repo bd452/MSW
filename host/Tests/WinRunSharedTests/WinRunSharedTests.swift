@@ -630,7 +630,6 @@ final class XPCDataContractTests: XCTestCase {
 // MARK: - WinRunError Tests
 
 final class WinRunErrorTests: XCTestCase {
-
     // MARK: - Domain Categorization Tests
 
     func testVMErrorsHaveCorrectDomain() {

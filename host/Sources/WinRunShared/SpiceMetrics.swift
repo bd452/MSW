@@ -20,4 +20,3 @@ public struct SpiceStreamMetrics: Codable, Hashable {
         self.lastErrorDescription = lastErrorDescription
     }
 }
-

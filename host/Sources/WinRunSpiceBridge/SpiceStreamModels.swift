@@ -94,6 +94,26 @@ public struct WindowMetadata: Codable, Hashable {
         self.isResizable = isResizable
         self.scaleFactor = scaleFactor
     }
+
+    // Custom Hashable implementation since CGRect doesn't conform to Hashable
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(windowID)
+        hasher.combine(title)
+        hasher.combine(frame.origin.x)
+        hasher.combine(frame.origin.y)
+        hasher.combine(frame.size.width)
+        hasher.combine(frame.size.height)
+        hasher.combine(isResizable)
+        hasher.combine(scaleFactor)
+    }
+
+    public static func == (lhs: WindowMetadata, rhs: WindowMetadata) -> Bool {
+        lhs.windowID == rhs.windowID &&
+        lhs.title == rhs.title &&
+        lhs.frame == rhs.frame &&
+        lhs.isResizable == rhs.isResizable &&
+        lhs.scaleFactor == rhs.scaleFactor
+    }
 }
 
 // MARK: - Reconnect Policy
@@ -179,4 +199,3 @@ enum SpiceStreamError: Error {
     case connectionFailed(String)
     case sharedMemoryUnavailable(String)
 }
-

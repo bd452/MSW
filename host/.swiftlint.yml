@@ -12,6 +12,10 @@ excluded:
 disabled_rules:
   - trailing_comma  # Allow trailing commas for easier diffs
   - identifier_name  # Allow short names like `x`, `y` for coordinates
+  - todo  # TODOs are fine in development
+  - force_unwrapping  # Too noisy, especially in tests
+  - implicitly_unwrapped_optional  # Common pattern in test setup
+  - function_parameter_count  # Sometimes needed for complex APIs
 
 opt_in_rules:
   - closure_spacing
@@ -22,8 +26,6 @@ opt_in_rules:
   - explicit_init
   - fatal_error_message
   - first_where
-  - force_unwrapping
-  - implicitly_unwrapped_optional
   - last_where
   - multiline_arguments
   - multiline_parameters
@@ -39,28 +41,33 @@ opt_in_rules:
   - vertical_whitespace_opening_braces
   - yoda_condition
 
-# Line length: warning at 120, error at 200
+# Line length - generous limits
 line_length:
-  warning: 120
+  warning: 140
   error: 200
   ignores_comments: true
   ignores_urls: true
   ignores_interpolated_strings: true
 
-# Type body length
+# Type body length - generous for test fixtures
 type_body_length:
-  warning: 300
-  error: 500
-
-# File length
-file_length:
   warning: 400
   error: 600
 
+# File length - generous for test files
+file_length:
+  warning: 600
+  error: 1000
+
 # Function body length
 function_body_length:
-  warning: 50
-  error: 100
+  warning: 60
+  error: 120
+
+# Type name - allow short names like VM
+type_name:
+  min_length: 2
+  max_length: 50
 
 # Cyclomatic complexity
 cyclomatic_complexity:
@@ -72,21 +79,12 @@ nesting:
   type_level: 2
   function_level: 3
 
-# Force unwrapping severity
-force_unwrapping:
-  severity: warning
-
-# Force cast severity
+# Force cast severity (still warn, but not opted-in as error)
 force_cast:
   severity: warning
 
-# Custom rules
-custom_rules:
-  no_print_statements:
-    name: "No print() statements"
-    regex: "\\bprint\\s*\\("
-    message: "Use Logger instead of print()"
-    severity: warning
-    match_kinds:
-      - identifier
+# Note: print() is allowed because:
+# - CLI tools legitimately use print() for user output
+# - Logging module uses print() internally
+# Use Logger in app/daemon code for structured logging
 

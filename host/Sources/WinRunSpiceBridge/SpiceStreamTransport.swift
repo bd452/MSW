@@ -424,4 +424,3 @@ final class MockSpiceStreamTransport: SpiceStreamTransport {
     }
 }
 #endif
-

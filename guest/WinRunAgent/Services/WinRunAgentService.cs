@@ -35,10 +35,10 @@ public sealed class WinRunAgentService
             switch (message)
             {
                 case LaunchProgramMessage launch:
-                    await _launcher.LaunchAsync(launch.Path, launch.Arguments, token);
+                    _ = await _launcher.LaunchAsync(launch.Path, launch.Arguments, token);
                     break;
                 case RequestIconMessage iconRequest:
-                    await _iconService.ExtractIconAsync(iconRequest.ExecutablePath, token);
+                    _ = await _iconService.ExtractIconAsync(iconRequest.ExecutablePath, token);
                     break;
                 case ShortcutCreatedMessage shortcut:
                     _logger.Info($"Shortcut created: {shortcut.ShortcutPath} -> {shortcut.TargetPath}");
@@ -50,8 +50,5 @@ public sealed class WinRunAgentService
         }
     }
 
-    private void OnWindowEvent(object? sender, WindowEventArgs e)
-    {
-        _logger.Debug($"Window {e.WindowId} updated title {e.Title} bounds {e.Bounds}");
-    }
+    private void OnWindowEvent(object? sender, WindowEventArgs e) => _logger.Debug($"Window {e.WindowId} updated title {e.Title} bounds {e.Bounds}");
 }

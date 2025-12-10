@@ -23,28 +23,28 @@ public enum MouseEventType: Int32, Codable, Hashable {
 public struct MouseInputEvent: Codable, Hashable {
     /// Target window ID (0 for global)
     public let windowID: UInt64
-    
+
     /// Event type (move, press, release, scroll)
     public let eventType: MouseEventType
-    
+
     /// Mouse button involved (nil for move events)
     public let button: MouseButton?
-    
+
     /// X position in window coordinates (pixels)
     public let x: Double
-    
+
     /// Y position in window coordinates (pixels)
     public let y: Double
-    
+
     /// Scroll delta for scroll events (positive = up/right)
     public let scrollDeltaX: Double
-    
+
     /// Scroll delta for scroll events (positive = up)
     public let scrollDeltaY: Double
-    
+
     /// Modifier keys held during the event
     public let modifiers: KeyModifiers
-    
+
     public init(
         windowID: UInt64,
         eventType: MouseEventType,
@@ -77,11 +77,11 @@ public enum KeyEventType: Int32, Codable, Hashable {
 /// Modifier key flags
 public struct KeyModifiers: OptionSet, Codable, Hashable {
     public let rawValue: Int32
-    
+
     public init(rawValue: Int32) {
         self.rawValue = rawValue
     }
-    
+
     public static let shift = KeyModifiers(rawValue: 1 << 0)
     public static let control = KeyModifiers(rawValue: 1 << 1)
     public static let alt = KeyModifiers(rawValue: 1 << 2)
@@ -94,25 +94,25 @@ public struct KeyModifiers: OptionSet, Codable, Hashable {
 public struct KeyboardInputEvent: Codable, Hashable {
     /// Target window ID (0 for global)
     public let windowID: UInt64
-    
+
     /// Event type (key down or key up)
     public let eventType: KeyEventType
-    
+
     /// Virtual key code (Windows VK code)
     public let keyCode: UInt32
-    
+
     /// Hardware scan code
     public let scanCode: UInt32
-    
+
     /// Whether this is an extended key (right Ctrl, arrow keys, etc.)
     public let isExtendedKey: Bool
-    
+
     /// Modifier keys held during the event
     public let modifiers: KeyModifiers
-    
+
     /// Unicode character if applicable (for text input)
     public let character: String?
-    
+
     public init(
         windowID: UInt64,
         eventType: KeyEventType,
@@ -154,25 +154,25 @@ public enum ClipboardDirection: Int32, Codable, Hashable {
 public struct ClipboardData: Codable, Hashable {
     /// The format of the clipboard content
     public let format: ClipboardFormat
-    
+
     /// The actual data (encoded appropriately for the format)
     public let data: Data
-    
+
     /// Sequence number for ordering/deduplication
     public let sequenceNumber: UInt64
-    
+
     public init(format: ClipboardFormat, data: Data, sequenceNumber: UInt64 = 0) {
         self.format = format
         self.data = data
         self.sequenceNumber = sequenceNumber
     }
-    
+
     /// Create clipboard data from a string
     public static func text(_ string: String, sequenceNumber: UInt64 = 0) -> ClipboardData? {
         guard let data = string.data(using: .utf8) else { return nil }
         return ClipboardData(format: .plainText, data: data, sequenceNumber: sequenceNumber)
     }
-    
+
     /// Extract text content if format is plainText
     public var textContent: String? {
         guard format == .plainText else { return nil }
@@ -184,13 +184,13 @@ public struct ClipboardData: Codable, Hashable {
 public struct ClipboardEvent: Codable, Hashable {
     /// Direction of the sync
     public let direction: ClipboardDirection
-    
+
     /// Available formats (best format first)
     public let availableFormats: [ClipboardFormat]
-    
+
     /// The clipboard data for the preferred format
     public let content: ClipboardData?
-    
+
     public init(
         direction: ClipboardDirection,
         availableFormats: [ClipboardFormat],
@@ -224,16 +224,16 @@ public enum DragDropEventType: Int32, Codable, Hashable {
 public struct DraggedFile: Codable, Hashable {
     /// macOS path (e.g., /Users/name/file.txt)
     public let hostPath: String
-    
+
     /// Translated Windows path (e.g., Z:\file.txt)
     public let guestPath: String?
-    
+
     /// File size in bytes
     public let fileSize: UInt64
-    
+
     /// Whether this is a directory
     public let isDirectory: Bool
-    
+
     public init(hostPath: String, guestPath: String? = nil, fileSize: UInt64 = 0, isDirectory: Bool = false) {
         self.hostPath = hostPath
         self.guestPath = guestPath
@@ -246,23 +246,23 @@ public struct DraggedFile: Codable, Hashable {
 public struct DragDropEvent: Codable, Hashable {
     /// Target window ID
     public let windowID: UInt64
-    
+
     /// Event type
     public let eventType: DragDropEventType
-    
+
     /// Current position in window coordinates
     public let x: Double
     public let y: Double
-    
+
     /// Files being dragged (populated for enter and drop events)
     public let files: [DraggedFile]
-    
+
     /// Allowed operations (set by enter handler)
     public let allowedOperations: [DragOperation]
-    
+
     /// Selected operation (for drop events)
     public let selectedOperation: DragOperation?
-    
+
     public init(
         windowID: UInt64,
         eventType: DragDropEventType,
@@ -290,7 +290,7 @@ public struct KeyCodeMapper {
     public static func windowsKeyCode(fromMacOS macKeyCode: UInt16) -> UInt32 {
         return macToWindowsKeyMap[macKeyCode] ?? UInt32(macKeyCode)
     }
-    
+
     /// Convert macOS modifier flags to KeyModifiers
     public static func modifiers(fromMacOS flags: UInt) -> KeyModifiers {
         var result: KeyModifiers = []
@@ -301,7 +301,7 @@ public struct KeyCodeMapper {
         if flags & (1 << 16) != 0 { result.insert(.capsLock) }   // NSEvent.ModifierFlags.capsLock
         return result
     }
-    
+
     // Common macOS key code to Windows VK code mappings
     private static let macToWindowsKeyMap: [UInt16: UInt32] = [
         // Letters (A-Z: VK 0x41-0x5A)
@@ -331,7 +331,7 @@ public struct KeyCodeMapper {
         0x07: 0x58, // X
         0x10: 0x59, // Y
         0x06: 0x5A, // Z
-        
+
         // Numbers (0-9: VK 0x30-0x39)
         0x1D: 0x30, // 0
         0x12: 0x31, // 1
@@ -343,7 +343,7 @@ public struct KeyCodeMapper {
         0x1A: 0x37, // 7
         0x1C: 0x38, // 8
         0x19: 0x39, // 9
-        
+
         // Function keys
         0x7A: 0x70, // F1
         0x78: 0x71, // F2
@@ -357,7 +357,7 @@ public struct KeyCodeMapper {
         0x6D: 0x79, // F10
         0x67: 0x7A, // F11
         0x6F: 0x7B, // F12
-        
+
         // Special keys
         0x24: 0x0D, // Return -> VK_RETURN
         0x30: 0x09, // Tab -> VK_TAB
@@ -369,13 +369,13 @@ public struct KeyCodeMapper {
         0x77: 0x23, // End -> VK_END
         0x74: 0x21, // Page Up -> VK_PRIOR
         0x79: 0x22, // Page Down -> VK_NEXT
-        
+
         // Arrow keys
         0x7B: 0x25, // Left -> VK_LEFT
         0x7C: 0x27, // Right -> VK_RIGHT
         0x7E: 0x26, // Up -> VK_UP
         0x7D: 0x28, // Down -> VK_DOWN
-        
+
         // Modifiers
         0x38: 0x10, // Shift -> VK_SHIFT
         0x3B: 0x11, // Control -> VK_CONTROL
@@ -383,4 +383,3 @@ public struct KeyCodeMapper {
         0x37: 0x5B, // Command -> VK_LWIN
     ]
 }
-
