@@ -1,4 +1,4 @@
-- [ ] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
+- [X] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
   - [X] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/, host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
     - [X] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift } <docs/decisions/spice-bridge.md>
     - [X] Add C shim + pkg-config wiring for libspice-glib { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
@@ -30,7 +30,7 @@
 
 - [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
   - [ ] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, new:guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
-    - [ ] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, new:guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
+    - [X] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [ ] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
     - [ ] Report capability flags + DPI info to host { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
   - [ ] Program launch + session management { guest/WinRunAgent/Services/ProgramLauncher.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
