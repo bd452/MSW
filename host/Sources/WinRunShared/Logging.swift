@@ -102,8 +102,13 @@ extension Logger {
         line: UInt = #line
     ) {
         log(
-            level: .debug, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+            level: .debug,
+            message: message,
+            metadata: metadata,
+            file: file,
+            function: function,
+            line: line
+        )
     }
 
     public func info(
@@ -114,8 +119,13 @@ extension Logger {
         line: UInt = #line
     ) {
         log(
-            level: .info, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+            level: .info,
+            message: message,
+            metadata: metadata,
+            file: file,
+            function: function,
+            line: line
+        )
     }
 
     public func warn(
@@ -126,8 +136,13 @@ extension Logger {
         line: UInt = #line
     ) {
         log(
-            level: .warn, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+            level: .warn,
+            message: message,
+            metadata: metadata,
+            file: file,
+            function: function,
+            line: line
+        )
     }
 
     public func error(
@@ -138,8 +153,13 @@ extension Logger {
         line: UInt = #line
     ) {
         log(
-            level: .error, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+            level: .error,
+            message: message,
+            metadata: metadata,
+            file: file,
+            function: function,
+            line: line
+        )
     }
 }
 
@@ -397,8 +417,13 @@ public struct TelemetryAwareLogger: Logger {
         line: UInt
     ) {
         underlying.log(
-            level: level, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+            level: level,
+            message: message,
+            metadata: metadata,
+            file: file,
+            function: function,
+            line: line
+        )
 
         // Send errors and warnings to telemetry
         if level >= .warn {
@@ -443,8 +468,13 @@ public struct CompositeLogger: Logger {
     ) {
         for logger in loggers {
             logger.log(
-                level: level, message: message, metadata: metadata, file: file, function: function,
-                line: line)
+                level: level,
+                message: message,
+                metadata: metadata,
+                file: file,
+                function: function,
+                line: line
+            )
         }
     }
 }
