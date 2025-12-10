@@ -82,16 +82,24 @@ extension LogMetadataValue: ExpressibleByBooleanLiteral {
 public protocol Logger: Sendable {
     /// Log a message at the specified level with optional metadata
     func log(
-        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
-        line: UInt)
+        level: LogLevel,
+        message: String,
+        metadata: LogMetadata?,
+        file: String,
+        function: String,
+        line: UInt
+    )
 }
 
 // MARK: - Logger Convenience Methods
 
 extension Logger {
     public func debug(
-        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
-        function: String = #function, line: UInt = #line
+        _ message: String,
+        metadata: LogMetadata? = nil,
+        file: String = #file,
+        function: String = #function,
+        line: UInt = #line
     ) {
         log(
             level: .debug, message: message, metadata: metadata, file: file, function: function,
@@ -99,8 +107,11 @@ extension Logger {
     }
 
     public func info(
-        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
-        function: String = #function, line: UInt = #line
+        _ message: String,
+        metadata: LogMetadata? = nil,
+        file: String = #file,
+        function: String = #function,
+        line: UInt = #line
     ) {
         log(
             level: .info, message: message, metadata: metadata, file: file, function: function,
@@ -108,8 +119,11 @@ extension Logger {
     }
 
     public func warn(
-        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
-        function: String = #function, line: UInt = #line
+        _ message: String,
+        metadata: LogMetadata? = nil,
+        file: String = #file,
+        function: String = #function,
+        line: UInt = #line
     ) {
         log(
             level: .warn, message: message, metadata: metadata, file: file, function: function,
@@ -117,8 +131,11 @@ extension Logger {
     }
 
     public func error(
-        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
-        function: String = #function, line: UInt = #line
+        _ message: String,
+        metadata: LogMetadata? = nil,
+        file: String = #file,
+        function: String = #function,
+        line: UInt = #line
     ) {
         log(
             level: .error, message: message, metadata: metadata, file: file, function: function,
@@ -144,7 +161,11 @@ public struct OSLogLogger: Logger {
     }
 
     public func log(
-        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        level: LogLevel,
+        message: String,
+        metadata: LogMetadata?,
+        file: String,
+        function: String,
         line: UInt
     ) {
         guard level >= minimumLevel else { return }
@@ -199,7 +220,11 @@ public final class FileLogger: Logger, @unchecked Sendable {
     }
 
     public func log(
-        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        level: LogLevel,
+        message: String,
+        metadata: LogMetadata?,
+        file: String,
+        function: String,
         line: UInt
     ) {
         guard level >= minimumLevel else { return }
@@ -309,7 +334,11 @@ public struct StandardLogger: Logger {
     }
 
     public func log(
-        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        level: LogLevel,
+        message: String,
+        metadata: LogMetadata?,
+        file: String,
+        function: String,
         line: UInt
     ) {
         guard level >= minimumLevel else { return }
@@ -360,7 +389,11 @@ public struct TelemetryAwareLogger: Logger {
     }
 
     public func log(
-        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        level: LogLevel,
+        message: String,
+        metadata: LogMetadata?,
+        file: String,
+        function: String,
         line: UInt
     ) {
         underlying.log(
@@ -401,7 +434,11 @@ public struct CompositeLogger: Logger {
     }
 
     public func log(
-        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        level: LogLevel,
+        message: String,
+        metadata: LogMetadata?,
+        file: String,
+        function: String,
         line: UInt
     ) {
         for logger in loggers {

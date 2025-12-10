@@ -53,50 +53,57 @@ protocol SpiceStreamTransport {
 
             switch configuration.transport {
             case let .tcp(host, port, security, ticket):
-                handle = host.withCString { hostPointer in
-                    if let ticket {
-                        return ticket.withCString { ticketPointer in
-                            winrun_spice_stream_open_tcp(
-                                hostPointer,
-                                port,
-                                security == .tls,
-                                windowID,
-                                unmanaged.toOpaque(),
-                                spiceFrameThunk,
-                                spiceMetadataThunk,
-                                spiceClosedThunk,
-                                ticketPointer,
-                                &errorBuffer,
-                                errorBuffer.count
-                            )
-                        }
-                    } else {
-                        return winrun_spice_stream_open_tcp(
+                handle = openTCPStream(
+                    host: host,
+                    port: port,
+                    useTLS: security == .tls,
+                    windowID: windowID,
+                    unmanaged: unmanaged,
+                    ticket: ticket,
+                    errorBuffer: &errorBuffer
+                )
+            case let .sharedMemory(descriptor, ticket):
+                handle = try openSharedMemoryStream(
+                    descriptor: descriptor,
+                    windowID: windowID,
+                    unmanaged: unmanaged,
+                    ticket: ticket,
+                    errorBuffer: &errorBuffer
+                )
+            }
+
+            guard handle != nil else {
+                unmanaged.release()
+                let message = String(cString: errorBuffer)
+                throw SpiceStreamError.connectionFailed(message.isEmpty ? "Unknown libspice error" : message)
+            }
+
+            self.currentHandle = handle
+
+            return SpiceStreamSubscription {
+                if let handle {
+                    winrun_spice_stream_close(handle)
+                }
+                unmanaged.release()
+            }
+        }
+
+        private func openTCPStream(
+            host: String,
+            port: UInt16,
+            useTLS: Bool,
+            windowID: UInt64,
+            unmanaged: Unmanaged<CallbackTrampoline>,
+            ticket: String?,
+            errorBuffer: inout [CChar]
+        ) -> SpiceStreamHandle? {
+            host.withCString { hostPointer in
+                if let ticket {
+                    return ticket.withCString { ticketPointer in
+                        winrun_spice_stream_open_tcp(
                             hostPointer,
                             port,
-                            security == .tls,
-                            windowID,
-                            unmanaged.toOpaque(),
-                            spiceFrameThunk,
-                            spiceMetadataThunk,
-                            spiceClosedThunk,
-                            nil,
-                            &errorBuffer,
-                            errorBuffer.count
-                        )
-                    }
-                }
-            case let .sharedMemory(descriptor, ticket):
-                guard descriptor >= 0 else {
-                    unmanaged.release()
-                    throw SpiceStreamError.sharedMemoryUnavailable(
-                        "Missing shared-memory descriptor")
-                }
-
-                if let ticket {
-                    handle = ticket.withCString { ticketPointer in
-                        winrun_spice_stream_open_shared(
-                            descriptor,
+                            useTLS,
                             windowID,
                             unmanaged.toOpaque(),
                             spiceFrameThunk,
@@ -108,8 +115,10 @@ protocol SpiceStreamTransport {
                         )
                     }
                 } else {
-                    handle = winrun_spice_stream_open_shared(
-                        descriptor,
+                    return winrun_spice_stream_open_tcp(
+                        hostPointer,
+                        port,
+                        useTLS,
                         windowID,
                         unmanaged.toOpaque(),
                         spiceFrameThunk,
@@ -121,21 +130,46 @@ protocol SpiceStreamTransport {
                     )
                 }
             }
+        }
 
-            guard handle != nil else {
+        private func openSharedMemoryStream(
+            descriptor: Int32,
+            windowID: UInt64,
+            unmanaged: Unmanaged<CallbackTrampoline>,
+            ticket: String?,
+            errorBuffer: inout [CChar]
+        ) throws -> SpiceStreamHandle? {
+            guard descriptor >= 0 else {
                 unmanaged.release()
-                let message = String(cString: errorBuffer)
-                throw SpiceStreamError.connectionFailed(
-                    message.isEmpty ? "Unknown libspice error" : message)
+                throw SpiceStreamError.sharedMemoryUnavailable("Missing shared-memory descriptor")
             }
 
-            self.currentHandle = handle
-
-            return SpiceStreamSubscription {
-                if let handle {
-                    winrun_spice_stream_close(handle)
+            if let ticket {
+                return ticket.withCString { ticketPointer in
+                    winrun_spice_stream_open_shared(
+                        descriptor,
+                        windowID,
+                        unmanaged.toOpaque(),
+                        spiceFrameThunk,
+                        spiceMetadataThunk,
+                        spiceClosedThunk,
+                        ticketPointer,
+                        &errorBuffer,
+                        errorBuffer.count
+                    )
                 }
-                unmanaged.release()
+            } else {
+                return winrun_spice_stream_open_shared(
+                    descriptor,
+                    windowID,
+                    unmanaged.toOpaque(),
+                    spiceFrameThunk,
+                    spiceMetadataThunk,
+                    spiceClosedThunk,
+                    nil,
+                    &errorBuffer,
+                    errorBuffer.count
+                )
             }
         }
 
