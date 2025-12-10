@@ -81,26 +81,48 @@ extension LogMetadataValue: ExpressibleByBooleanLiteral {
 /// Protocol for logging implementations supporting structured metadata
 public protocol Logger: Sendable {
     /// Log a message at the specified level with optional metadata
-    func log(level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String, line: UInt)
+    func log(
+        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        line: UInt)
 }
 
 // MARK: - Logger Convenience Methods
 
-public extension Logger {
-    func debug(_ message: String, metadata: LogMetadata? = nil, file: String = #file, function: String = #function, line: UInt = #line) {
-        log(level: .debug, message: message, metadata: metadata, file: file, function: function, line: line)
+extension Logger {
+    public func debug(
+        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
+        function: String = #function, line: UInt = #line
+    ) {
+        log(
+            level: .debug, message: message, metadata: metadata, file: file, function: function,
+            line: line)
     }
 
-    func info(_ message: String, metadata: LogMetadata? = nil, file: String = #file, function: String = #function, line: UInt = #line) {
-        log(level: .info, message: message, metadata: metadata, file: file, function: function, line: line)
+    public func info(
+        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
+        function: String = #function, line: UInt = #line
+    ) {
+        log(
+            level: .info, message: message, metadata: metadata, file: file, function: function,
+            line: line)
     }
 
-    func warn(_ message: String, metadata: LogMetadata? = nil, file: String = #file, function: String = #function, line: UInt = #line) {
-        log(level: .warn, message: message, metadata: metadata, file: file, function: function, line: line)
+    public func warn(
+        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
+        function: String = #function, line: UInt = #line
+    ) {
+        log(
+            level: .warn, message: message, metadata: metadata, file: file, function: function,
+            line: line)
     }
 
-    func error(_ message: String, metadata: LogMetadata? = nil, file: String = #file, function: String = #function, line: UInt = #line) {
-        log(level: .error, message: message, metadata: metadata, file: file, function: function, line: line)
+    public func error(
+        _ message: String, metadata: LogMetadata? = nil, file: String = #file,
+        function: String = #function, line: UInt = #line
+    ) {
+        log(
+            level: .error, message: message, metadata: metadata, file: file, function: function,
+            line: line)
     }
 }
 
@@ -121,7 +143,10 @@ public struct OSLogLogger: Logger {
         self.minimumLevel = minimumLevel
     }
 
-    public func log(level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String, line: UInt) {
+    public func log(
+        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        line: UInt
+    ) {
         guard level >= minimumLevel else { return }
 
         let formattedMessage: String
@@ -152,7 +177,9 @@ public final class FileLogger: Logger, @unchecked Sendable {
     ///   - fileURL: Path to the log file
     ///   - minimumLevel: Minimum level to log
     ///   - maxFileSizeBytes: Maximum file size before rotation (default 10MB)
-    public init(fileURL: URL, minimumLevel: LogLevel = .debug, maxFileSizeBytes: UInt64 = 10_000_000) {
+    public init(
+        fileURL: URL, minimumLevel: LogLevel = .debug, maxFileSizeBytes: UInt64 = 10_000_000
+    ) {
         self.fileURL = fileURL
         self.minimumLevel = minimumLevel
         self.maxFileSizeBytes = maxFileSizeBytes
@@ -171,7 +198,10 @@ public final class FileLogger: Logger, @unchecked Sendable {
         }
     }
 
-    public func log(level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String, line: UInt) {
+    public func log(
+        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        line: UInt
+    ) {
         guard level >= minimumLevel else { return }
 
         let timestamp = dateFormatter.string(from: Date())
@@ -234,13 +264,21 @@ public final class FileLogger: Logger, @unchecked Sendable {
         let directory = fileURL.deletingLastPathComponent()
         let baseName = fileURL.deletingPathExtension().lastPathComponent
 
-        guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey]) else { return }
+        guard
+            let files = try? FileManager.default.contentsOfDirectory(
+                at: directory, includingPropertiesForKeys: [.creationDateKey])
+        else { return }
 
-        let rotatedLogs = files
+        let rotatedLogs =
+            files
             .filter { $0.lastPathComponent.hasPrefix(baseName) && $0 != fileURL }
             .sorted { url1, url2 in
-                let date1 = (try? url1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-                let date2 = (try? url2.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+                let date1 =
+                    (try? url1.resourceValues(forKeys: [.creationDateKey]).creationDate)
+                    ?? .distantPast
+                let date2 =
+                    (try? url2.resourceValues(forKeys: [.creationDateKey]).creationDate)
+                    ?? .distantPast
                 return date1 > date2
             }
 
@@ -270,7 +308,10 @@ public struct StandardLogger: Logger {
         self.minimumLevel = minimumLevel
     }
 
-    public func log(level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String, line: UInt) {
+    public func log(
+        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        line: UInt
+    ) {
         guard level >= minimumLevel else { return }
 
         var output = "[\(level.name)][\(subsystem)] \(message)"
@@ -318,8 +359,13 @@ public struct TelemetryAwareLogger: Logger {
         self.subsystem = subsystem
     }
 
-    public func log(level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String, line: UInt) {
-        underlying.log(level: level, message: message, metadata: metadata, file: file, function: function, line: line)
+    public func log(
+        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        line: UInt
+    ) {
+        underlying.log(
+            level: level, message: message, metadata: metadata, file: file, function: function,
+            line: line)
 
         // Send errors and warnings to telemetry
         if level >= .warn {
@@ -328,7 +374,7 @@ public struct TelemetryAwareLogger: Logger {
                 "message": message,
                 "subsystem": subsystem,
                 "file": (file as NSString).lastPathComponent,
-                "line": line
+                "line": line,
             ]
             if let metadata = metadata {
                 for (key, value) in metadata {
@@ -354,9 +400,14 @@ public struct CompositeLogger: Logger {
         self.loggers = loggers
     }
 
-    public func log(level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String, line: UInt) {
+    public func log(
+        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        line: UInt
+    ) {
         for logger in loggers {
-            logger.log(level: level, message: message, metadata: metadata, file: file, function: function, line: line)
+            logger.log(
+                level: level, message: message, metadata: metadata, file: file, function: function,
+                line: line)
         }
     }
 }
@@ -433,7 +484,8 @@ public enum LoggerFactory {
         fileLogging: Bool,
         minimumLevel: LogLevel
     ) -> Logger {
-        let osLog = OSLogLogger(subsystem: subsystem, category: category, minimumLevel: minimumLevel)
+        let osLog = OSLogLogger(
+            subsystem: subsystem, category: category, minimumLevel: minimumLevel)
 
         if fileLogging {
             let fileURL = defaultLogDirectory.appendingPathComponent(logFileName)

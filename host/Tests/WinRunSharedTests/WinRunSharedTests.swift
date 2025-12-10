@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import WinRunShared
 
 final class WinRunSharedTests: XCTestCase {
@@ -57,7 +58,8 @@ final class WinRunSharedTests: XCTestCase {
             network: baseConfig.network
         )
         XCTAssertThrowsError(try lowCPUConfig.validate()) { error in
-            guard case VMConfigurationValidationError.cpuCountOutOfRange(let actual, _) = error else {
+            guard case VMConfigurationValidationError.cpuCountOutOfRange(let actual, _) = error
+            else {
                 return XCTFail("Expected cpuCountOutOfRange")
             }
             XCTAssertEqual(actual, 1)
@@ -145,7 +147,8 @@ final class ConfigStoreTests: XCTestCase {
     }
 
     func testSaveCreatesDirectoryIfNeeded() throws {
-        let nestedURL = tempDir
+        let nestedURL =
+            tempDir
             .appendingPathComponent("nested/deep/config.json")
         let store = ConfigStore(configURL: nestedURL)
 
@@ -207,8 +210,8 @@ final class ConfigStoreTests: XCTestCase {
                 "resources": ["cpuCount": 4, "memorySizeGB": 4],
                 "disk": ["imagePath": "/tmp/test.img", "sizeGB": 64],
                 "network": ["mode": "nat"],
-                "suspendOnIdleAfterSeconds": 300
-            ]
+                "suspendOnIdleAfterSeconds": 300,
+            ],
         ]
         let data = try JSONSerialization.data(withJSONObject: futureConfig)
         try data.write(to: configURL)
@@ -261,7 +264,7 @@ final class ConfigStoreTests: XCTestCase {
         let loaded = try store.load()
 
         XCTAssertFalse(created)
-        XCTAssertEqual(loaded.resources.cpuCount, 8) // Original values preserved
+        XCTAssertEqual(loaded.resources.cpuCount, 8)  // Original values preserved
     }
 
     // MARK: - Error Handling Tests
@@ -341,7 +344,9 @@ final class XPCMessageSerializationTests: XCTestCase {
     }
 
     func testAllVMStatusValuesEncodable() throws {
-        let allStatuses: [VMStatus] = [.stopped, .starting, .running, .suspending, .suspended, .stopping]
+        let allStatuses: [VMStatus] = [
+            .stopped, .starting, .running, .suspending, .suspended, .stopping,
+        ]
 
         for status in allStatuses {
             let state = VMState(status: status, uptime: 0, activeSessions: 0)
@@ -354,7 +359,7 @@ final class XPCMessageSerializationTests: XCTestCase {
     // MARK: - GuestSession Tests
 
     func testGuestSessionRoundTrip() throws {
-        let startDate = Date(timeIntervalSince1970: 1700000000)
+        let startDate = Date(timeIntervalSince1970: 1_700_000_000)
         let session = GuestSession(
             id: "session-123",
             windowsPath: "C:\\Windows\\notepad.exe",
@@ -373,7 +378,8 @@ final class XPCMessageSerializationTests: XCTestCase {
         XCTAssertEqual(decoded.windowsPath, session.windowsPath)
         XCTAssertEqual(decoded.windowTitle, "Untitled - Notepad")
         XCTAssertEqual(decoded.processId, 1234)
-        XCTAssertEqual(decoded.startedAt.timeIntervalSince1970, startDate.timeIntervalSince1970, accuracy: 1)
+        XCTAssertEqual(
+            decoded.startedAt.timeIntervalSince1970, startDate.timeIntervalSince1970, accuracy: 1)
     }
 
     func testGuestSessionListRoundTrip() throws {
@@ -391,7 +397,7 @@ final class XPCMessageSerializationTests: XCTestCase {
                 windowTitle: "Calculator",
                 processId: 200,
                 startedAt: Date()
-            )
+            ),
         ])
 
         encoder.dateEncodingStrategy = .iso8601
@@ -423,7 +429,7 @@ final class XPCMessageSerializationTests: XCTestCase {
             displayName: "My App",
             iconPath: "C:\\Program Files\\My App\\app.ico",
             arguments: "--start-minimized",
-            detectedAt: Date(timeIntervalSince1970: 1700000000)
+            detectedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
 
         encoder.dateEncodingStrategy = .iso8601
@@ -437,7 +443,7 @@ final class XPCMessageSerializationTests: XCTestCase {
         XCTAssertEqual(decoded.displayName, "My App")
         XCTAssertEqual(decoded.iconPath, shortcut.iconPath)
         XCTAssertEqual(decoded.arguments, "--start-minimized")
-        XCTAssertEqual(decoded.id, shortcut.shortcutPath) // id is derived from shortcutPath
+        XCTAssertEqual(decoded.id, shortcut.shortcutPath)  // id is derived from shortcutPath
     }
 
     func testWindowsShortcutMinimal() throws {
@@ -470,7 +476,7 @@ final class XPCMessageSerializationTests: XCTestCase {
                 targetPath: "C:\\B.exe",
                 displayName: "App B",
                 iconPath: "C:\\B.ico"
-            )
+            ),
         ])
 
         encoder.dateEncodingStrategy = .iso8601
@@ -493,7 +499,7 @@ final class XPCMessageSerializationTests: XCTestCase {
             failed: 1,
             launcherPaths: [
                 "/Users/test/Applications/WinRun Apps/App1.app",
-                "/Users/test/Applications/WinRun Apps/App2.app"
+                "/Users/test/Applications/WinRun Apps/App2.app",
             ]
         )
 
@@ -638,7 +644,7 @@ final class WinRunErrorTests: XCTestCase {
             .vmAlreadyStopped,
             .vmOperationTimeout(operation: "start", timeoutSeconds: 60),
             .vmSnapshotFailed(reason: "disk full"),
-            .virtualizationUnavailable(reason: "macOS 12")
+            .virtualizationUnavailable(reason: "macOS 12"),
         ]
 
         for error in vmErrors {
@@ -652,7 +658,7 @@ final class WinRunErrorTests: XCTestCase {
             .configWriteFailed(path: "/tmp/config.json", underlying: nil),
             .configInvalid(reason: "bad format"),
             .configSchemaUnsupported(found: 99, supported: 1),
-            .configMissingValue(key: "cpuCount")
+            .configMissingValue(key: "cpuCount"),
         ]
 
         for error in configErrors {
@@ -665,7 +671,7 @@ final class WinRunErrorTests: XCTestCase {
             .spiceConnectionFailed(reason: "timeout"),
             .spiceDisconnected(reason: "remote closed"),
             .spiceSharedMemoryUnavailable(reason: "not supported"),
-            .spiceAuthenticationFailed(reason: "invalid token")
+            .spiceAuthenticationFailed(reason: "invalid token"),
         ]
 
         for error in spiceErrors {
@@ -678,7 +684,7 @@ final class WinRunErrorTests: XCTestCase {
             .daemonUnreachable,
             .xpcConnectionRejected(reason: "signature mismatch"),
             .xpcThrottled(retryAfterSeconds: 5.0),
-            .xpcUnauthorized(reason: "not in staff group")
+            .xpcUnauthorized(reason: "not in staff group"),
         ]
 
         for error in xpcErrors {
@@ -690,7 +696,7 @@ final class WinRunErrorTests: XCTestCase {
         let launcherErrors: [WinRunError] = [
             .launcherAlreadyExists(path: "/Applications/Test.app"),
             .launcherCreationFailed(name: "Test", reason: "permission denied"),
-            .launcherIconMissing(path: "/tmp/icon.icns")
+            .launcherIconMissing(path: "/tmp/icon.icns"),
         ]
 
         for error in launcherErrors {
@@ -739,7 +745,7 @@ final class WinRunErrorTests: XCTestCase {
             .spiceConnectionFailed(reason: ""),
             .daemonUnreachable,
             .launcherAlreadyExists(path: ""),
-            .cancelled
+            .cancelled,
         ]
 
         var codes = Set<Int>()
