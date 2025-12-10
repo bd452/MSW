@@ -118,7 +118,7 @@ public sealed class WindowTrackerTests
         var tracker = new WindowTracker(logger);
         tracker.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() =>
+        _ = Assert.Throws<ObjectDisposedException>(() =>
             tracker.Start((_, _) => { }));
     }
 

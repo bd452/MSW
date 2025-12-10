@@ -40,9 +40,6 @@ public sealed class WinRunAgentService
                 case RequestIconMessage iconRequest:
                     _ = await _iconService.ExtractIconAsync(iconRequest.ExecutablePath, token);
                     break;
-                case ShortcutCreatedMessage shortcut:
-                    _logger.Info($"Shortcut created: {shortcut.ShortcutPath} -> {shortcut.TargetPath}");
-                    break;
                 default:
                     _logger.Warn($"Unhandled message type {message.GetType().Name}");
                     break;

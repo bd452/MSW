@@ -67,7 +67,7 @@ public sealed class WindowTracker : IDisposable
     {
         foreach (var handle in _hookHandles)
         {
-            Win32.UnhookWinEvent(handle);
+            _ = Win32.UnhookWinEvent(handle);
         }
         _hookHandles.Clear();
 
@@ -82,7 +82,11 @@ public sealed class WindowTracker : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         Stop();
     }
@@ -106,17 +110,14 @@ public sealed class WindowTracker : IDisposable
         }
     }
 
-    private void EnumerateExistingWindows()
-    {
-        Win32.EnumWindows((hwnd, _) =>
-        {
-            if (IsTrackableWindow(hwnd))
-            {
-                TrackWindow(hwnd, isNew: false);
-            }
-            return true; // Continue enumeration
-        }, IntPtr.Zero);
-    }
+    private void EnumerateExistingWindows() => _ = Win32.EnumWindows((hwnd, _) =>
+                                                    {
+                                                        if (IsTrackableWindow(hwnd))
+                                                        {
+                                                            TrackWindow(hwnd, isNew: false);
+                                                        }
+                                                        return true; // Continue enumeration
+                                                    }, IntPtr.Zero);
 
     private void WinEventCallback(
         nint hWinEventHook,
@@ -129,7 +130,9 @@ public sealed class WindowTracker : IDisposable
     {
         // Only handle window-level events (not child objects like buttons)
         if (idObject != Win32.OBJID_WINDOW || hwnd == IntPtr.Zero)
+        {
             return;
+        }
 
         try
         {
@@ -164,6 +167,8 @@ public sealed class WindowTracker : IDisposable
                 case Win32.EVENT_SYSTEM_MINIMIZEEND:
                     HandleWindowMinimized(hwnd, minimized: false);
                     break;
+                default:
+                    break;
             }
         }
         catch (Exception ex)
@@ -175,18 +180,24 @@ public sealed class WindowTracker : IDisposable
     private void HandleWindowCreatedOrShown(nint hwnd)
     {
         if (!IsTrackableWindow(hwnd))
+        {
             return;
+        }
 
         if (_trackedWindows.ContainsKey(hwnd))
+        {
             return;
+        }
 
         TrackWindow(hwnd, isNew: true);
     }
 
-    private void HandleWindowDestroyedOrHidden(nint hwnd, uint eventType)
+    private void HandleWindowDestroyedOrHidden(nint hwnd, uint _)
     {
         if (!_trackedWindows.TryRemove(hwnd, out var metadata))
+        {
             return;
+        }
 
         _logger.Debug($"Window destroyed/hidden: HWND={hwnd}, Title=\"{metadata.Title}\"");
         RaiseEvent(new WindowEventArgs(
@@ -199,11 +210,15 @@ public sealed class WindowTracker : IDisposable
     private void HandleWindowTitleChanged(nint hwnd)
     {
         if (!_trackedWindows.TryGetValue(hwnd, out var existing))
+        {
             return;
+        }
 
         var newTitle = GetWindowTitle(hwnd);
         if (newTitle == existing.Title)
+        {
             return;
+        }
 
         var updated = existing with { Title = newTitle };
         _trackedWindows[hwnd] = updated;
@@ -219,11 +234,15 @@ public sealed class WindowTracker : IDisposable
     private void HandleWindowLocationChanged(nint hwnd)
     {
         if (!_trackedWindows.TryGetValue(hwnd, out var existing))
+        {
             return;
+        }
 
         var newBounds = GetWindowBounds(hwnd);
         if (newBounds == existing.Bounds)
+        {
             return;
+        }
 
         var updated = existing with { Bounds = newBounds };
         _trackedWindows[hwnd] = updated;
@@ -238,7 +257,9 @@ public sealed class WindowTracker : IDisposable
     private void HandleForegroundChanged(nint hwnd)
     {
         if (!_trackedWindows.ContainsKey(hwnd))
+        {
             return;
+        }
 
         RaiseEvent(new WindowEventArgs(
             (ulong)hwnd,
@@ -250,7 +271,9 @@ public sealed class WindowTracker : IDisposable
     private void HandleWindowMinimized(nint hwnd, bool minimized)
     {
         if (!_trackedWindows.TryGetValue(hwnd, out var existing))
+        {
             return;
+        }
 
         var updated = existing with { IsMinimized = minimized };
         _trackedWindows[hwnd] = updated;
@@ -294,35 +317,39 @@ public sealed class WindowTracker : IDisposable
     {
         // Must be a visible, top-level window
         if (!Win32.IsWindowVisible(hwnd))
+        {
             return false;
+        }
 
         // Filter by extended window style - skip tool windows, layered windows used for effects
         var exStyle = Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         if ((exStyle & Win32.WS_EX_TOOLWINDOW) != 0)
+        {
             return false;
+        }
 
         // Must have either WS_EX_APPWINDOW or not be owned
         var owner = Win32.GetWindow(hwnd, Win32.GW_OWNER);
         if (owner != IntPtr.Zero && (exStyle & Win32.WS_EX_APPWINDOW) == 0)
+        {
             return false;
+        }
 
         // Skip windows with empty titles (usually helper windows)
         var title = GetWindowTitle(hwnd);
         if (string.IsNullOrWhiteSpace(title))
+        {
             return false;
+        }
 
         // Skip known system window classes
         var className = GetWindowClassName(hwnd);
-        if (IsSystemWindowClass(className))
-            return false;
-
-        return true;
+        return !IsSystemWindowClass(className);
     }
 
-    private static bool IsSystemWindowClass(string className)
-    {
+    private static bool IsSystemWindowClass(string className) =>
         // Common Windows system classes to ignore
-        return className switch
+        className switch
         {
             "Progman" => true,                    // Desktop
             "WorkerW" => true,                    // Desktop worker
@@ -337,42 +364,40 @@ public sealed class WindowTracker : IDisposable
             "NativeHWNDHost" => true,
             _ => className.StartsWith("IME", StringComparison.Ordinal)
         };
-    }
 
     private static string GetWindowTitle(nint hwnd)
     {
         var length = Win32.GetWindowTextLength(hwnd);
         if (length == 0)
+        {
             return string.Empty;
+        }
 
         var sb = new StringBuilder(length + 1);
-        Win32.GetWindowText(hwnd, sb, sb.Capacity);
+        _ = Win32.GetWindowText(hwnd, sb, sb.Capacity);
         return sb.ToString();
     }
 
     private static string GetWindowClassName(nint hwnd)
     {
         var sb = new StringBuilder(256);
-        Win32.GetClassName(hwnd, sb, sb.Capacity);
+        _ = Win32.GetClassName(hwnd, sb, sb.Capacity);
         return sb.ToString();
     }
 
     private static Rect GetWindowBounds(nint hwnd)
     {
-        Win32.GetWindowRect(hwnd, out var rect);
+        _ = Win32.GetWindowRect(hwnd, out var rect);
         return new Rect(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
     }
 
     private static uint GetWindowProcessId(nint hwnd)
     {
-        Win32.GetWindowThreadProcessId(hwnd, out var processId);
+        _ = Win32.GetWindowThreadProcessId(hwnd, out var processId);
         return processId;
     }
 
-    private void RaiseEvent(WindowEventArgs args)
-    {
-        _eventHandler?.Invoke(this, args);
-    }
+    private void RaiseEvent(WindowEventArgs args) => _eventHandler?.Invoke(this, args);
 }
 
 /// <summary>
@@ -503,14 +528,15 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     public static partial nint GetWindow(nint hWnd, uint uCmd);
 
-    [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW", StringMarshalling = StringMarshalling.Utf16)]
-    public static partial int GetWindowText(nint hWnd, StringBuilder lpString, int nMaxCount);
+    // Use DllImport for StringBuilder parameters (LibraryImport source gen doesn't support them)
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(nint hWnd, StringBuilder lpString, int nMaxCount);
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
     public static partial int GetWindowTextLength(nint hWnd);
 
-    [LibraryImport("user32.dll", EntryPoint = "GetClassNameW", StringMarshalling = StringMarshalling.Utf16)]
-    public static partial int GetClassName(nint hWnd, StringBuilder lpClassName, int nMaxCount);
+    [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(nint hWnd, StringBuilder lpClassName, int nMaxCount);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

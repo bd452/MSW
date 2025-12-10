@@ -13,9 +13,6 @@ public sealed class DesktopDuplicationBridge : IDisposable
     private nint _context;
     private nint _duplication;
     private nint _stagingTexture;
-    private int _outputWidth;
-    private int _outputHeight;
-    private bool _initialized;
     private bool _disposed;
 
     public DesktopDuplicationBridge(IAgentLogger logger)
@@ -26,17 +23,17 @@ public sealed class DesktopDuplicationBridge : IDisposable
     /// <summary>
     /// Gets whether desktop duplication is currently initialized and ready.
     /// </summary>
-    public bool IsInitialized => _initialized;
+    public bool IsInitialized { get; private set; }
 
     /// <summary>
     /// Gets the width of the captured output in pixels.
     /// </summary>
-    public int OutputWidth => _outputWidth;
+    public int OutputWidth { get; private set; }
 
     /// <summary>
     /// Gets the height of the captured output in pixels.
     /// </summary>
-    public int OutputHeight => _outputHeight;
+    public int OutputHeight { get; private set; }
 
     /// <summary>
     /// Initializes DXGI Desktop Duplication for the primary display.
@@ -46,15 +43,18 @@ public sealed class DesktopDuplicationBridge : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_initialized)
+        if (IsInitialized)
+        {
             return true;
+        }
 
         try
         {
             _logger.Info("Initializing DXGI Desktop Duplication");
 
             // Create DXGI factory
-            var hr = DXGI.CreateDXGIFactory1(ref DXGI.IID_IDXGIFactory1, out var factory);
+            var factoryIid = DXGI.IID_IDXGIFactory1;
+            var hr = DXGI.CreateDXGIFactory1(ref factoryIid, out var factory);
             if (hr < 0)
             {
                 _logger.Error($"Failed to create DXGI factory: HRESULT 0x{hr:X8}");
@@ -102,7 +102,8 @@ public sealed class DesktopDuplicationBridge : IDisposable
                     try
                     {
                         // Query for IDXGIOutput1
-                        hr = DXGI.QueryInterface(output, ref DXGI.IID_IDXGIOutput1, out var output1);
+                        var output1Iid = DXGI.IID_IDXGIOutput1;
+                        hr = DXGI.QueryInterface(output, ref output1Iid, out var output1);
                         if (hr < 0)
                         {
                             _logger.Error($"Failed to get IDXGIOutput1: HRESULT 0x{hr:X8}");
@@ -112,9 +113,9 @@ public sealed class DesktopDuplicationBridge : IDisposable
                         try
                         {
                             // Get output description for dimensions
-                            DXGI.IDXGIOutput_GetDesc(output, out var outputDesc);
-                            _outputWidth = outputDesc.DesktopCoordinates.Right - outputDesc.DesktopCoordinates.Left;
-                            _outputHeight = outputDesc.DesktopCoordinates.Bottom - outputDesc.DesktopCoordinates.Top;
+                            _ = DXGI.IDXGIOutput_GetDesc(output, out var outputDesc);
+                            OutputWidth = outputDesc.DesktopCoordinates.Right - outputDesc.DesktopCoordinates.Left;
+                            OutputHeight = outputDesc.DesktopCoordinates.Bottom - outputDesc.DesktopCoordinates.Top;
 
                             // Create desktop duplication
                             hr = DXGI.IDXGIOutput1_DuplicateOutput(output1, _device, out _duplication);
@@ -127,8 +128,8 @@ public sealed class DesktopDuplicationBridge : IDisposable
                             // Create staging texture for CPU access
                             var textureDesc = new D3D11.D3D11_TEXTURE2D_DESC
                             {
-                                Width = (uint)_outputWidth,
-                                Height = (uint)_outputHeight,
+                                Width = (uint)OutputWidth,
+                                Height = (uint)OutputHeight,
                                 MipLevels = 1,
                                 ArraySize = 1,
                                 Format = DXGI.DXGI_FORMAT_B8G8R8A8_UNORM,
@@ -146,29 +147,31 @@ public sealed class DesktopDuplicationBridge : IDisposable
                                 return false;
                             }
 
-                            _initialized = true;
-                            _logger.Info($"Desktop Duplication initialized: {_outputWidth}x{_outputHeight}");
+                            IsInitialized = true;
+                            _logger.Info($"Desktop Duplication initialized: {OutputWidth}x{OutputHeight}");
                             return true;
                         }
                         finally
                         {
-                            if (!_initialized)
-                                Marshal.Release(output1);
+                            if (!IsInitialized)
+                            {
+                                _ = Marshal.Release(output1);
+                            }
                         }
                     }
                     finally
                     {
-                        Marshal.Release(output);
+                        _ = Marshal.Release(output);
                     }
                 }
                 finally
                 {
-                    Marshal.Release(adapter);
+                    _ = Marshal.Release(adapter);
                 }
             }
             finally
             {
-                Marshal.Release(factory);
+                _ = Marshal.Release(factory);
             }
         }
         catch (Exception ex)
@@ -188,13 +191,13 @@ public sealed class DesktopDuplicationBridge : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (!_initialized)
+        if (!IsInitialized)
         {
             _logger.Warn("CaptureFrame called before initialization");
             return null;
         }
 
-        nint frameTexture = IntPtr.Zero;
+        var frameTexture = IntPtr.Zero;
         try
         {
             // Acquire next frame
@@ -216,7 +219,7 @@ public sealed class DesktopDuplicationBridge : IDisposable
                 if (hr == DXGI.DXGI_ERROR_ACCESS_LOST)
                 {
                     _logger.Warn("Desktop duplication access lost, needs reinitialization");
-                    _initialized = false;
+                    IsInitialized = false;
                 }
                 return null;
             }
@@ -224,7 +227,8 @@ public sealed class DesktopDuplicationBridge : IDisposable
             try
             {
                 // Query for ID3D11Texture2D
-                hr = DXGI.QueryInterface(resource, ref D3D11.IID_ID3D11Texture2D, out frameTexture);
+                var texture2dIid = D3D11.IID_ID3D11Texture2D;
+                hr = DXGI.QueryInterface(resource, ref texture2dIid, out frameTexture);
                 if (hr < 0)
                 {
                     return null;
@@ -250,13 +254,13 @@ public sealed class DesktopDuplicationBridge : IDisposable
                 try
                 {
                     // Copy pixel data
-                    var dataSize = _outputHeight * mappedResource.RowPitch;
+                    var dataSize = (int)(OutputHeight * mappedResource.RowPitch);
                     var data = new byte[dataSize];
                     Marshal.Copy(mappedResource.pData, data, 0, dataSize);
 
                     return new CapturedFrame(
-                        Width: _outputWidth,
-                        Height: _outputHeight,
+                        Width: OutputWidth,
+                        Height: OutputHeight,
                         Stride: (int)mappedResource.RowPitch,
                         Format: PixelFormat.BGRA32,
                         Data: data,
@@ -269,11 +273,13 @@ public sealed class DesktopDuplicationBridge : IDisposable
             }
             finally
             {
-                Marshal.Release(resource);
+                _ = Marshal.Release(resource);
                 if (frameTexture != IntPtr.Zero)
-                    Marshal.Release(frameTexture);
+                {
+                    _ = Marshal.Release(frameTexture);
+                }
 
-                DXGI.IDXGIOutputDuplication_ReleaseFrame(_duplication);
+                _ = DXGI.IDXGIOutputDuplication_ReleaseFrame(_duplication);
             }
         }
         catch (Exception ex)
@@ -301,7 +307,9 @@ public sealed class DesktopDuplicationBridge : IDisposable
         var height = bottom - y;
 
         if (width <= 0 || height <= 0)
+        {
             return null;
+        }
 
         var bytesPerPixel = 4; // BGRA32
         var newStride = width * bytesPerPixel;
@@ -329,34 +337,38 @@ public sealed class DesktopDuplicationBridge : IDisposable
     {
         if (_stagingTexture != IntPtr.Zero)
         {
-            Marshal.Release(_stagingTexture);
+            _ = Marshal.Release(_stagingTexture);
             _stagingTexture = IntPtr.Zero;
         }
 
         if (_duplication != IntPtr.Zero)
         {
-            Marshal.Release(_duplication);
+            _ = Marshal.Release(_duplication);
             _duplication = IntPtr.Zero;
         }
 
         if (_context != IntPtr.Zero)
         {
-            Marshal.Release(_context);
+            _ = Marshal.Release(_context);
             _context = IntPtr.Zero;
         }
 
         if (_device != IntPtr.Zero)
         {
-            Marshal.Release(_device);
+            _ = Marshal.Release(_device);
             _device = IntPtr.Zero;
         }
 
-        _initialized = false;
+        IsInitialized = false;
     }
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         Cleanup();
     }
