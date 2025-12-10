@@ -37,8 +37,7 @@ jobs:
         run: brew install swiftlint
       - name: Run SwiftLint
         working-directory: host
-        # Warnings show as annotations but don't fail the build
-        run: swiftlint lint --no-cache --reporter github-actions-logging || true
+        run: swiftlint lint --strict --no-cache --reporter github-actions-logging
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Guest (Windows) - runs in parallel with Host jobs
@@ -50,7 +49,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          global-json-file: guest/global.json
+      - name: Verify SDK version
+        run: dotnet --version
       - name: Restore dependencies
         working-directory: guest
         run: dotnet restore WinRunAgent.sln
@@ -68,7 +69,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          global-json-file: guest/global.json
+      - name: Verify SDK version
+        run: dotnet --version
       - name: Check formatting
         working-directory: guest
         run: dotnet format WinRunAgent.sln --verify-no-changes --verbosity diagnostic

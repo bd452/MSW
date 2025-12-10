@@ -101,9 +101,7 @@ extension Logger {
         function: String = #function,
         line: UInt = #line
     ) {
-        log(
-            level: .debug, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+        log(level: .debug, message: message, metadata: metadata, file: file, function: function, line: line)
     }
 
     public func info(
@@ -113,9 +111,7 @@ extension Logger {
         function: String = #function,
         line: UInt = #line
     ) {
-        log(
-            level: .info, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+        log(level: .info, message: message, metadata: metadata, file: file, function: function, line: line)
     }
 
     public func warn(
@@ -125,9 +121,7 @@ extension Logger {
         function: String = #function,
         line: UInt = #line
     ) {
-        log(
-            level: .warn, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+        log(level: .warn, message: message, metadata: metadata, file: file, function: function, line: line)
     }
 
     public func error(
@@ -137,9 +131,7 @@ extension Logger {
         function: String = #function,
         line: UInt = #line
     ) {
-        log(
-            level: .error, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+        log(level: .error, message: message, metadata: metadata, file: file, function: function, line: line)
     }
 }
 
@@ -396,9 +388,7 @@ public struct TelemetryAwareLogger: Logger {
         function: String,
         line: UInt
     ) {
-        underlying.log(
-            level: level, message: message, metadata: metadata, file: file, function: function,
-            line: line)
+        underlying.log(level: level, message: message, metadata: metadata, file: file, function: function, line: line)
 
         // Send errors and warnings to telemetry
         if level >= .warn {
@@ -442,9 +432,7 @@ public struct CompositeLogger: Logger {
         line: UInt
     ) {
         for logger in loggers {
-            logger.log(
-                level: level, message: message, metadata: metadata, file: file, function: function,
-                line: line)
+            logger.log(level: level, message: message, metadata: metadata, file: file, function: function, line: line)
         }
     }
 }

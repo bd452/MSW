@@ -65,15 +65,17 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         hideOthersItem.keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(hideOthersItem)
 
-        appMenu.addItem(
-            NSMenuItem(
-                title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)),
-                keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(
+            title: "Show All",
+            action: #selector(NSApplication.unhideAllApplications(_:)),
+            keyEquivalent: ""
+        ))
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(
-            NSMenuItem(
-                title: "Quit WinRun", action: #selector(NSApplication.terminate(_:)),
-                keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(
+            title: "Quit WinRun",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ))
 
         return appMenuItem
     }
@@ -83,10 +85,11 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         let fileMenu = NSMenu(title: "File")
         fileMenuItem.submenu = fileMenu
 
-        fileMenu.addItem(
-            NSMenuItem(
-                title: "Close Window", action: #selector(NSWindow.performClose(_:)),
-                keyEquivalent: "w"))
+        fileMenu.addItem(NSMenuItem(
+            title: "Close Window",
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        ))
 
         return fileMenuItem
     }
@@ -99,15 +102,10 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
         editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
         editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(
-            NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
-        editMenu.addItem(
-            NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
-        editMenu.addItem(
-            NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
-        editMenu.addItem(
-            NSMenuItem(
-                title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
 
         return editMenuItem
     }
@@ -115,18 +113,22 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
     private func createWindowMenu() -> NSMenu {
         let windowMenu = NSMenu(title: "Window")
 
-        windowMenu.addItem(
-            NSMenuItem(
-                title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)),
-                keyEquivalent: "m"))
-        windowMenu.addItem(
-            NSMenuItem(
-                title: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        windowMenu.addItem(NSMenuItem(
+            title: "Minimize",
+            action: #selector(NSWindow.performMiniaturize(_:)),
+            keyEquivalent: "m"
+        ))
+        windowMenu.addItem(NSMenuItem(
+            title: "Zoom",
+            action: #selector(NSWindow.performZoom(_:)),
+            keyEquivalent: ""
+        ))
         windowMenu.addItem(NSMenuItem.separator())
-        windowMenu.addItem(
-            NSMenuItem(
-                title: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)),
-                keyEquivalent: ""))
+        windowMenu.addItem(NSMenuItem(
+            title: "Bring All to Front",
+            action: #selector(NSApplication.arrangeInFront(_:)),
+            keyEquivalent: ""
+        ))
 
         return windowMenu
     }

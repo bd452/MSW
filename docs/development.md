@@ -7,12 +7,61 @@
 - Swift 5.9 toolchain
 - Homebrew packages (`scripts/bootstrap.sh` handles install)
 - libspice-glib development headers (installed via brew)
-- (Optional) .NET SDK for running guest linting locally: `brew install dotnet`
+- (Optional) .NET 9 SDK for running guest linting locally: `brew install dotnet`
 
 ### Windows Guest
 - Windows Server 2022 (Desktop Experience disabled)
-- .NET 8 SDK
+- .NET 9 SDK (pinned via `guest/global.json`)
 - Visual Studio Build Tools (for testing the agent)
+
+### SDK Version Strategy
+
+The project uses a **split strategy** for maximum stability:
+
+| Component | Version | Why |
+|-----------|---------|-----|
+| **SDK** (build tools) | .NET 9 | Latest stable tooling, C# 13 features, faster builds |
+| **Target Framework** (runtime) | net8.0-windows | LTS runtime (supported until Nov 2026) |
+
+This gives us modern development tooling while targeting a stable, long-term-supported runtime.
+
+### SDK Version Pinning
+
+The guest project uses `guest/global.json` to pin the .NET SDK version to **9.0.x**:
+
+```json
+{
+  "sdk": {
+    "version": "9.0.100",
+    "rollForward": "latestFeature"
+  }
+}
+```
+
+This ensures:
+- **Consistent analyzer behavior** between local development and CI
+- **Reproducible builds** regardless of which SDKs are installed
+- **Modern tooling** with C# 13 language features
+
+#### Installing .NET 9 SDK
+
+**macOS:**
+```bash
+brew install dotnet
+```
+
+**Windows:**
+Download from https://dotnet.microsoft.com/download/dotnet/9.0
+
+#### Verifying the SDK Version
+
+From the `guest/` directory:
+```bash
+dotnet --version
+# Should output 9.0.xxx
+```
+
+If you see a "compatible SDK not found" error, install .NET 9 SDK.
 
 ## Common Tasks
 

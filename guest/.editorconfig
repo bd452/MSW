@@ -46,9 +46,21 @@ dotnet_style_namespace_match_folder = false:silent
 
 # Naming conventions
 # NOTE: Rules are evaluated alphabetically by name, so we use numeric prefixes to control order.
-# More specific rules (static_readonly) must come before general rules (instance fields).
+# More specific rules (constants, static_readonly) must come before general rules (instance fields).
 
-# 1. Static readonly fields - PascalCase (for Gate pattern) (IDE1006)
+# 1. Private constants - UPPER_CASE with underscores (for Win32 API constants) (IDE1006)
+dotnet_naming_rule.a0_private_constants_should_be_upper_case.severity = warning
+dotnet_naming_rule.a0_private_constants_should_be_upper_case.symbols = private_constants
+dotnet_naming_rule.a0_private_constants_should_be_upper_case.style = upper_case_style
+
+dotnet_naming_symbols.private_constants.applicable_kinds = field
+dotnet_naming_symbols.private_constants.applicable_accessibilities = private
+dotnet_naming_symbols.private_constants.required_modifiers = const
+
+dotnet_naming_style.upper_case_style.capitalization = all_upper
+dotnet_naming_style.upper_case_style.word_separator = _
+
+# 2. Static readonly fields - PascalCase (for Gate pattern) (IDE1006)
 dotnet_naming_rule.a1_static_readonly_fields_should_be_pascal_case.severity = warning
 dotnet_naming_rule.a1_static_readonly_fields_should_be_pascal_case.symbols = static_readonly_fields
 dotnet_naming_rule.a1_static_readonly_fields_should_be_pascal_case.style = pascal_case_style
@@ -59,13 +71,14 @@ dotnet_naming_symbols.static_readonly_fields.required_modifiers = static, readon
 
 dotnet_naming_style.pascal_case_style.capitalization = pascal_case
 
-# 2. Private instance fields - underscore prefix + camelCase
+# 3. Private instance fields - underscore prefix + camelCase
 dotnet_naming_rule.b1_private_fields_should_be_underscore_camel_case.severity = warning
 dotnet_naming_rule.b1_private_fields_should_be_underscore_camel_case.symbols = private_instance_fields
 dotnet_naming_rule.b1_private_fields_should_be_underscore_camel_case.style = underscore_camel_case_style
 
 dotnet_naming_symbols.private_instance_fields.applicable_kinds = field
 dotnet_naming_symbols.private_instance_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_instance_fields.required_modifiers =
 
 dotnet_naming_style.underscore_camel_case_style.capitalization = camel_case
 dotnet_naming_style.underscore_camel_case_style.required_prefix = _
