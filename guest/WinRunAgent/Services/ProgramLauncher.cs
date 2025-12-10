@@ -98,7 +98,7 @@ public sealed class ProgramLauncher : IDisposable
             token);
 
         // Cache the result for idempotency
-        _messageIdCache.TryAdd(message.MessageId, result);
+        _ = _messageIdCache.TryAdd(message.MessageId, result);
 
         return result;
     }
@@ -111,26 +111,17 @@ public sealed class ProgramLauncher : IDisposable
         string[]? arguments = null,
         string? workingDirectory = null,
         Dictionary<string, string>? environment = null,
-        CancellationToken token = default)
-    {
-        return await LaunchCoreAsync(path, arguments ?? [], workingDirectory, environment, token);
-    }
+        CancellationToken token = default) => await LaunchCoreAsync(path, arguments ?? [], workingDirectory, environment, token);
 
     /// <summary>
     /// Gets information about a launched process by its process ID.
     /// </summary>
-    public LaunchedProcessInfo? GetProcessInfo(int processId)
-    {
-        return _launchedProcesses.Values.FirstOrDefault(p => p.ProcessId == processId);
-    }
+    public LaunchedProcessInfo? GetProcessInfo(int processId) => _launchedProcesses.Values.FirstOrDefault(p => p.ProcessId == processId);
 
     /// <summary>
     /// Gets all currently tracked processes.
     /// </summary>
-    public IReadOnlyCollection<LaunchedProcessInfo> GetTrackedProcesses()
-    {
-        return _launchedProcesses.Values.Where(p => !p.HasExited).ToList();
-    }
+    public IReadOnlyCollection<LaunchedProcessInfo> GetTrackedProcesses() => _launchedProcesses.Values.Where(p => !p.HasExited).ToList();
 
     private async Task<LaunchResult> LaunchCoreAsync(
         string path,
@@ -305,18 +296,18 @@ public sealed class ProgramLauncher : IDisposable
             var processInfo = new LaunchedProcessInfo(
                 processId,
                 psi.FileName,
-                psi.ArgumentList.ToArray(),
+                [.. psi.ArgumentList],
                 psi.WorkingDirectory,
                 launchTime);
 
-            _launchedProcesses.TryAdd((uint)processId, processInfo);
+            _ = _launchedProcesses.TryAdd((uint)processId, processInfo);
 
             _logger.Info($"Successfully launched {psi.FileName} with PID {processId}");
 
             // Allow cancellation to kill the process
             if (token.CanBeCanceled)
             {
-                token.Register(() =>
+                _ = token.Register(() =>
                 {
                     try
                     {
@@ -382,7 +373,7 @@ public sealed class ProgramLauncher : IDisposable
 
         foreach (var pid in exitedProcesses)
         {
-            _launchedProcesses.TryRemove(pid, out _);
+            _ = _launchedProcesses.TryRemove(pid, out _);
         }
 
         if (exitedProcesses.Count > 0)

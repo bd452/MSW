@@ -13,7 +13,6 @@ public sealed class WinRunAgentService : IDisposable
     private readonly IconExtractionService _iconService;
     private readonly InputInjectionService _inputService;
     private readonly ClipboardSyncService _clipboardService;
-    private readonly SessionManager _sessionManager;
     private readonly Channel<HostMessage> _inboundChannel;
     private readonly Channel<GuestMessage> _outboundChannel;
     private readonly IAgentLogger _logger;
@@ -38,14 +37,14 @@ public sealed class WinRunAgentService : IDisposable
         _outboundChannel = outboundChannel;
         _logger = logger;
 
-        _sessionManager = new SessionManager(
+        SessionManager = new SessionManager(
             logger,
             launcher,
             windowTracker,
             SendMessageAsync);
 
         // Subscribe to session state changes
-        _sessionManager.SessionStateChanged += OnSessionStateChanged;
+        SessionManager.SessionStateChanged += OnSessionStateChanged;
 
         // Subscribe to clipboard changes
         _clipboardService.ClipboardChanged += OnClipboardChanged;
@@ -75,7 +74,7 @@ public sealed class WinRunAgentService : IDisposable
     /// <summary>
     /// Gets the session manager for external access.
     /// </summary>
-    public SessionManager SessionManager => _sessionManager;
+    public SessionManager SessionManager { get; }
 
     /// <summary>
     /// Runs the agent service, processing messages until cancelled.
@@ -88,7 +87,7 @@ public sealed class WinRunAgentService : IDisposable
         _windowTracker.Start(OnWindowEvent);
 
         // Start session management (heartbeats, idle detection)
-        _sessionManager.Start();
+        SessionManager.Start();
 
         try
         {
@@ -100,7 +99,7 @@ public sealed class WinRunAgentService : IDisposable
         }
         finally
         {
-            _sessionManager.Stop();
+            SessionManager.Stop();
             _windowTracker.Stop();
             _logger.Info("WinRun guest agent shut down");
         }
@@ -180,7 +179,7 @@ public sealed class WinRunAgentService : IDisposable
             // Track the session
             if (result.ProcessId.HasValue)
             {
-                _sessionManager.TrackSession(result.ProcessId.Value, launch.Path);
+                _ = SessionManager.TrackSession(result.ProcessId.Value, launch.Path);
             }
 
             await SendAckAsync(launch.MessageId, success: true);
@@ -218,14 +217,14 @@ public sealed class WinRunAgentService : IDisposable
         }
     }
 
-    private async Task HandleShutdownAsync(ShutdownMessage shutdown, CancellationToken token)
+    private async Task HandleShutdownAsync(ShutdownMessage shutdown, CancellationToken _)
     {
         _logger.Info($"Shutdown requested with timeout {shutdown.TimeoutMs}ms");
 
         // Gracefully stop all sessions
-        foreach (var session in _sessionManager.GetActiveSessions())
+        foreach (var session in SessionManager.GetActiveSessions())
         {
-            _sessionManager.MarkSessionExited(session.ProcessId);
+            SessionManager.MarkSessionExited(session.ProcessId);
         }
 
         await SendAckAsync(shutdown.MessageId, success: true);
@@ -234,14 +233,14 @@ public sealed class WinRunAgentService : IDisposable
     private void HandleMouseInput(MouseInputMessage mouseInput)
     {
         // Record activity for the target window's session
-        var session = _sessionManager.GetSessionForWindow(mouseInput.WindowId);
+        var session = SessionManager.GetSessionForWindow(mouseInput.WindowId);
         if (session != null)
         {
-            _sessionManager.RecordActivity(session.ProcessId);
+            SessionManager.RecordActivity(session.ProcessId);
         }
 
         // Focus window and inject mouse input
-        _inputService.FocusWindow(mouseInput.WindowId);
+        _ = _inputService.FocusWindow(mouseInput.WindowId);
         var success = _inputService.InjectMouse(mouseInput);
 
         _logger.Debug($"Mouse {mouseInput.EventType} at ({mouseInput.X}, {mouseInput.Y}) for window {mouseInput.WindowId}: {(success ? "OK" : "FAILED")}");
@@ -250,14 +249,14 @@ public sealed class WinRunAgentService : IDisposable
     private void HandleKeyboardInput(KeyboardInputMessage keyboardInput)
     {
         // Record activity for the target window's session
-        var session = _sessionManager.GetSessionForWindow(keyboardInput.WindowId);
+        var session = SessionManager.GetSessionForWindow(keyboardInput.WindowId);
         if (session != null)
         {
-            _sessionManager.RecordActivity(session.ProcessId);
+            SessionManager.RecordActivity(session.ProcessId);
         }
 
         // Focus window and inject keyboard input
-        _inputService.FocusWindow(keyboardInput.WindowId);
+        _ = _inputService.FocusWindow(keyboardInput.WindowId);
         var success = _inputService.InjectKeyboard(keyboardInput);
 
         _logger.Debug($"Keyboard {keyboardInput.EventType} key {keyboardInput.KeyCode} for window {keyboardInput.WindowId}: {(success ? "OK" : "FAILED")}");
@@ -272,10 +271,10 @@ public sealed class WinRunAgentService : IDisposable
     private void HandleDragDrop(DragDropMessage dragDrop)
     {
         // Record activity
-        var session = _sessionManager.GetSessionForWindow(dragDrop.WindowId);
+        var session = SessionManager.GetSessionForWindow(dragDrop.WindowId);
         if (session != null)
         {
-            _sessionManager.RecordActivity(session.ProcessId);
+            SessionManager.RecordActivity(session.ProcessId);
         }
 
         // TODO: Full drag/drop implementation requires Windows OLE drag-drop APIs
@@ -330,15 +329,9 @@ public sealed class WinRunAgentService : IDisposable
         _ = SendMessageAsync(metadata);
     }
 
-    private void OnSessionStateChanged(object? sender, SessionStateChangedEventArgs e)
-    {
-        _logger.Info($"Session {e.Session.ProcessId} state: {e.PreviousState} -> {e.NewState}");
-    }
+    private void OnSessionStateChanged(object? sender, SessionStateChangedEventArgs e) => _logger.Info($"Session {e.Session.ProcessId} state: {e.PreviousState} -> {e.NewState}");
 
-    private void OnClipboardChanged(object? sender, GuestClipboardMessage e)
-    {
-        _logger.Debug($"Guest clipboard changed: {e.Format}, {e.Data.Length} bytes");
-    }
+    private void OnClipboardChanged(object? sender, GuestClipboardMessage e) => _logger.Debug($"Guest clipboard changed: {e.Format}, {e.Data.Length} bytes");
 
     public void Dispose()
     {
@@ -347,7 +340,7 @@ public sealed class WinRunAgentService : IDisposable
             return;
         }
 
-        _sessionManager.Dispose();
+        SessionManager.Dispose();
         _clipboardService.Dispose();
         _launcher.Dispose();
         _windowTracker.Dispose();

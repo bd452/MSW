@@ -85,7 +85,7 @@ public sealed partial class ClipboardSyncService : IDisposable
             }
             finally
             {
-                CloseClipboard();
+                _ = CloseClipboard();
             }
         }
         catch (Exception ex)
@@ -153,7 +153,7 @@ public sealed partial class ClipboardSyncService : IDisposable
             }
             finally
             {
-                CloseClipboard();
+                _ = CloseClipboard();
             }
         }
         catch (Exception ex)
@@ -189,6 +189,10 @@ public sealed partial class ClipboardSyncService : IDisposable
             case ClipboardFormat.FileUrl:
                 // File URLs need to be converted to HDROP format
                 // This is complex and not implemented here
+                return (0, null);
+
+            case ClipboardFormat.Tiff:
+                // TIFF not implemented
                 return (0, null);
 
             default:
@@ -233,7 +237,7 @@ public sealed partial class ClipboardSyncService : IDisposable
         }
         finally
         {
-            GlobalUnlock(hData);
+            _ = GlobalUnlock(hData);
         }
     }
 

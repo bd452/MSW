@@ -13,10 +13,7 @@ public sealed class ProgramLauncherTests : IDisposable
         _launcher = new ProgramLauncher(_logger);
     }
 
-    public void Dispose()
-    {
-        _launcher.Dispose();
-    }
+    public void Dispose() => _launcher.Dispose();
 
     [Fact]
     public async Task LaunchAsync_WithEmptyPath_ReturnsInvalidExecutableError()
@@ -217,7 +214,7 @@ public sealed class ProgramLauncherTests : IDisposable
             arguments: ["/c", "timeout", "/t", "2"]);
 
         Assert.True(result.Success);
-        Assert.NotNull(result.ProcessId);
+        _ = Assert.NotNull(result.ProcessId);
 
         var tracked = _launcher.GetTrackedProcesses();
         Assert.Contains(tracked, p => p.ProcessId == result.ProcessId);

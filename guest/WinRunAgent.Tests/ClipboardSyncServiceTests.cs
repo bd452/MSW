@@ -18,10 +18,7 @@ public sealed class ClipboardSyncServiceTests : IDisposable
         });
     }
 
-    public void Dispose()
-    {
-        _service.Dispose();
-    }
+    public void Dispose() => _service.Dispose();
 
     [Fact]
     public void SetClipboard_IgnoresStaleData()

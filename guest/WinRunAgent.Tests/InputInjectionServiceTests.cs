@@ -25,8 +25,9 @@ public sealed class InputInjectionServiceTests
             Y = 200
         };
 
+
         // On non-Windows, this will fail but should not throw
-        var result = _service.InjectMouse(input);
+        _ = _service.InjectMouse(input);
 
         // On non-Windows, the P/Invoke will fail
         // Just verify no exception and logging occurred

@@ -56,8 +56,8 @@ public sealed class SessionManagerTests : IDisposable
     [Fact]
     public void GetActiveSessions_ReturnsTrackedSessions()
     {
-        _sessionManager.TrackSession(1234, @"C:\App1.exe");
-        _sessionManager.TrackSession(5678, @"C:\App2.exe");
+        _ = _sessionManager.TrackSession(1234, @"C:\App1.exe");
+        _ = _sessionManager.TrackSession(5678, @"C:\App2.exe");
 
         var sessions = _sessionManager.GetActiveSessions();
 
@@ -75,7 +75,7 @@ public sealed class SessionManagerTests : IDisposable
     [Fact]
     public void GetSession_ReturnsSessionForKnownProcess()
     {
-        _sessionManager.TrackSession(1234, @"C:\App.exe");
+        _ = _sessionManager.TrackSession(1234, @"C:\App.exe");
 
         var session = _sessionManager.GetSession(1234);
 
@@ -86,7 +86,7 @@ public sealed class SessionManagerTests : IDisposable
     [Fact]
     public void MarkSessionExited_ChangesState()
     {
-        _sessionManager.TrackSession(1234, @"C:\App.exe");
+        _ = _sessionManager.TrackSession(1234, @"C:\App.exe");
 
         _sessionManager.MarkSessionExited(1234);
 
@@ -133,7 +133,7 @@ public sealed class SessionManagerTests : IDisposable
     [Fact]
     public void GetSessionForWindow_ReturnsCorrectSession()
     {
-        _sessionManager.TrackSession(1234, @"C:\App.exe");
+        _ = _sessionManager.TrackSession(1234, @"C:\App.exe");
         _sessionManager.AssociateWindow(100UL, 1234);
 
         var session = _sessionManager.GetSessionForWindow(100UL);
@@ -153,7 +153,7 @@ public sealed class SessionManagerTests : IDisposable
     [Fact]
     public void GenerateHeartbeat_ReturnsValidMessage()
     {
-        _sessionManager.TrackSession(1234, @"C:\App.exe");
+        _ = _sessionManager.TrackSession(1234, @"C:\App.exe");
         _sessionManager.AssociateWindow(100UL, 1234);
 
         var heartbeat = _sessionManager.GenerateHeartbeat();

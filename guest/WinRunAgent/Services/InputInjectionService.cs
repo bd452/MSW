@@ -89,9 +89,9 @@ public sealed partial class InputInjectionService
                 // Try alternative method
                 var threadId = GetWindowThreadProcessId(hwnd, out _);
                 var currentThreadId = GetCurrentThreadId();
-                AttachThreadInput(currentThreadId, threadId, true);
-                SetForegroundWindow(hwnd);
-                AttachThreadInput(currentThreadId, threadId, false);
+                _ = AttachThreadInput(currentThreadId, threadId, true);
+                _ = SetForegroundWindow(hwnd);
+                _ = AttachThreadInput(currentThreadId, threadId, false);
             }
             return true;
         }
@@ -105,28 +105,24 @@ public sealed partial class InputInjectionService
     private static (int X, int Y) GetAbsoluteCoordinates(ulong windowId, double relativeX, double relativeY)
     {
         var hwnd = (nint)windowId;
-        if (GetWindowRect(hwnd, out var rect))
-        {
-            return (rect.Left + (int)relativeX, rect.Top + (int)relativeY);
-        }
-        return ((int)relativeX, (int)relativeY);
+        return GetWindowRect(hwnd, out var rect) ? ((int X, int Y))(rect.Left + (int)relativeX, rect.Top + (int)relativeY) : ((int X, int Y))((int)relativeX, (int)relativeY);
     }
 
     private static int NormalizeX(int x)
     {
         var screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        return (x * 65535) / screenWidth;
+        return x * 65535 / screenWidth;
     }
 
     private static int NormalizeY(int y)
     {
         var screenHeight = GetSystemMetrics(SM_CYSCREEN);
-        return (y * 65535) / screenHeight;
+        return y * 65535 / screenHeight;
     }
 
     private static uint GetMouseFlags(MouseInputMessage input)
     {
-        uint flags = MOUSEEVENTF_ABSOLUTE;
+        var flags = MOUSEEVENTF_ABSOLUTE;
 
         switch (input.EventType)
         {
@@ -158,6 +154,8 @@ public sealed partial class InputInjectionService
             case MouseEventType.Scroll:
                 flags |= input.ScrollDeltaX != 0 ? MOUSEEVENTF_HWHEEL : MOUSEEVENTF_WHEEL;
                 break;
+            default:
+                break;
         }
 
         return flags;
@@ -172,12 +170,7 @@ public sealed partial class InputInjectionService
             return (uint)(int)(delta * 120);
         }
 
-        if (input.Button is MouseButton.Extra1 or MouseButton.Extra2)
-        {
-            return input.Button == MouseButton.Extra1 ? XBUTTON1 : XBUTTON2;
-        }
-
-        return 0;
+        return input.Button is MouseButton.Extra1 or MouseButton.Extra2 ? input.Button == MouseButton.Extra1 ? XBUTTON1 : XBUTTON2 : 0;
     }
 
     private static uint GetKeyboardFlags(KeyboardInputMessage input)

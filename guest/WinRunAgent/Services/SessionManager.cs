@@ -35,14 +35,11 @@ public sealed class ProgramSession
         State = SessionState.Starting;
     }
 
-    public void RecordActivity()
-    {
-        LastActivityTime = DateTime.UtcNow;
-    }
+    public void RecordActivity() => LastActivityTime = DateTime.UtcNow;
 
     public void AddWindow(ulong windowId)
     {
-        _windowIds.Add(windowId);
+        _ = _windowIds.Add(windowId);
         RecordActivity();
         if (State == SessionState.Starting)
         {
@@ -52,14 +49,11 @@ public sealed class ProgramSession
 
     public void RemoveWindow(ulong windowId)
     {
-        _windowIds.Remove(windowId);
+        _ = _windowIds.Remove(windowId);
         RecordActivity();
     }
 
-    public void MarkIdle()
-    {
-        State = SessionState.Idle;
-    }
+    public void MarkIdle() => State = SessionState.Idle;
 
     public void MarkActive()
     {
@@ -67,10 +61,7 @@ public sealed class ProgramSession
         RecordActivity();
     }
 
-    public void MarkExited()
-    {
-        State = SessionState.Exited;
-    }
+    public void MarkExited() => State = SessionState.Exited;
 }
 
 /// <summary>
@@ -156,12 +147,12 @@ public sealed class SessionManager : IDisposable
         // Subscribe to process exit events from launcher
         foreach (var info in _launcher.GetTrackedProcesses())
         {
-            TrackSession(info.ProcessId, info.ExecutablePath);
+            _ = TrackSession(info.ProcessId, info.ExecutablePath);
         }
 
         // Start timers
-        _heartbeatTimer.Change(HeartbeatInterval, HeartbeatInterval);
-        _idleCheckTimer.Change(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        _ = _heartbeatTimer.Change(HeartbeatInterval, HeartbeatInterval);
+        _ = _idleCheckTimer.Change(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
 
         _logger.Info($"SessionManager started with heartbeat interval {HeartbeatInterval}");
     }
@@ -171,8 +162,8 @@ public sealed class SessionManager : IDisposable
     /// </summary>
     public void Stop()
     {
-        _heartbeatTimer.Change(Timeout.Infinite, Timeout.Infinite);
-        _idleCheckTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        _ = _heartbeatTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        _ = _idleCheckTimer.Change(Timeout.Infinite, Timeout.Infinite);
         _windowTracker.WindowEvent -= OnWindowEvent;
 
         _logger.Info("SessionManager stopped");
@@ -210,13 +201,13 @@ public sealed class SessionManager : IDisposable
             // Clean up window mappings
             foreach (var windowId in session.WindowIds.ToList())
             {
-                _windowToProcess.TryRemove(windowId, out _);
+                _ = _windowToProcess.TryRemove(windowId, out _);
             }
 
             // Remove from active sessions after a delay to allow for late events
             _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(t =>
             {
-                _sessions.TryRemove(processId, out _);
+                _ = _sessions.TryRemove(processId, out _);
             });
         }
     }
@@ -275,30 +266,21 @@ public sealed class SessionManager : IDisposable
     /// <summary>
     /// Gets all active sessions.
     /// </summary>
-    public IReadOnlyCollection<ProgramSession> GetActiveSessions()
-    {
-        return _sessions.Values
+    public IReadOnlyCollection<ProgramSession> GetActiveSessions() => _sessions.Values
             .Where(s => s.State != SessionState.Exited)
             .ToList();
-    }
 
     /// <summary>
     /// Gets a session by process ID.
     /// </summary>
-    public ProgramSession? GetSession(int processId)
-    {
-        return _sessions.TryGetValue(processId, out var session) ? session : null;
-    }
+    public ProgramSession? GetSession(int processId) => _sessions.TryGetValue(processId, out var session) ? session : null;
 
     /// <summary>
     /// Gets the session for a window.
     /// </summary>
-    public ProgramSession? GetSessionForWindow(ulong windowId)
-    {
-        return _windowToProcess.TryGetValue(windowId, out var processId)
+    public ProgramSession? GetSessionForWindow(ulong windowId) => _windowToProcess.TryGetValue(windowId, out var processId)
             ? GetSession(processId)
             : null;
-    }
 
     /// <summary>
     /// Generates a heartbeat message with current metrics.
@@ -384,7 +366,7 @@ public sealed class SessionManager : IDisposable
 
             foreach (var processId in exitedSessionIds)
             {
-                _sessions.TryRemove(processId, out _);
+                _ = _sessions.TryRemove(processId, out _);
             }
         }
         catch (Exception ex)
@@ -420,6 +402,16 @@ public sealed class SessionManager : IDisposable
                     RecordActivity(session.ProcessId);
                 }
                 break;
+            case WindowEventType.Moved:
+                break;
+            case WindowEventType.TitleChanged:
+                break;
+            case WindowEventType.Minimized:
+                break;
+            case WindowEventType.Restored:
+                break;
+            default:
+                break;
         }
     }
 
@@ -450,10 +442,7 @@ public sealed class SessionManager : IDisposable
         }
     }
 
-    private void RaiseSessionStateChanged(ProgramSession session, SessionState previousState, SessionState newState)
-    {
-        SessionStateChanged?.Invoke(this, new SessionStateChangedEventArgs(session, previousState, newState));
-    }
+    private void RaiseSessionStateChanged(ProgramSession session, SessionState previousState, SessionState newState) => SessionStateChanged?.Invoke(this, new SessionStateChangedEventArgs(session, previousState, newState));
 
     public void Dispose()
     {
