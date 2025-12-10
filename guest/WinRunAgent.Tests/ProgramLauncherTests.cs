@@ -319,17 +319,5 @@ public sealed class ProgramLauncherTests : IDisposable
         // Note: This is a best-effort test as timing can vary
     }
 
-    private sealed class TestLogger : IAgentLogger
-    {
-        public List<string> DebugMessages { get; } = [];
-        public List<string> InfoMessages { get; } = [];
-        public List<string> WarnMessages { get; } = [];
-        public List<string> ErrorMessages { get; } = [];
-
-        public void Debug(string message) => DebugMessages.Add(message);
-        public void Info(string message) => InfoMessages.Add(message);
-        public void Warn(string message) => WarnMessages.Add(message);
-        public void Error(string message) => ErrorMessages.Add(message);
-    }
 }
 
