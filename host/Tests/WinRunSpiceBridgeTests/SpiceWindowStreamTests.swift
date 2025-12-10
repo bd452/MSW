@@ -1,7 +1,8 @@
-import XCTest
 import CoreGraphics
-@testable import WinRunSpiceBridge
+import XCTest
+
 @testable import WinRunShared
+@testable import WinRunSpiceBridge
 
 // MARK: - Test Transport
 
@@ -52,7 +53,8 @@ final class TestSpiceStreamTransport: SpiceStreamTransport {
             // For testing async behavior
             Thread.sleep(forTimeInterval: interval)
             openBehavior = thenBehavior
-            return try openStream(configuration: configuration, windowID: windowID, callbacks: callbacks)
+            return try openStream(
+                configuration: configuration, windowID: windowID, callbacks: callbacks)
         }
     }
 
@@ -280,10 +282,11 @@ final class SpiceWindowStreamTests: XCTestCase {
 
     func testConnectionFailureTriggersReconnect() {
         transport.openBehavior = .fail(.connectionFailed("Test error"))
-        stream = makeStream(reconnectPolicy: ReconnectPolicy(
-            initialDelay: 0.05,
-            maxAttempts: 2
-        ))
+        stream = makeStream(
+            reconnectPolicy: ReconnectPolicy(
+                initialDelay: 0.05,
+                maxAttempts: 2
+            ))
 
         stream.connect(toWindowID: 1)
 
@@ -501,7 +504,7 @@ final class SpiceWindowStreamTests: XCTestCase {
 
         let clipboard = ClipboardData(
             format: .plainText,
-            data: "Hello".data(using: .utf8)!,
+            data: Data("Hello".utf8),
             sequenceNumber: 1
         )
 
@@ -604,7 +607,7 @@ final class SpiceWindowStreamTests: XCTestCase {
 
         let clipboard = ClipboardData(
             format: .plainText,
-            data: "From Windows".data(using: .utf8)!,
+            data: Data("From Windows".utf8),
             sequenceNumber: 5
         )
         transport.simulateClipboard(clipboard)
@@ -708,7 +711,8 @@ final class SpiceWindowStreamTests: XCTestCase {
             SpiceConnectionState.reconnecting(attempt: 3, maxAttempts: nil).description,
             "Reconnecting (attempt 3)..."
         )
-        XCTAssertTrue(SpiceConnectionState.failed(reason: "timeout").description.contains("timeout"))
+        XCTAssertTrue(
+            SpiceConnectionState.failed(reason: "timeout").description.contains("timeout"))
     }
 
     func testConnectionStateIsConnected() {
@@ -847,7 +851,10 @@ final class WindowMetadataTests: XCTestCase {
 
 /// A logger that discards all messages (for use in tests).
 private struct NullLogger: Logger {
-    func log(level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String, line: UInt) {
+    func log(
+        level: LogLevel, message: String, metadata: LogMetadata?, file: String, function: String,
+        line: UInt
+    ) {
         // Intentionally empty - discard all log messages
     }
 }

@@ -10,12 +10,12 @@ excluded:
 
 # Rules configuration
 disabled_rules:
-  - trailing_comma  # Allow trailing commas for easier diffs
-  - identifier_name  # Allow short names like `x`, `y` for coordinates
-  - todo  # TODOs are fine in development
-  - force_unwrapping  # Too noisy, especially in tests
-  - implicitly_unwrapped_optional  # Common pattern in test setup
-  - function_parameter_count  # Sometimes needed for complex APIs
+  - trailing_comma # Allow trailing commas for easier diffs
+  - identifier_name # Allow short names like `x`, `y` for coordinates
+  - todo # TODOs are fine in development
+  - force_unwrapping # Too noisy, especially in tests
+  - implicitly_unwrapped_optional # Common pattern in test setup
+  - function_parameter_count # Sometimes needed for complex APIs
 
 opt_in_rules:
   - closure_spacing
@@ -82,7 +82,6 @@ nesting:
 # Force cast severity (still warn, but not opted-in as error)
 force_cast:
   severity: warning
-
 # Note: print() is allowed because:
 # - CLI tools legitimately use print() for user output
 # - Logging module uses print() internally

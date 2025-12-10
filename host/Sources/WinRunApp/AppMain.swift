@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 import WinRunShared
 import WinRunXPC
 
@@ -38,17 +38,29 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
 
-        appMenu.addItem(NSMenuItem(title: "About WinRun", action: #selector(showAbout), keyEquivalent: ""))
+        appMenu.addItem(
+            NSMenuItem(title: "About WinRun", action: #selector(showAbout), keyEquivalent: ""))
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(NSMenuItem(title: "Hide WinRun", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        appMenu.addItem(
+            NSMenuItem(
+                title: "Hide WinRun", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        )
 
-        let hideOthersItem = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        let hideOthersItem = NSMenuItem(
+            title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h")
         hideOthersItem.keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(hideOthersItem)
 
-        appMenu.addItem(NSMenuItem(title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
+        appMenu.addItem(
+            NSMenuItem(
+                title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)),
+                keyEquivalent: ""))
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit WinRun", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(
+            NSMenuItem(
+                title: "Quit WinRun", action: #selector(NSApplication.terminate(_:)),
+                keyEquivalent: "q"))
 
         // File Menu
         let fileMenuItem = NSMenuItem()
@@ -57,7 +69,10 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         let fileMenu = NSMenu(title: "File")
         fileMenuItem.submenu = fileMenu
 
-        fileMenu.addItem(NSMenuItem(title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        fileMenu.addItem(
+            NSMenuItem(
+                title: "Close Window", action: #selector(NSWindow.performClose(_:)),
+                keyEquivalent: "w"))
 
         // Edit Menu (with clipboard integration)
         let editMenuItem = NSMenuItem()
@@ -69,10 +84,15 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
         editMenu.addItem(NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z"))
         editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
-        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
-        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
-        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenu.addItem(
+            NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(
+            NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(
+            NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(
+            NSMenuItem(
+                title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
 
         // Window Menu
         let windowMenuItem = NSMenuItem()
@@ -81,10 +101,18 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         let windowMenu = NSMenu(title: "Window")
         windowMenuItem.submenu = windowMenu
 
-        windowMenu.addItem(NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
-        windowMenu.addItem(NSMenuItem(title: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        windowMenu.addItem(
+            NSMenuItem(
+                title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)),
+                keyEquivalent: "m"))
+        windowMenu.addItem(
+            NSMenuItem(
+                title: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
         windowMenu.addItem(NSMenuItem.separator())
-        windowMenu.addItem(NSMenuItem(title: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
+        windowMenu.addItem(
+            NSMenuItem(
+                title: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)),
+                keyEquivalent: ""))
 
         // Help Menu
         let helpMenuItem = NSMenuItem()
@@ -93,7 +121,8 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         let helpMenu = NSMenu(title: "Help")
         helpMenuItem.submenu = helpMenu
 
-        helpMenu.addItem(NSMenuItem(title: "WinRun Help", action: #selector(showHelp), keyEquivalent: "?"))
+        helpMenu.addItem(
+            NSMenuItem(title: "WinRun Help", action: #selector(showHelp), keyEquivalent: "?"))
 
         NSApplication.shared.mainMenu = mainMenu
         NSApplication.shared.windowsMenu = windowMenu
