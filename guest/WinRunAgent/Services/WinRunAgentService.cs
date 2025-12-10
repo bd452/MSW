@@ -230,13 +230,9 @@ public sealed class WinRunAgentService : IDisposable
 
         if (result.IsSuccess)
         {
-            var iconMessage = new IconDataMessage
-            {
-                ExecutablePath = iconRequest.ExecutablePath,
-                Width = result.Width,
-                Height = result.Height,
-                PngData = result.PngData
-            };
+            var iconMessage = SpiceMessageSerializer.CreateIconMessage(
+                iconRequest.ExecutablePath,
+                result);
             await SendMessageAsync(iconMessage);
             await SendAckAsync(iconRequest.MessageId, success: true);
         }

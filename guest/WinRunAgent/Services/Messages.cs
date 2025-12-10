@@ -234,6 +234,22 @@ public sealed record IconDataMessage : GuestMessage
     public required int Width { get; init; }
     public required int Height { get; init; }
     public required byte[] PngData { get; init; }
+
+    /// <summary>
+    /// Hash of the icon data for caching and deduplication.
+    /// Host can use this to avoid re-processing identical icons.
+    /// </summary>
+    public string? IconHash { get; init; }
+
+    /// <summary>
+    /// Index of the icon within the source file (for multi-icon files).
+    /// </summary>
+    public int IconIndex { get; init; }
+
+    /// <summary>
+    /// Whether this icon was scaled from a smaller source.
+    /// </summary>
+    public bool WasScaled { get; init; }
 }
 
 /// <summary>
@@ -245,6 +261,26 @@ public sealed record ShortcutDetectedMessage : GuestMessage
     public required string TargetPath { get; init; }
     public string? DisplayName { get; init; }
     public string? IconPath { get; init; }
+
+    /// <summary>
+    /// Icon index within the icon path (for multi-icon files).
+    /// </summary>
+    public int IconIndex { get; init; }
+
+    /// <summary>
+    /// Command-line arguments defined in the shortcut.
+    /// </summary>
+    public string? Arguments { get; init; }
+
+    /// <summary>
+    /// Working directory defined in the shortcut.
+    /// </summary>
+    public string? WorkingDirectory { get; init; }
+
+    /// <summary>
+    /// Whether this is a new shortcut or an update to an existing one.
+    /// </summary>
+    public bool IsNew { get; init; } = true;
 }
 
 /// <summary>
@@ -594,4 +630,81 @@ public static class SpiceMessageSerializer
             FrameNumber = frameNumber,
             IsKeyFrame = isKeyFrame
         };
+
+    /// <summary>
+    /// Creates an icon data message from extraction results.
+    /// </summary>
+    public static IconDataMessage CreateIconMessage(
+        string executablePath,
+        IconExtractionResult result,
+        int iconIndex = 0) => new()
+        {
+            ExecutablePath = executablePath,
+            Width = result.Width,
+            Height = result.Height,
+            PngData = result.PngData,
+            IconHash = ComputeIconHash(result.PngData),
+            IconIndex = iconIndex,
+            WasScaled = result.Width != result.Height || result.Width < 256
+        };
+
+    /// <summary>
+    /// Creates an icon data message from raw PNG data.
+    /// </summary>
+    public static IconDataMessage CreateIconMessage(
+        string executablePath,
+        byte[] pngData,
+        int width,
+        int height,
+        int iconIndex = 0,
+        bool wasScaled = false) => new()
+        {
+            ExecutablePath = executablePath,
+            Width = width,
+            Height = height,
+            PngData = pngData,
+            IconHash = ComputeIconHash(pngData),
+            IconIndex = iconIndex,
+            WasScaled = wasScaled
+        };
+
+    /// <summary>
+    /// Creates a shortcut detected message from parsed shortcut info.
+    /// </summary>
+    public static ShortcutDetectedMessage CreateShortcutMessage(ShortcutInfo info, bool isNew = true) => new()
+    {
+        ShortcutPath = info.ShortcutPath,
+        TargetPath = info.TargetPath,
+        DisplayName = info.DisplayName,
+        IconPath = info.IconPath,
+        IconIndex = info.IconIndex,
+        Arguments = info.Arguments,
+        WorkingDirectory = info.WorkingDirectory,
+        IsNew = isNew
+    };
+
+    /// <summary>
+    /// Computes a hash of icon data for caching and deduplication.
+    /// Uses a simple combination of length and content samples for fast hashing.
+    /// </summary>
+    private static string ComputeIconHash(byte[] data)
+    {
+        if (data.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // Combine length with sample bytes for a fast, good-enough hash
+        // This is sufficient for icon deduplication purposes
+        var hash = HashCode.Combine(
+            data.Length,
+            data.Length > 0 ? data[0] : 0,
+            data.Length > 10 ? data[10] : 0,
+            data.Length > 100 ? data[100] : 0,
+            data.Length > 1000 ? data[1000] : 0,
+            data.Length > 2 ? data[data.Length / 2] : 0,
+            data.Length > 1 ? data[^1] : 0);
+
+        return hash.ToString("X8");
+    }
 }

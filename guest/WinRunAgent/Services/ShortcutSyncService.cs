@@ -316,14 +316,8 @@ public sealed class ShortcutSyncService : IDisposable
 
         _logger.Debug($"Detected shortcut: {info.DisplayName} -> {info.TargetPath}");
 
-        // Create notification message
-        var message = new ShortcutDetectedMessage
-        {
-            ShortcutPath = info.ShortcutPath,
-            TargetPath = info.TargetPath,
-            DisplayName = info.DisplayName,
-            IconPath = info.IconPath
-        };
+        // Create notification message with full shortcut info
+        var message = SpiceMessageSerializer.CreateShortcutMessage(info, isNew: isNewShortcut);
 
         try
         {
