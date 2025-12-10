@@ -11,6 +11,8 @@ public sealed class WinRunAgentService : IDisposable
     private readonly WindowTracker _windowTracker;
     private readonly ProgramLauncher _launcher;
     private readonly IconExtractionService _iconService;
+    private readonly InputInjectionService _inputService;
+    private readonly ClipboardSyncService _clipboardService;
     private readonly SessionManager _sessionManager;
     private readonly Channel<HostMessage> _inboundChannel;
     private readonly Channel<GuestMessage> _outboundChannel;
@@ -21,6 +23,8 @@ public sealed class WinRunAgentService : IDisposable
         WindowTracker windowTracker,
         ProgramLauncher launcher,
         IconExtractionService iconService,
+        InputInjectionService inputService,
+        ClipboardSyncService clipboardService,
         Channel<HostMessage> inboundChannel,
         Channel<GuestMessage> outboundChannel,
         IAgentLogger logger)
@@ -28,6 +32,8 @@ public sealed class WinRunAgentService : IDisposable
         _windowTracker = windowTracker;
         _launcher = launcher;
         _iconService = iconService;
+        _inputService = inputService;
+        _clipboardService = clipboardService;
         _inboundChannel = inboundChannel;
         _outboundChannel = outboundChannel;
         _logger = logger;
@@ -40,10 +46,13 @@ public sealed class WinRunAgentService : IDisposable
 
         // Subscribe to session state changes
         _sessionManager.SessionStateChanged += OnSessionStateChanged;
+
+        // Subscribe to clipboard changes
+        _clipboardService.ClipboardChanged += OnClipboardChanged;
     }
 
     /// <summary>
-    /// Backward compatibility constructor without outbound channel.
+    /// Backward compatibility constructor without outbound channel and optional services.
     /// </summary>
     public WinRunAgentService(
         WindowTracker windowTracker,
@@ -51,8 +60,15 @@ public sealed class WinRunAgentService : IDisposable
         IconExtractionService iconService,
         Channel<HostMessage> inboundChannel,
         IAgentLogger logger)
-        : this(windowTracker, launcher, iconService, inboundChannel,
-               Channel.CreateUnbounded<GuestMessage>(), logger)
+        : this(
+            windowTracker,
+            launcher,
+            iconService,
+            new InputInjectionService(logger),
+            new ClipboardSyncService(logger),
+            inboundChannel,
+            Channel.CreateUnbounded<GuestMessage>(),
+            logger)
     {
     }
 
@@ -224,8 +240,11 @@ public sealed class WinRunAgentService : IDisposable
             _sessionManager.RecordActivity(session.ProcessId);
         }
 
-        // TODO: Inject mouse input to Windows (SendInput)
-        _logger.Debug($"Mouse {mouseInput.EventType} at ({mouseInput.X}, {mouseInput.Y}) for window {mouseInput.WindowId}");
+        // Focus window and inject mouse input
+        _inputService.FocusWindow(mouseInput.WindowId);
+        var success = _inputService.InjectMouse(mouseInput);
+
+        _logger.Debug($"Mouse {mouseInput.EventType} at ({mouseInput.X}, {mouseInput.Y}) for window {mouseInput.WindowId}: {(success ? "OK" : "FAILED")}");
     }
 
     private void HandleKeyboardInput(KeyboardInputMessage keyboardInput)
@@ -237,14 +256,17 @@ public sealed class WinRunAgentService : IDisposable
             _sessionManager.RecordActivity(session.ProcessId);
         }
 
-        // TODO: Inject keyboard input to Windows (SendInput)
-        _logger.Debug($"Keyboard {keyboardInput.EventType} key {keyboardInput.KeyCode} for window {keyboardInput.WindowId}");
+        // Focus window and inject keyboard input
+        _inputService.FocusWindow(keyboardInput.WindowId);
+        var success = _inputService.InjectKeyboard(keyboardInput);
+
+        _logger.Debug($"Keyboard {keyboardInput.EventType} key {keyboardInput.KeyCode} for window {keyboardInput.WindowId}: {(success ? "OK" : "FAILED")}");
     }
 
     private void HandleClipboardData(HostClipboardMessage clipboardData)
     {
-        // TODO: Set Windows clipboard
-        _logger.Debug($"Clipboard data received: {clipboardData.Format}, {clipboardData.Data.Length} bytes");
+        var success = _clipboardService.SetClipboard(clipboardData);
+        _logger.Debug($"Clipboard data received: {clipboardData.Format}, {clipboardData.Data.Length} bytes: {(success ? "OK" : "FAILED")}");
     }
 
     private void HandleDragDrop(DragDropMessage dragDrop)
@@ -256,8 +278,9 @@ public sealed class WinRunAgentService : IDisposable
             _sessionManager.RecordActivity(session.ProcessId);
         }
 
-        // TODO: Handle drag/drop operations
-        _logger.Debug($"DragDrop {dragDrop.EventType} for window {dragDrop.WindowId}");
+        // TODO: Full drag/drop implementation requires Windows OLE drag-drop APIs
+        // For now, log the event
+        _logger.Debug($"DragDrop {dragDrop.EventType} for window {dragDrop.WindowId}, {dragDrop.Files.Length} files");
     }
 
     private async Task SendCapabilityAnnouncementAsync()
@@ -312,6 +335,11 @@ public sealed class WinRunAgentService : IDisposable
         _logger.Info($"Session {e.Session.ProcessId} state: {e.PreviousState} -> {e.NewState}");
     }
 
+    private void OnClipboardChanged(object? sender, GuestClipboardMessage e)
+    {
+        _logger.Debug($"Guest clipboard changed: {e.Format}, {e.Data.Length} bytes");
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -320,6 +348,7 @@ public sealed class WinRunAgentService : IDisposable
         }
 
         _sessionManager.Dispose();
+        _clipboardService.Dispose();
         _launcher.Dispose();
         _windowTracker.Dispose();
         _disposed = true;

@@ -33,10 +33,10 @@
     - [X] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
     - [X] Report capability flags + DPI info to host { guest/WinRunAgent/Services/Messages.cs, guest/WinRunAgent/Services/SystemInfoService.cs } <docs/decisions/protocols.md>
-  - [ ] Program launch + session management { guest/WinRunAgent/Services/ProgramLauncher.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+  - [X] Program launch + session management { guest/WinRunAgent/Services/ProgramLauncher.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
     - [X] Launch Windows processes with arguments/env/working dirs { guest/WinRunAgent/Services/ProgramLauncher.cs } <docs/decisions/protocols.md>
     - [X] Track active sessions, heartbeats, and idle timeouts { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
-    - [ ] Expose control-channel handlers for host commands { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
+    - [X] Expose control-channel handlers for host commands { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
   - [ ] Icon extraction + shortcut sync { guest/WinRunAgent/Services/IconExtractionService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [ ] Extract & cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs } <docs/decisions/protocols.md>
     - [ ] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
