@@ -539,9 +539,11 @@ public static class SpiceMessageSerializer
             SpiceMessageType.ShortcutDetected => throw new NotImplementedException(),
             SpiceMessageType.ClipboardChanged => throw new NotImplementedException(),
             SpiceMessageType.Heartbeat => throw new NotImplementedException(),
+            SpiceMessageType.TelemetryReport => throw new NotImplementedException(),
             SpiceMessageType.Error => throw new NotImplementedException(),
             SpiceMessageType.Ack => throw new NotImplementedException(),
-            SpiceMessageType.TelemetryReport => throw new NotImplementedException(),
+            // Guest-to-host message types (0x80-0xFF) are not deserialized here
+            // Unknown or invalid message types return null
             _ => null
         };
     }

@@ -444,7 +444,7 @@ public sealed class ProgramLauncherTests : IDisposable
         var result = await _launcher.LaunchAsync(
             path,
             arguments: ["/c", "echo", "test"],
-            environment: new Dictionary<string, string>());
+            environment: []);
 
         Assert.True(result.Success);
     }

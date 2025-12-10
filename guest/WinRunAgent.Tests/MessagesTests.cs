@@ -590,8 +590,8 @@ public sealed class MessagesTests
             EventType = DragDropEventType.Drop,
             X = 150.0,
             Y = 250.0,
-            Files = new[]
-            {
+            Files =
+            [
                 new DraggedFileInfo
                 {
                     HostPath = "/Users/test/file.txt",
@@ -599,8 +599,8 @@ public sealed class MessagesTests
                     FileSize = 1024,
                     IsDirectory = false
                 }
-            },
-            AllowedOperations = new[] { DragOperation.Copy, DragOperation.Move },
+            ],
+            AllowedOperations = [DragOperation.Copy, DragOperation.Move],
             SelectedOperation = DragOperation.Copy
         };
 
@@ -614,7 +614,7 @@ public sealed class MessagesTests
         Assert.Equal(DragDropEventType.Drop, msg.EventType);
         Assert.Equal(150.0, msg.X);
         Assert.Equal(250.0, msg.Y);
-        Assert.Single(msg.Files);
+        _ = Assert.Single(msg.Files);
         Assert.Equal(2, msg.AllowedOperations.Length);
         Assert.Equal(DragOperation.Copy, msg.SelectedOperation);
     }
@@ -796,8 +796,8 @@ public sealed class MessagesTests
         var consumed = SpiceMessageSerializer.TryReadMessage(bytes, out var message);
 
         Assert.Equal(bytes.Length, consumed);
-        Assert.NotNull(message);
-        Assert.IsType<LaunchProgramMessage>(message);
+        _ = Assert.NotNull(message);
+        _ = Assert.IsType<LaunchProgramMessage>(message);
     }
 
     [Fact]
