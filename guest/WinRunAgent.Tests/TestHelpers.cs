@@ -11,12 +11,12 @@ public sealed class TestLogger : IAgentLogger
     public List<LogEntry> Entries { get; } = [];
 
     /// <summary>All messages (for backward compatibility).</summary>
-    public List<string> Messages => Entries.Select(e => e.Message).ToList();
+    public List<string> Messages => [.. Entries.Select(e => e.Message)];
 
-    public List<string> DebugMessages => Entries.Where(e => e.Level == LogLevel.Debug).Select(e => e.Message).ToList();
-    public List<string> InfoMessages => Entries.Where(e => e.Level == LogLevel.Info).Select(e => e.Message).ToList();
-    public List<string> WarnMessages => Entries.Where(e => e.Level == LogLevel.Warn).Select(e => e.Message).ToList();
-    public List<string> ErrorMessages => Entries.Where(e => e.Level == LogLevel.Error).Select(e => e.Message).ToList();
+    public List<string> DebugMessages => [.. Entries.Where(e => e.Level == LogLevel.Debug).Select(e => e.Message)];
+    public List<string> InfoMessages => [.. Entries.Where(e => e.Level == LogLevel.Info).Select(e => e.Message)];
+    public List<string> WarnMessages => [.. Entries.Where(e => e.Level == LogLevel.Warn).Select(e => e.Message)];
+    public List<string> ErrorMessages => [.. Entries.Where(e => e.Level == LogLevel.Error).Select(e => e.Message)];
 
     public LogLevel MinimumLevel { get; set; } = LogLevel.Debug;
 

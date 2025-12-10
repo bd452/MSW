@@ -495,7 +495,7 @@ public sealed class CompositeLogger : IAgentLogger
 
     public CompositeLogger(IEnumerable<IAgentLogger> loggers)
     {
-        _loggers = loggers.ToArray();
+        _loggers = [.. loggers];
     }
 
     public LogLevel MinimumLevel
