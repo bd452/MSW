@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace WinRun.Agent.Services;
 
@@ -337,6 +338,13 @@ public sealed class SpiceChannelTelemetry : IDisposable
                 }
 
                 return true;
+            }
+            catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // TaskCanceledException is thrown by WriteAsync when token is cancelled
+                // Convert to OperationCanceledException for consistency
+                _logger.Debug($"Send cancelled for {messageTypeName}");
+                throw new OperationCanceledException("Send operation was cancelled", cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

@@ -406,7 +406,9 @@ public sealed class SpiceChannelTelemetryTests : IDisposable
 
         await telemetry.ReportTelemetryAsync();
 
-        Assert.True(outbound.Reader.TryRead(out var message));
+        // Wait for message with timeout
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var message = await outbound.Reader.ReadAsync(cts.Token);
         var report = Assert.IsType<TelemetryReportMessage>(message);
         Assert.True(report.UptimeMs > 0);
         Assert.Equal(1, report.MessageProcessingErrors);
