@@ -49,9 +49,9 @@
     - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
 - [ ] Cross-Cutting & Operations { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, README.md } <docs/decisions/operations.md, docs/development.md>
-  - [ ] Host/guest protocol contracts { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-    - [ ] Define Spice payload schemas + version negotiation { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-    - [ ] Document channel capabilities + security expectations { docs/architecture.md, docs/decisions/protocols.md }
+  - [X] Host/guest protocol contracts { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
+    - [X] Define Spice payload schemas + version negotiation { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
+    - [X] Document channel capabilities + security expectations { docs/architecture.md, docs/decisions/protocols.md }
   - [ ] Build + packaging automation { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, new:scripts/package-host.sh, new:scripts/package-guest.ps1 } <docs/decisions/operations.md>
     - [ ] Add macOS pkg build step hooking pkgbuild/productbuild { scripts/build-all.sh, new:scripts/package-host.sh } <docs/decisions/operations.md>
     - [ ] Add Windows MSI/installer packaging { scripts/build-all.sh, new:scripts/package-guest.ps1 } <docs/decisions/operations.md>
