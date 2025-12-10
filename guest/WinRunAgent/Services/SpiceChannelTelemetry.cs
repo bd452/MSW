@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace WinRun.Agent.Services;
 

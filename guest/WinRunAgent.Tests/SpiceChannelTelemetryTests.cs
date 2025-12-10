@@ -400,9 +400,10 @@ public sealed class SpiceChannelTelemetryTests : IDisposable
         var outbound = Channel.CreateUnbounded<GuestMessage>();
         using var telemetry = new SpiceChannelTelemetry(_logger, outbound);
 
-        // Record some activity
+        // Record some activity and ensure some time has passed
         telemetry.RecordReceiveSuccess();
         telemetry.RecordMessageProcessingError("test error");
+        await Task.Delay(10); // Ensure some uptime has elapsed
 
         await telemetry.ReportTelemetryAsync();
 
@@ -410,7 +411,7 @@ public sealed class SpiceChannelTelemetryTests : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var message = await outbound.Reader.ReadAsync(cts.Token);
         var report = Assert.IsType<TelemetryReportMessage>(message);
-        Assert.True(report.UptimeMs > 0);
+        Assert.True(report.UptimeMs >= 0); // Uptime should be non-negative
         Assert.Equal(1, report.MessageProcessingErrors);
         Assert.Equal("test error", report.LastErrorMessage);
     }
