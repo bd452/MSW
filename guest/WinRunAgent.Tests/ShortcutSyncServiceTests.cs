@@ -213,14 +213,5 @@ public sealed class ShortcutSyncServiceTests : IDisposable
         Assert.True(message.Timestamp > 0);
     }
 
-    private sealed class TestLogger : IAgentLogger
-    {
-        public List<string> Messages { get; } = [];
-
-        public void Debug(string message) => Messages.Add($"[DEBUG] {message}");
-        public void Info(string message) => Messages.Add($"[INFO] {message}");
-        public void Warn(string message) => Messages.Add($"[WARN] {message}");
-        public void Error(string message) => Messages.Add($"[ERROR] {message}");
-    }
 }
 

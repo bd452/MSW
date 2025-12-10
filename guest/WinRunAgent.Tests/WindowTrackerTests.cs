@@ -137,16 +137,4 @@ public sealed class WindowTrackerTests
         Assert.Contains(WindowEventType.Updated, eventTypes);
     }
 
-    private sealed class TestLogger : IAgentLogger
-    {
-        public List<string> DebugMessages { get; } = [];
-        public List<string> InfoMessages { get; } = [];
-        public List<string> WarnMessages { get; } = [];
-        public List<string> ErrorMessages { get; } = [];
-
-        public void Debug(string message) => DebugMessages.Add(message);
-        public void Info(string message) => InfoMessages.Add(message);
-        public void Warn(string message) => WarnMessages.Add(message);
-        public void Error(string message) => ErrorMessages.Add(message);
-    }
 }

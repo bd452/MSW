@@ -184,14 +184,5 @@ public sealed class InputInjectionServiceTests
         // Verify no exception thrown
     }
 
-    private sealed class TestLogger : IAgentLogger
-    {
-        public List<string> Messages { get; } = [];
-
-        public void Debug(string message) => Messages.Add(message);
-        public void Info(string message) => Messages.Add(message);
-        public void Warn(string message) => Messages.Add(message);
-        public void Error(string message) => Messages.Add(message);
-    }
 }
 
