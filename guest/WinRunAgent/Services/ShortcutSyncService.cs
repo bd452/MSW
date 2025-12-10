@@ -9,7 +9,6 @@ namespace WinRun.Agent.Services;
 public sealed class ShortcutSyncService : IDisposable
 {
     private readonly IAgentLogger _logger;
-    private readonly IconExtractionService _iconService;
     private readonly Action<ShortcutDetectedMessage> _onShortcutDetected;
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly HashSet<string> _knownShortcuts = new(StringComparer.OrdinalIgnoreCase);
@@ -36,9 +35,14 @@ public sealed class ShortcutSyncService : IDisposable
         Action<ShortcutDetectedMessage> onShortcutDetected)
     {
         _logger = logger;
-        _iconService = iconService;
+        IconService = iconService;
         _onShortcutDetected = onShortcutDetected;
     }
+
+    /// <summary>
+    /// Gets the icon extraction service for proactive icon fetching.
+    /// </summary>
+    public IconExtractionService IconService { get; }
 
     /// <summary>
     /// Gets the list of known shortcut paths.

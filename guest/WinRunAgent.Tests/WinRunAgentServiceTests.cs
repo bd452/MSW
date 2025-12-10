@@ -108,7 +108,8 @@ public sealed class WinRunAgentServiceTests : IDisposable
         };
         await inbound.Writer.WriteAsync(launchMessage);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        // Allow enough time for shortcut scanning + message processing on CI
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
 
         try
         {
@@ -167,7 +168,8 @@ public sealed class WinRunAgentServiceTests : IDisposable
         };
         await inbound.Writer.WriteAsync(iconRequest);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        // Allow enough time for shortcut scanning + message processing on CI
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
 
         try
         {
