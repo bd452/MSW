@@ -30,11 +30,22 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
 
     private func setupMenuBar() {
         let mainMenu = NSMenu()
+        let windowMenu = createWindowMenu()
+        let helpMenu = createHelpMenu()
 
-        // Application Menu
+        mainMenu.addItem(createAppMenuItem())
+        mainMenu.addItem(createFileMenuItem())
+        mainMenu.addItem(createEditMenuItem())
+        mainMenu.addItem(createWindowMenuItem(windowMenu: windowMenu))
+        mainMenu.addItem(createHelpMenuItem(helpMenu: helpMenu))
+
+        NSApplication.shared.mainMenu = mainMenu
+        NSApplication.shared.windowsMenu = windowMenu
+        NSApplication.shared.helpMenu = helpMenu
+    }
+
+    private func createAppMenuItem() -> NSMenuItem {
         let appMenuItem = NSMenuItem()
-        mainMenu.addItem(appMenuItem)
-
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
 
@@ -47,8 +58,10 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         )
 
         let hideOthersItem = NSMenuItem(
-            title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)),
-            keyEquivalent: "h")
+            title: "Hide Others",
+            action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h"
+        )
         hideOthersItem.keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(hideOthersItem)
 
@@ -62,10 +75,11 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
                 title: "Quit WinRun", action: #selector(NSApplication.terminate(_:)),
                 keyEquivalent: "q"))
 
-        // File Menu
-        let fileMenuItem = NSMenuItem()
-        mainMenu.addItem(fileMenuItem)
+        return appMenuItem
+    }
 
+    private func createFileMenuItem() -> NSMenuItem {
+        let fileMenuItem = NSMenuItem()
         let fileMenu = NSMenu(title: "File")
         fileMenuItem.submenu = fileMenu
 
@@ -74,10 +88,11 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
                 title: "Close Window", action: #selector(NSWindow.performClose(_:)),
                 keyEquivalent: "w"))
 
-        // Edit Menu (with clipboard integration)
-        let editMenuItem = NSMenuItem()
-        mainMenu.addItem(editMenuItem)
+        return fileMenuItem
+    }
 
+    private func createEditMenuItem() -> NSMenuItem {
+        let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
         editMenuItem.submenu = editMenu
 
@@ -94,12 +109,11 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
             NSMenuItem(
                 title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
 
-        // Window Menu
-        let windowMenuItem = NSMenuItem()
-        mainMenu.addItem(windowMenuItem)
+        return editMenuItem
+    }
 
+    private func createWindowMenu() -> NSMenu {
         let windowMenu = NSMenu(title: "Window")
-        windowMenuItem.submenu = windowMenu
 
         windowMenu.addItem(
             NSMenuItem(
@@ -114,19 +128,26 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
                 title: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)),
                 keyEquivalent: ""))
 
-        // Help Menu
-        let helpMenuItem = NSMenuItem()
-        mainMenu.addItem(helpMenuItem)
+        return windowMenu
+    }
 
+    private func createWindowMenuItem(windowMenu: NSMenu) -> NSMenuItem {
+        let windowMenuItem = NSMenuItem()
+        windowMenuItem.submenu = windowMenu
+        return windowMenuItem
+    }
+
+    private func createHelpMenu() -> NSMenu {
         let helpMenu = NSMenu(title: "Help")
-        helpMenuItem.submenu = helpMenu
-
         helpMenu.addItem(
             NSMenuItem(title: "WinRun Help", action: #selector(showHelp), keyEquivalent: "?"))
+        return helpMenu
+    }
 
-        NSApplication.shared.mainMenu = mainMenu
-        NSApplication.shared.windowsMenu = windowMenu
-        NSApplication.shared.helpMenu = helpMenu
+    private func createHelpMenuItem(helpMenu: NSMenu) -> NSMenuItem {
+        let helpMenuItem = NSMenuItem()
+        helpMenuItem.submenu = helpMenu
+        return helpMenuItem
     }
 
     @objc private func showAbout() {
