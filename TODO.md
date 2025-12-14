@@ -75,7 +75,7 @@
   - [ ] Guest provisioning protocol messages { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add ProvisionProgress, ProvisionError, ProvisionComplete message types { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
     - [X] Implement provisioning status reporter in guest agent { new:guest/WinRunAgent/Services/ProvisioningReporter.cs } <docs/decisions/windows-provisioning.md>
-    - [ ] Add unit tests for provisioning message serialization { guest/WinRunAgent.Tests/MessagesTests.cs, host/Tests/WinRunSpiceBridgeTests/SpiceProtocolTests.swift } <docs/development.md>
+    - [X] Add unit tests for provisioning message serialization { guest/WinRunAgent.Tests/MessagesTests.cs, host/Tests/WinRunSpiceBridgeTests/SpiceProtocolTests.swift } <docs/development.md>
 
 - [ ] Setup UI (First-Run Experience) { host/Sources/WinRunApp/Setup/, host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
   - [ ] First-run detection + setup flow routing { host/Sources/WinRunApp/AppMain.swift, new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>

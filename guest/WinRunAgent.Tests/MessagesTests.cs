@@ -296,6 +296,9 @@ public sealed class MessagesTests
         Assert.True((byte)SpiceMessageType.ShortcutDetected >= 0x80);
         Assert.True((byte)SpiceMessageType.ClipboardChanged >= 0x80);
         Assert.True((byte)SpiceMessageType.Heartbeat >= 0x80);
+        Assert.True((byte)SpiceMessageType.ProvisionProgress >= 0x80);
+        Assert.True((byte)SpiceMessageType.ProvisionError >= 0x80);
+        Assert.True((byte)SpiceMessageType.ProvisionComplete >= 0x80);
         Assert.True((byte)SpiceMessageType.Error >= 0x80);
         Assert.True((byte)SpiceMessageType.Ack >= 0x80);
     }
@@ -911,6 +914,212 @@ public sealed class MessagesTests
         Assert.True(combined.HasFlag(GuestCapabilities.ClipboardSync));
         Assert.True(combined.HasFlag(GuestCapabilities.IconExtraction));
         Assert.False(combined.HasFlag(GuestCapabilities.DragDrop));
+    }
+
+    // ========================================================================
+    // Provisioning Message Tests
+    // ========================================================================
+
+    [Fact]
+    public void ProvisioningPhaseValuesAreDistinct()
+    {
+        var phases = Enum.GetValues<ProvisioningPhase>();
+        var distinctValues = phases.Select(p => p.ToString()).Distinct().ToList();
+
+        Assert.Equal(phases.Length, distinctValues.Count);
+    }
+
+    [Fact]
+    public void AllProvisioningPhasesAreDefined()
+    {
+        var phases = Enum.GetValues<ProvisioningPhase>();
+
+        Assert.Contains(ProvisioningPhase.Drivers, phases);
+        Assert.Contains(ProvisioningPhase.Agent, phases);
+        Assert.Contains(ProvisioningPhase.Optimize, phases);
+        Assert.Contains(ProvisioningPhase.Finalize, phases);
+        Assert.Contains(ProvisioningPhase.Complete, phases);
+    }
+
+    [Fact]
+    public void CreateProvisionProgressSetsAllFields()
+    {
+        var message = SpiceMessageSerializer.CreateProvisionProgress(
+            ProvisioningPhase.Drivers,
+            50,
+            "Installing VirtIO drivers");
+
+        Assert.Equal(ProvisioningPhase.Drivers, message.Phase);
+        Assert.Equal(50, message.Percent);
+        Assert.Equal("Installing VirtIO drivers", message.Message);
+    }
+
+    [Fact]
+    public void CreateProvisionProgressClampsPercentTo100()
+    {
+        var message = SpiceMessageSerializer.CreateProvisionProgress(
+            ProvisioningPhase.Agent,
+            150,
+            "Installing agent");
+
+        Assert.Equal(100, message.Percent);
+    }
+
+    [Fact]
+    public void CreateProvisionErrorSetsAllFields()
+    {
+        var message = SpiceMessageSerializer.CreateProvisionError(
+            ProvisioningPhase.Optimize,
+            0x80070005,
+            "Access denied",
+            isRecoverable: true);
+
+        Assert.Equal(ProvisioningPhase.Optimize, message.Phase);
+        Assert.Equal(0x80070005u, message.ErrorCode);
+        Assert.Equal("Access denied", message.Message);
+        Assert.True(message.IsRecoverable);
+    }
+
+    [Fact]
+    public void CreateProvisionErrorDefaultsToNonRecoverable()
+    {
+        var message = SpiceMessageSerializer.CreateProvisionError(
+            ProvisioningPhase.Finalize,
+            0x00000001,
+            "Generic error");
+
+        Assert.False(message.IsRecoverable);
+    }
+
+    [Fact]
+    public void CreateProvisionCompleteSetsAllFields()
+    {
+        var message = SpiceMessageSerializer.CreateProvisionComplete(
+            diskUsageMB: 12345,
+            windowsVersion: "Windows 11 Pro 23H2",
+            agentVersion: "1.2.3");
+
+        Assert.True(message.Success);
+        Assert.Equal(12345UL, message.DiskUsageMB);
+        Assert.Equal("Windows 11 Pro 23H2", message.WindowsVersion);
+        Assert.Equal("1.2.3", message.AgentVersion);
+        Assert.Null(message.ErrorMessage);
+    }
+
+    [Fact]
+    public void CreateProvisionFailedSetsAllFields()
+    {
+        var message = SpiceMessageSerializer.CreateProvisionFailed(
+            "Driver installation failed",
+            windowsVersion: "Windows 11 Enterprise");
+
+        Assert.False(message.Success);
+        Assert.Equal(0UL, message.DiskUsageMB);
+        Assert.Equal("Windows 11 Enterprise", message.WindowsVersion);
+        Assert.Equal("Unknown", message.AgentVersion);
+        Assert.Equal("Driver installation failed", message.ErrorMessage);
+    }
+
+    [Fact]
+    public void CreateProvisionFailedUsesDefaultWindowsVersion()
+    {
+        var message = SpiceMessageSerializer.CreateProvisionFailed("Error occurred");
+
+        Assert.Equal("Unknown", message.WindowsVersion);
+    }
+
+    [Fact]
+    public void SerializeProvisionProgressMessage()
+    {
+        var message = new ProvisionProgressMessage
+        {
+            Phase = ProvisioningPhase.Agent,
+            Percent = 75,
+            Message = "Registering service"
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.ProvisionProgress, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeProvisionErrorMessage()
+    {
+        var message = new ProvisionErrorMessage
+        {
+            Phase = ProvisioningPhase.Drivers,
+            ErrorCode = 0x80070002,
+            Message = "File not found",
+            IsRecoverable = false
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.ProvisionError, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeProvisionCompleteMessage()
+    {
+        var message = new ProvisionCompleteMessage
+        {
+            Success = true,
+            DiskUsageMB = 8192,
+            WindowsVersion = "Windows 11 IoT Enterprise LTSC",
+            AgentVersion = "1.0.0"
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.ProvisionComplete, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void SerializeProvisionCompleteMessageWithError()
+    {
+        var message = new ProvisionCompleteMessage
+        {
+            Success = false,
+            DiskUsageMB = 0,
+            WindowsVersion = "Windows 11 Pro",
+            AgentVersion = "Unknown",
+            ErrorMessage = "Installation aborted by user"
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.ProvisionComplete, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void ProvisionProgressMessageHasTimestamp()
+    {
+        var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var message = new ProvisionProgressMessage
+        {
+            Phase = ProvisioningPhase.Complete,
+            Percent = 100,
+            Message = "Done"
+        };
+
+        var after = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        Assert.InRange(message.Timestamp, before, after);
+    }
+
+    [Fact]
+    public void ProvisioningMessageTypesHaveCorrectRawValues()
+    {
+        // Verify specific values match the host's Swift enum
+        Assert.Equal(0x89, (byte)SpiceMessageType.ProvisionProgress);
+        Assert.Equal(0x8A, (byte)SpiceMessageType.ProvisionError);
+        Assert.Equal(0x8B, (byte)SpiceMessageType.ProvisionComplete);
     }
 
     private static byte[] SerializeHostMessage<T>(SpiceMessageType type, T message) where T : HostMessage

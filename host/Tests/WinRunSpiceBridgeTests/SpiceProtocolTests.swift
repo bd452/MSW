@@ -79,7 +79,9 @@ final class SpiceMessageTypeTests: XCTestCase {
         let guestTypes: [SpiceMessageType] = [
             .windowMetadata, .frameData, .capabilityFlags, .dpiInfo,
             .iconData, .shortcutDetected, .clipboardChanged,
-            .heartbeat, .telemetryReport, .error, .ack,
+            .heartbeat, .telemetryReport,
+            .provisionProgress, .provisionError, .provisionComplete,
+            .error, .ack,
         ]
 
         for type in guestTypes {
@@ -108,6 +110,9 @@ final class SpiceMessageTypeTests: XCTestCase {
         XCTAssertEqual(SpiceMessageType.clipboardChanged.rawValue, 0x86)
         XCTAssertEqual(SpiceMessageType.heartbeat.rawValue, 0x87)
         XCTAssertEqual(SpiceMessageType.telemetryReport.rawValue, 0x88)
+        XCTAssertEqual(SpiceMessageType.provisionProgress.rawValue, 0x89)
+        XCTAssertEqual(SpiceMessageType.provisionError.rawValue, 0x8A)
+        XCTAssertEqual(SpiceMessageType.provisionComplete.rawValue, 0x8B)
         XCTAssertEqual(SpiceMessageType.error.rawValue, 0xFE)
         XCTAssertEqual(SpiceMessageType.ack.rawValue, 0xFF)
     }
