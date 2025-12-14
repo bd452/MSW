@@ -66,7 +66,7 @@
     - [X] Implement error recovery and rollback for failed provisioning { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for state machine transitions and error handling { new:host/Tests/WinRunSetupTests/SetupCoordinatorTests.swift, new:host/Tests/WinRunSetupTests/ProvisioningStateTests.swift } <docs/development.md>
   - [ ] Windows unattended installation assets { new:infrastructure/windows/autounattend.xml, new:infrastructure/windows/provision/ } <docs/decisions/windows-provisioning.md>
-    - [ ] Create autounattend.xml for silent Windows install { new:infrastructure/windows/autounattend.xml } <docs/decisions/windows-provisioning.md>
+    - [X] Create autounattend.xml for silent Windows install { new:infrastructure/windows/autounattend.xml } <docs/decisions/windows-provisioning.md>
     - [ ] Implement autounattend injection (FAT12 floppy image or ISO embedding) { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Write VirtIO driver installation script { new:infrastructure/windows/provision/install-drivers.ps1 } <docs/decisions/windows-provisioning.md>
     - [ ] Write WinRunAgent installation script { new:infrastructure/windows/provision/install-agent.ps1 } <docs/decisions/windows-provisioning.md>
