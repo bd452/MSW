@@ -29,6 +29,8 @@ public sealed partial class ClipboardSyncService : IDisposable
     /// </summary>
     public bool SetClipboard(HostClipboardMessage message)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (message.SequenceNumber <= _lastSequenceNumber)
         {
             _logger.Debug($"Ignoring stale clipboard data (seq {message.SequenceNumber} <= {_lastSequenceNumber})");
@@ -100,6 +102,8 @@ public sealed partial class ClipboardSyncService : IDisposable
     /// </summary>
     public async Task<GuestClipboardMessage?> GetClipboardAsync()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         try
         {
             if (!OpenClipboard(IntPtr.Zero))
@@ -248,6 +252,9 @@ public sealed partial class ClipboardSyncService : IDisposable
             return;
         }
         _disposed = true;
+
+        // Clear event handlers to prevent callbacks after disposal
+        ClipboardChanged = null;
     }
 
     // Clipboard formats

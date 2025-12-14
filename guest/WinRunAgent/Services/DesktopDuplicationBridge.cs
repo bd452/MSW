@@ -262,7 +262,7 @@ public sealed class DesktopDuplicationBridge : IDisposable
                         Width: OutputWidth,
                         Height: OutputHeight,
                         Stride: (int)mappedResource.RowPitch,
-                        Format: PixelFormat.BGRA32,
+                        Format: PixelFormatType.Bgra32,
                         Data: data,
                         Timestamp: frameInfo.LastPresentTime);
                 }
@@ -381,18 +381,11 @@ public sealed record CapturedFrame(
     int Width,
     int Height,
     int Stride,
-    PixelFormat Format,
+    PixelFormatType Format,
     byte[] Data,
     long Timestamp);
 
-/// <summary>
-/// Pixel formats for captured frames.
-/// </summary>
-public enum PixelFormat
-{
-    BGRA32,
-    RGBA32
-}
+// Note: PixelFormatType is defined in Messages.cs to avoid duplication
 
 #region DXGI/D3D11 P/Invoke
 

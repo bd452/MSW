@@ -633,7 +633,7 @@ public static class SpiceMessageSerializer
             Width = frame.Width,
             Height = frame.Height,
             Stride = frame.Stride,
-            Format = frame.Format == PixelFormat.BGRA32 ? PixelFormatType.Bgra32 : PixelFormatType.Rgba32,
+            Format = frame.Format,
             DataLength = (uint)frame.Data.Length,
             FrameNumber = frameNumber,
             IsKeyFrame = isKeyFrame

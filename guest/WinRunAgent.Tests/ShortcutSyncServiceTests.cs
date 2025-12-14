@@ -6,35 +6,15 @@ namespace WinRun.Agent.Tests;
 public sealed class ShortcutSyncServiceTests : IDisposable
 {
     private readonly TestLogger _logger = new();
-    private readonly string _testCacheDir;
-    private readonly IconExtractionService _iconService;
     private readonly List<ShortcutDetectedMessage> _detectedShortcuts = [];
     private readonly ShortcutSyncService _service;
 
     public ShortcutSyncServiceTests()
     {
-        _testCacheDir = Path.Combine(Path.GetTempPath(), $"ShortcutSyncTest_{Guid.NewGuid():N}");
-        _iconService = new IconExtractionService(_logger, _testCacheDir, TimeSpan.FromHours(1));
-        _service = new ShortcutSyncService(_logger, _iconService, _detectedShortcuts.Add);
+        _service = new ShortcutSyncService(_logger, _detectedShortcuts.Add);
     }
 
-    public void Dispose()
-    {
-        _service.Dispose();
-        _iconService.Dispose();
-
-        if (Directory.Exists(_testCacheDir))
-        {
-            try
-            {
-                Directory.Delete(_testCacheDir, recursive: true);
-            }
-            catch
-            {
-                // Ignore cleanup failures
-            }
-        }
-    }
+    public void Dispose() => _service.Dispose();
 
     [Fact]
     public void Constructor_DoesNotStartMonitoring() =>

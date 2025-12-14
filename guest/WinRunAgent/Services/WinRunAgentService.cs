@@ -77,7 +77,6 @@ public sealed class WinRunAgentService : IDisposable
         // Create shortcut service with callback to send messages
         ShortcutService = new ShortcutSyncService(
             logger,
-            iconService,
             msg => _ = SendMessageAsync(msg));
 
         SessionManager = new SessionManager(

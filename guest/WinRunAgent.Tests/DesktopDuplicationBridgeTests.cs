@@ -13,14 +13,14 @@ public sealed class DesktopDuplicationBridgeTests
             Width: 100,
             Height: 50,
             Stride: 400,
-            Format: PixelFormat.BGRA32,
+            Format: PixelFormatType.Bgra32,
             Data: data,
             Timestamp: 12345678L);
 
         Assert.Equal(100, frame.Width);
         Assert.Equal(50, frame.Height);
         Assert.Equal(400, frame.Stride);
-        Assert.Equal(PixelFormat.BGRA32, frame.Format);
+        Assert.Equal(PixelFormatType.Bgra32, frame.Format);
         Assert.Equal(data, frame.Data);
         Assert.Equal(12345678L, frame.Timestamp);
     }
@@ -47,7 +47,7 @@ public sealed class DesktopDuplicationBridgeTests
             }
         }
 
-        var frame = new CapturedFrame(width, height, stride, PixelFormat.BGRA32, data, 0);
+        var frame = new CapturedFrame(width, height, stride, PixelFormatType.Bgra32, data, 0);
 
         // Extract region from (2,3) with size 4x3
         var region = new Rect(2, 3, 4, 3);
@@ -75,7 +75,7 @@ public sealed class DesktopDuplicationBridgeTests
         var height = 10;
         var stride = width * 4;
         var data = new byte[height * stride];
-        var frame = new CapturedFrame(width, height, stride, PixelFormat.BGRA32, data, 0);
+        var frame = new CapturedFrame(width, height, stride, PixelFormatType.Bgra32, data, 0);
 
         // Request region that extends past frame bounds
         var region = new Rect(8, 8, 5, 5); // Would extend to (13,13) but frame is only 10x10
@@ -93,7 +93,7 @@ public sealed class DesktopDuplicationBridgeTests
         var height = 10;
         var stride = width * 4;
         var data = new byte[height * stride];
-        var frame = new CapturedFrame(width, height, stride, PixelFormat.BGRA32, data, 0);
+        var frame = new CapturedFrame(width, height, stride, PixelFormatType.Bgra32, data, 0);
 
         // Request region starting at negative coordinates
         var region = new Rect(-2, -3, 5, 6);
@@ -113,7 +113,7 @@ public sealed class DesktopDuplicationBridgeTests
         var height = 10;
         var stride = width * 4;
         var data = new byte[height * stride];
-        var frame = new CapturedFrame(width, height, stride, PixelFormat.BGRA32, data, 0);
+        var frame = new CapturedFrame(width, height, stride, PixelFormatType.Bgra32, data, 0);
 
         // Request region completely outside frame
         var region = new Rect(20, 20, 5, 5);
@@ -129,7 +129,7 @@ public sealed class DesktopDuplicationBridgeTests
         var height = 10;
         var stride = width * 4;
         var data = new byte[height * stride];
-        var frame = new CapturedFrame(width, height, stride, PixelFormat.BGRA32, data, 0);
+        var frame = new CapturedFrame(width, height, stride, PixelFormatType.Bgra32, data, 0);
 
         var region = new Rect(5, 5, 0, 0);
         var result = DesktopDuplicationBridge.ExtractWindowRegion(frame, region);
@@ -140,13 +140,13 @@ public sealed class DesktopDuplicationBridgeTests
     [Fact]
     public void ExtractWindowRegion_PreservesFormatAndTimestamp()
     {
-        var frame = new CapturedFrame(10, 10, 40, PixelFormat.BGRA32, new byte[400], 999L);
+        var frame = new CapturedFrame(10, 10, 40, PixelFormatType.Bgra32, new byte[400], 999L);
         var region = new Rect(0, 0, 5, 5);
 
         var result = DesktopDuplicationBridge.ExtractWindowRegion(frame, region);
 
         Assert.NotNull(result);
-        Assert.Equal(PixelFormat.BGRA32, result.Format);
+        Assert.Equal(PixelFormatType.Bgra32, result.Format);
         Assert.Equal(999L, result.Timestamp);
     }
 
@@ -182,12 +182,12 @@ public sealed class DesktopDuplicationBridgeTests
     }
 
     [Fact]
-    public void PixelFormatEnumHasExpectedValues()
+    public void PixelFormatTypeEnumHasExpectedValues()
     {
-        var formats = Enum.GetValues<PixelFormat>();
+        var formats = Enum.GetValues<PixelFormatType>();
 
-        Assert.Contains(PixelFormat.BGRA32, formats);
-        Assert.Contains(PixelFormat.RGBA32, formats);
+        Assert.Contains(PixelFormatType.Bgra32, formats);
+        Assert.Contains(PixelFormatType.Rgba32, formats);
     }
 
 }

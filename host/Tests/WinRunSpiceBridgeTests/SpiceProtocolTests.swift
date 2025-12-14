@@ -230,9 +230,9 @@ final class SpiceMessageSerializerTests: XCTestCase {
             osVersion: "Windows 11"
         )
 
-        // Create envelope manually
+        // Create envelope manually using camelCase to match guest's serialization
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
+        // Default key encoding is camelCase (no strategy set) to match guest's JsonNamingPolicy.CamelCase
         let payload = try encoder.encode(original)
 
         var envelope = Data()

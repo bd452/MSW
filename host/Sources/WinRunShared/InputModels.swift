@@ -134,14 +134,16 @@ public struct KeyboardInputEvent: Codable, Hashable {
 
 // MARK: - Clipboard
 
-/// Supported clipboard data formats
+/// Supported clipboard data formats.
+/// String values must match guest's ClipboardFormat enum when serialized as JSON.
+/// Guest uses JsonNamingPolicy.CamelCase, so values are camelCase strings.
 public enum ClipboardFormat: String, Codable, Hashable, CaseIterable {
-    case plainText = "public.plain-text"
-    case rtf = "public.rtf"
-    case html = "public.html"
-    case png = "public.png"
-    case tiff = "public.tiff"
-    case fileURL = "public.file-url"
+    case plainText
+    case rtf
+    case html
+    case png
+    case tiff
+    case fileUrl
 }
 
 /// Direction of clipboard synchronization

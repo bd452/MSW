@@ -31,18 +31,11 @@ public sealed class ShortcutSyncService : IDisposable
 
     public ShortcutSyncService(
         IAgentLogger logger,
-        IconExtractionService iconService,
         Action<ShortcutDetectedMessage> onShortcutDetected)
     {
         _logger = logger;
-        IconService = iconService;
         _onShortcutDetected = onShortcutDetected;
     }
-
-    /// <summary>
-    /// Gets the icon extraction service for proactive icon fetching.
-    /// </summary>
-    public IconExtractionService IconService { get; }
 
     /// <summary>
     /// Gets the list of known shortcut paths.
