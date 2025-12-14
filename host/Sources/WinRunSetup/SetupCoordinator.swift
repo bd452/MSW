@@ -222,7 +222,7 @@ public actor SetupCoordinator {
                 // Get size before deletion
                 freedBytes = (try? getDiskUsage(at: diskPath)) ?? 0
 
-                try await diskCreator.deleteDiskImage(at: diskPath)
+                try diskCreator.deleteDiskImage(at: diskPath)
             } catch {
                 rollbackError = (error as? WinRunError) ?? WinRunError.wrap(error, context: "Rollback")
             }

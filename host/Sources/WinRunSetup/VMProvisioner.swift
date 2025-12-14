@@ -106,15 +106,10 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
 
 /// Creates and validates VM configurations for Windows provisioning.
 public final class VMProvisioner: Sendable {
-    private let fileManager: FileManager
     private let resourcesDirectory: URL?
     private let installationTask = InstallationTaskHolder()
 
-    public init(
-        fileManager: FileManager = .default,
-        resourcesDirectory: URL? = nil
-    ) {
-        self.fileManager = fileManager
+    public init(resourcesDirectory: URL? = nil) {
         self.resourcesDirectory = resourcesDirectory
     }
 
@@ -189,7 +184,7 @@ public final class VMProvisioner: Sendable {
     public func bundledAutounattendPath() -> URL? {
         guard let resources = resourcesDirectory else { return nil }
         let path = resources.appendingPathComponent("provision/autounattend.xml")
-        return fileManager.fileExists(atPath: path.path) ? path : nil
+        return FileManager.default.fileExists(atPath: path.path) ? path : nil
     }
 
     // MARK: - Installation Lifecycle
@@ -277,7 +272,7 @@ public final class VMProvisioner: Sendable {
     // MARK: - Private Helpers
 
     private func validateFileExists(at url: URL, description: String) throws {
-        guard fileManager.fileExists(atPath: url.path) else {
+        guard FileManager.default.fileExists(atPath: url.path) else {
             throw WinRunError.configInvalid(reason: "\(description) not found at \(url.path)")
         }
     }
@@ -285,11 +280,11 @@ public final class VMProvisioner: Sendable {
     private func createAutounattendFloppy(from autounattendPath: URL) async throws -> URL {
         try validateFileExists(at: autounattendPath, description: "Autounattend.xml")
 
-        let tempDir = fileManager.temporaryDirectory
+        let tempDir = FileManager.default.temporaryDirectory
         let floppyPath = tempDir.appendingPathComponent("autounattend-\(UUID().uuidString).img")
         let floppySize: UInt64 = 1_474_560
 
-        let created = fileManager.createFile(
+        let created = FileManager.default.createFile(
             atPath: floppyPath.path, contents: nil, attributes: nil)
         guard created else {
             throw WinRunError.diskCreationFailed(

@@ -98,15 +98,8 @@ public struct DiskImageResult: Equatable, Sendable {
 /// print("Created disk at \(result.path)")
 /// ```
 public final class DiskImageCreator: Sendable {
-    /// File manager used for disk operations.
-    private let fileManager: FileManager
-
     /// Creates a new disk image creator.
-    ///
-    /// - Parameter fileManager: File manager to use for operations. Defaults to `.default`.
-    public init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
-    }
+    public init() {}
 
     /// Creates a sparse disk image with the specified configuration.
     ///
@@ -127,7 +120,7 @@ public final class DiskImageCreator: Sendable {
         let sizeBytes = configuration.sizeGB * 1024 * 1024 * 1024
 
         // Check if file already exists
-        if fileManager.fileExists(atPath: destinationURL.path) {
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
             if configuration.overwriteExisting {
                 try removeExisting(at: destinationURL)
             } else {
@@ -160,8 +153,8 @@ public final class DiskImageCreator: Sendable {
     /// - Parameter url: The path to the disk image to delete.
     /// - Throws: An error if the file cannot be deleted.
     public func deleteDiskImage(at url: URL) throws {
-        guard fileManager.fileExists(atPath: url.path) else { return }
-        try fileManager.removeItem(at: url)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
     }
 
     /// Checks if a disk image exists at the specified path.
@@ -169,7 +162,7 @@ public final class DiskImageCreator: Sendable {
     /// - Parameter url: The path to check.
     /// - Returns: `true` if a file exists at the path.
     public func diskImageExists(at url: URL) -> Bool {
-        fileManager.fileExists(atPath: url.path)
+        FileManager.default.fileExists(atPath: url.path)
     }
 
     /// Gets information about an existing disk image.
@@ -177,9 +170,9 @@ public final class DiskImageCreator: Sendable {
     /// - Parameter url: The path to the disk image.
     /// - Returns: Information about the disk image, or `nil` if it doesn't exist.
     public func getDiskImageInfo(at url: URL) throws -> DiskImageResult? {
-        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
 
-        let attributes = try fileManager.attributesOfItem(atPath: url.path)
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         guard let sizeBytes = attributes[.size] as? UInt64 else {
             return nil
         }
@@ -213,7 +206,7 @@ public final class DiskImageCreator: Sendable {
 
     private func removeExisting(at url: URL) throws {
         do {
-            try fileManager.removeItem(at: url)
+            try FileManager.default.removeItem(at: url)
         } catch {
             throw WinRunError.diskCreationFailed(
                 path: url.path,
@@ -224,9 +217,9 @@ public final class DiskImageCreator: Sendable {
 
     private func createParentDirectory(for url: URL) throws {
         let parentDirectory = url.deletingLastPathComponent()
-        if !fileManager.fileExists(atPath: parentDirectory.path) {
+        if !FileManager.default.fileExists(atPath: parentDirectory.path) {
             do {
-                try fileManager.createDirectory(
+                try FileManager.default.createDirectory(
                     at: parentDirectory,
                     withIntermediateDirectories: true,
                     attributes: nil
@@ -242,7 +235,7 @@ public final class DiskImageCreator: Sendable {
 
     private func checkAvailableSpace(at url: URL, requiredGB: UInt64) throws {
         let parentDirectory = url.deletingLastPathComponent()
-        let attributes = try fileManager.attributesOfFileSystem(forPath: parentDirectory.path)
+        let attributes = try FileManager.default.attributesOfFileSystem(forPath: parentDirectory.path)
 
         guard let freeSpace = attributes[.systemFreeSize] as? UInt64 else {
             return  // Skip check if we can't determine free space
@@ -267,7 +260,7 @@ public final class DiskImageCreator: Sendable {
         // Create a sparse file by:
         // 1. Creating an empty file
         // 2. Truncating it to the desired size (this creates a sparse file on APFS/HFS+)
-        let created = fileManager.createFile(atPath: url.path, contents: nil, attributes: nil)
+        let created = FileManager.default.createFile(atPath: url.path, contents: nil, attributes: nil)
         guard created else {
             throw WinRunError.diskCreationFailed(
                 path: url.path,
@@ -277,7 +270,7 @@ public final class DiskImageCreator: Sendable {
 
         // Open the file and set its size using truncation
         guard let fileHandle = FileHandle(forWritingAtPath: url.path) else {
-            try? fileManager.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url)
             throw WinRunError.diskCreationFailed(
                 path: url.path,
                 reason: "Could not open file for writing"
@@ -290,7 +283,7 @@ public final class DiskImageCreator: Sendable {
             // truncate creates a sparse file on APFS
             try fileHandle.truncate(atOffset: sizeBytes)
         } catch {
-            try? fileManager.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url)
             throw WinRunError.diskCreationFailed(
                 path: url.path,
                 reason: "Could not set file size: \(error.localizedDescription)"
