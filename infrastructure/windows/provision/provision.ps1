@@ -65,6 +65,29 @@ function Send-ProvisionError {
     Write-Log "$Phase FAILED: $Message" -Level "ERROR"
 }
 
+function Find-ProvisionScript {
+    param([string]$ScriptPattern)
+    
+    # First try exact match
+    $exactPath = Join-Path $ProvisionDir $ScriptPattern
+    if (Test-Path $exactPath) {
+        return $exactPath
+    }
+    
+    # Try 8.3 compatible pattern (FAT12 floppy may truncate names)
+    # e.g., "install-drivers.ps1" -> "INSTALL*.PS1"
+    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($ScriptPattern)
+    $searchPrefix = $baseName.Substring(0, [Math]::Min(7, $baseName.Length))
+    $pattern = "$searchPrefix*.ps1"
+    
+    $matches = Get-ChildItem -Path $ProvisionDir -Filter $pattern -ErrorAction SilentlyContinue
+    if ($matches) {
+        return $matches[0].FullName
+    }
+    
+    return $null
+}
+
 function Invoke-ProvisionScript {
     param(
         [string]$ScriptName,
@@ -73,18 +96,19 @@ function Invoke-ProvisionScript {
         [int]$EndPercent
     )
     
-    $ScriptPath = Join-Path $ProvisionDir $ScriptName
+    $ScriptPath = Find-ProvisionScript -ScriptPattern $ScriptName
     
-    if (-not (Test-Path $ScriptPath)) {
-        Write-Log "Script not found: $ScriptPath - skipping" -Level "WARN"
+    if (-not $ScriptPath) {
+        Write-Log "Script not found: $ScriptName (searched $ProvisionDir) - skipping" -Level "WARN"
         return $true
     }
     
-    Send-ProvisionProgress -Phase $Phase -Percent $StartPercent -Message "Starting $ScriptName..."
+    $ActualName = [System.IO.Path]::GetFileName($ScriptPath)
+    Send-ProvisionProgress -Phase $Phase -Percent $StartPercent -Message "Starting $ActualName..."
     
     try {
         & $ScriptPath
-        Send-ProvisionProgress -Phase $Phase -Percent $EndPercent -Message "Completed $ScriptName"
+        Send-ProvisionProgress -Phase $Phase -Percent $EndPercent -Message "Completed $ActualName"
         return $true
     }
     catch {

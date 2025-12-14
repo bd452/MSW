@@ -172,8 +172,8 @@
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>2</Order>
-                    <Path>cmd /c if exist A:\provision\*.ps1 copy A:\provision\*.ps1 C:\WinRun\provision\</Path>
-                    <Description>Copy provisioning scripts from floppy</Description>
+                    <Path>cmd /c if exist A:\*.PS1 copy A:\*.PS1 C:\WinRun\provision\</Path>
+                    <Description>Copy provisioning scripts from floppy root</Description>
                 </RunSynchronousCommand>
             </RunSynchronous>
         </component>
