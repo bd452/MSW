@@ -29,8 +29,7 @@ final class InstallationLifecycleTests: XCTestCase {
 
     override func tearDown() async throws {
         if let testDirectory = testDirectory,
-            FileManager.default.fileExists(atPath: testDirectory.path)
-        {
+            FileManager.default.fileExists(atPath: testDirectory.path) {
             try? FileManager.default.removeItem(at: testDirectory)
         }
         testDirectory = nil

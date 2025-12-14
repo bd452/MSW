@@ -1,0 +1,9 @@
+{
+    "[swift]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "apple.swift-format",
+        "editor.codeActionsOnSave": {
+            "source.fixAll.swiftlint": "explicit"
+        }
+    }
+}
