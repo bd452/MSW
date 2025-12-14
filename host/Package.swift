@@ -44,6 +44,11 @@ var targets: [Target] = [
         path: "Sources/WinRunSpiceBridge"
     ),
     .target(
+        name: "WinRunSetup",
+        dependencies: ["WinRunShared"],
+        path: "Sources/WinRunSetup"
+    ),
+    .target(
         name: "WinRunVirtualMachine",
         dependencies: [
             "WinRunShared",
@@ -100,6 +105,11 @@ var targets: [Target] = [
         name: "WinRunXPCTests",
         dependencies: ["WinRunXPC", "WinRunShared"],
         path: "Tests/WinRunXPCTests"
+    ),
+    .testTarget(
+        name: "WinRunSetupTests",
+        dependencies: ["WinRunSetup", "WinRunShared"],
+        path: "Tests/WinRunSetupTests"
     )
 ]
 
@@ -116,6 +126,7 @@ let package = Package(
         .library(name: "WinRunXPCInterfaces", targets: ["WinRunXPC"]),
         .library(name: "WinRunVirtualMachine", targets: ["WinRunVirtualMachine"]),
         .library(name: "WinRunSpiceBridge", targets: ["WinRunSpiceBridge"]),
+        .library(name: "WinRunSetup", targets: ["WinRunSetup"]),
         .executable(name: "winrund", targets: ["WinRunDaemon"]),
         .executable(name: "WinRunApp", targets: ["WinRunApp"]),
         .executable(name: "winrun", targets: ["WinRunCLI"])

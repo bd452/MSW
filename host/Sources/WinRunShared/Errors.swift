@@ -9,6 +9,7 @@ public enum WinRunErrorDomain: String, CaseIterable, Codable {
     case spice = "spice"
     case xpc = "xpc"
     case launcher = "launcher"
+    case setup = "setup"
     case general = "general"
 
     public var displayName: String {
@@ -18,6 +19,7 @@ public enum WinRunErrorDomain: String, CaseIterable, Codable {
         case .spice: return "Spice Connection"
         case .xpc: return "IPC"
         case .launcher: return "Launcher"
+        case .setup: return "Setup"
         case .general: return "General"
         }
     }
@@ -125,6 +127,23 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
     /// Icon file not found or invalid.
     case launcherIconMissing(path: String)
 
+    // MARK: - Setup/Provisioning Errors
+
+    /// Failed to mount the provided ISO file.
+    case isoMountFailed(path: String, reason: String)
+
+    /// The ISO file is not a valid Windows installation image.
+    case isoInvalid(reason: String)
+
+    /// The ISO architecture is not compatible (not ARM64).
+    case isoArchitectureUnsupported(found: String, required: String)
+
+    /// The Windows version has limitations or is not recommended.
+    case isoVersionWarning(version: String, warning: String)
+
+    /// Failed to parse Windows image metadata (install.wim/esd).
+    case isoMetadataParseFailed(reason: String)
+
     // MARK: - General Errors
 
     /// Operation was cancelled.
@@ -156,6 +175,9 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return .general
         case .launcherAlreadyExists, .launcherCreationFailed, .launcherIconMissing:
             return .launcher
+        case .isoMountFailed, .isoInvalid, .isoArchitectureUnsupported,
+             .isoVersionWarning, .isoMetadataParseFailed:
+            return .setup
         case .cancelled, .internalError, .notSupported:
             return .general
         }
@@ -224,6 +246,18 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "Could not create launcher for \(name)"
         case .launcherIconMissing:
             return "Icon file not found"
+
+        // Setup errors
+        case .isoMountFailed:
+            return "Could not mount the Windows ISO"
+        case .isoInvalid:
+            return "Invalid Windows installation image"
+        case .isoArchitectureUnsupported:
+            return "Unsupported processor architecture"
+        case .isoVersionWarning(let version, _):
+            return "\(version) has compatibility limitations"
+        case .isoMetadataParseFailed:
+            return "Could not read Windows image metadata"
 
         // General errors
         case .cancelled:
@@ -297,6 +331,17 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
         case .launcherIconMissing(let path):
             return "Icon file not found at \(path)."
 
+        case .isoMountFailed(let path, let reason):
+            return "Failed to mount '\(path)': \(reason)"
+        case .isoInvalid(let reason):
+            return reason
+        case .isoArchitectureUnsupported(let found, let required):
+            return "This ISO is for \(found) processors. WinRun requires \(required)."
+        case .isoVersionWarning(_, let warning):
+            return warning
+        case .isoMetadataParseFailed(let reason):
+            return reason
+
         case .cancelled:
             return "The operation was cancelled by the user or system."
         case .internalError(let message):
@@ -357,6 +402,17 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "Check that you have write permission to the destination directory."
         case .launcherIconMissing:
             return "Provide a valid .icns icon file or omit the icon option to use the default."
+
+        case .isoMountFailed:
+            return "Ensure the file is a valid ISO image and you have read permission."
+        case .isoInvalid:
+            return "Download a Windows 11 ARM64 installation ISO from Microsoft."
+        case .isoArchitectureUnsupported:
+            return "Download the ARM64 version of Windows for Apple Silicon Macs."
+        case .isoVersionWarning:
+            return "Consider using Windows 11 IoT Enterprise LTSC 2024 ARM64 for best compatibility."
+        case .isoMetadataParseFailed:
+            return "The ISO may be corrupted. Try re-downloading from Microsoft."
 
         case .cancelled:
             return nil
@@ -434,6 +490,17 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
         case .launcherIconMissing(let path):
             base = "Launcher icon missing: \(path)"
 
+        case .isoMountFailed(let path, let reason):
+            base = "ISO mount failed '\(path)': \(reason)"
+        case .isoInvalid(let reason):
+            base = "ISO invalid: \(reason)"
+        case .isoArchitectureUnsupported(let found, let required):
+            base = "ISO architecture \(found), requires \(required)"
+        case .isoVersionWarning(let version, let warning):
+            base = "ISO version warning (\(version)): \(warning)"
+        case .isoMetadataParseFailed(let reason):
+            base = "ISO metadata parse failed: \(reason)"
+
         case .cancelled:
             base = "Operation cancelled"
         case .internalError(let message):
@@ -494,6 +561,12 @@ public extension WinRunError {
         case .launcherAlreadyExists: return 6001
         case .launcherCreationFailed: return 6002
         case .launcherIconMissing: return 6003
+
+        case .isoMountFailed: return 7001
+        case .isoInvalid: return 7002
+        case .isoArchitectureUnsupported: return 7003
+        case .isoVersionWarning: return 7004
+        case .isoMetadataParseFailed: return 7005
 
         case .cancelled: return 9001
         case .internalError: return 9002
