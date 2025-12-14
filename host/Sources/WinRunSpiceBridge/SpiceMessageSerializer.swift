@@ -25,16 +25,18 @@ public struct SpiceMessageParseResult {
 /// Serializes and deserializes Spice channel messages using a binary envelope format.
 /// Message format: [Type:1][Length:4][Payload:N]
 /// Payload is JSON-encoded for flexibility and debuggability.
+///
+/// JSON uses camelCase keys to match the guest's serialization format.
 public enum SpiceMessageSerializer {
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
+        // Use default key encoding (camelCase) to match guest's JsonNamingPolicy.CamelCase
         return encoder
     }()
 
     private static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        // Use default key decoding (camelCase) to match guest's JsonNamingPolicy.CamelCase
         return decoder
     }()
 

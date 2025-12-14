@@ -112,7 +112,7 @@ final class ClipboardManager {
             pasteboard.setData(clipboard.data, forType: .png)
         case .tiff:
             pasteboard.setData(clipboard.data, forType: .tiff)
-        case .fileURL:
+        case .fileUrl:
             if let urlString = String(data: clipboard.data, encoding: .utf8),
                let url = URL(string: urlString) {
                 pasteboard.writeObjects([url as NSURL])

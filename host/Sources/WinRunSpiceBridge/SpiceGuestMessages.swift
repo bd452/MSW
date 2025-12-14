@@ -11,14 +11,17 @@ public protocol GuestMessage: Codable {
 
 // MARK: - Supporting Types
 
-/// Window event type from guest
+/// Window event type from guest.
+/// Values must match guest's WindowEventType enum exactly for protocol compatibility.
 public enum WindowEventType: Int32, Codable {
     case created = 0
-    case updated = 1
-    case destroyed = 2
-    case activated = 3
-    case minimized = 4
-    case restored = 5
+    case destroyed = 1
+    case moved = 2
+    case titleChanged = 3
+    case focusChanged = 4
+    case minimized = 5
+    case restored = 6
+    case updated = 7
 }
 
 /// Rectangle bounds information (matching guest's RectInfo).

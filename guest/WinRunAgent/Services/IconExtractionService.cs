@@ -372,7 +372,7 @@ public sealed class IconExtractionService : IDisposable
             if (actualWidth < targetSize && actualHeight < targetSize)
             {
                 // Scale up using high-quality interpolation
-                finalBitmap = new Bitmap(targetSize, targetSize, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                finalBitmap = new Bitmap(targetSize, targetSize, PixelFormat.Format32bppArgb);
                 using var g = Graphics.FromImage(finalBitmap);
                 g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;

@@ -43,37 +43,41 @@ public actor ISOValidator {
             throw WinRunError.isoInvalid(reason: "Path is a directory, not an ISO file")
         }
 
-        // Mount the ISO
+        // Mount the ISO and ensure cleanup on all exit paths
         let mountPoint = try await mountISO(at: isoURL)
-        defer {
-            Task {
-                await unmountISO(mountPoint: mountPoint)
+
+        do {
+            // Find and parse Windows installation metadata
+            let (editionInfo, parseWarnings) = try await parseWindowsMetadata(mountPoint: mountPoint)
+
+            // Generate validation warnings based on edition info
+            var warnings = parseWarnings
+            if let info = editionInfo {
+                warnings.append(contentsOf: generateWarnings(for: info))
             }
+
+            logger?.info(
+                "ISO validation complete",
+                metadata: [
+                    "edition": .string(editionInfo?.editionName ?? "unknown"),
+                    "architecture": .string(editionInfo?.architecture ?? "unknown"),
+                    "warnings": .int(warnings.count),
+                ]
+            )
+
+            // Unmount before returning
+            await unmountISO(mountPoint: mountPoint)
+
+            return ISOValidationResult(
+                isoPath: isoURL,
+                editionInfo: editionInfo,
+                warnings: warnings
+            )
+        } catch {
+            // Always unmount on error before rethrowing
+            await unmountISO(mountPoint: mountPoint)
+            throw error
         }
-
-        // Find and parse Windows installation metadata
-        let (editionInfo, parseWarnings) = try await parseWindowsMetadata(mountPoint: mountPoint)
-
-        // Generate validation warnings based on edition info
-        var warnings = parseWarnings
-        if let info = editionInfo {
-            warnings.append(contentsOf: generateWarnings(for: info))
-        }
-
-        logger?.info(
-            "ISO validation complete",
-            metadata: [
-                "edition": .string(editionInfo?.editionName ?? "unknown"),
-                "architecture": .string(editionInfo?.architecture ?? "unknown"),
-                "warnings": .int(warnings.count),
-            ]
-        )
-
-        return ISOValidationResult(
-            isoPath: isoURL,
-            editionInfo: editionInfo,
-            warnings: warnings
-        )
     }
 
     // MARK: - ISO Mounting

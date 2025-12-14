@@ -319,7 +319,7 @@ public sealed class MessagesTests
             Width: 1920,
             Height: 1080,
             Stride: 7680,
-            Format: PixelFormat.BGRA32,
+            Format: PixelFormatType.Bgra32,
             Data: new byte[1920 * 1080 * 4],
             Timestamp: 0);
 

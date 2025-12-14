@@ -306,7 +306,7 @@ protocol SpiceStreamTransport {
             case .html: return WINRUN_CLIPBOARD_FORMAT_HTML
             case .png: return WINRUN_CLIPBOARD_FORMAT_PNG
             case .tiff: return WINRUN_CLIPBOARD_FORMAT_TIFF
-            case .fileURL: return WINRUN_CLIPBOARD_FORMAT_FILE_URL
+            case .fileUrl: return WINRUN_CLIPBOARD_FORMAT_FILE_URL
             }
         }
     }

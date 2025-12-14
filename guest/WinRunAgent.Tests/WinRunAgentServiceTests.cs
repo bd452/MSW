@@ -42,7 +42,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var iconService = new IconExtractionService(_logger);
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
-        using var shortcutService = new ShortcutSyncService(_logger, iconService, _ => { });
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -83,7 +83,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var iconService = new IconExtractionService(_logger);
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
-        using var shortcutService = new ShortcutSyncService(_logger, iconService, _ => { });
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -143,7 +143,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var iconService = new IconExtractionService(_logger);
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
-        using var shortcutService = new ShortcutSyncService(_logger, iconService, _ => { });
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 

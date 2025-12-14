@@ -431,17 +431,18 @@ public sealed record WindowEventArgs(
 
 /// <summary>
 /// Type of window event.
+/// Values must match host's WindowEventType enum exactly for protocol compatibility.
 /// </summary>
 public enum WindowEventType
 {
-    Created,
-    Destroyed,
-    Moved,
-    TitleChanged,
-    FocusChanged,
-    Minimized,
-    Restored,
-    Updated
+    Created = 0,
+    Destroyed = 1,
+    Moved = 2,
+    TitleChanged = 3,
+    FocusChanged = 4,
+    Minimized = 5,
+    Restored = 6,
+    Updated = 7
 }
 
 /// <summary>
