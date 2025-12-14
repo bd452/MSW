@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    WinRun Windows 11 ARM64 Unattended Installation Answer File
+    
+    This file automates Windows 11 ARM64 installation for the WinRun VM.
+    Place on a virtual floppy drive - Windows Setup will find it automatically.
+    
+    Account: Local "WinRun" user with admin rights (blank password, auto-login)
+    Locale: US English defaults (user can change later)
+    Post-install: Runs C:\WinRun\provision\provision.ps1 on first logon
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+    <!-- ============================================== -->
+    <!-- PASS 1: windowsPE - Windows Setup Environment  -->
+    <!-- ============================================== -->
+    <settings pass="windowsPE">
+        
+        <!-- International settings during setup -->
+        <component name="Microsoft-Windows-International-Core-WinPE" 
+                   processorArchitecture="arm64" 
+                   publicKeyToken="31bf3856ad364e35" 
+                   language="neutral" 
+                   versionScope="nonSxS" 
+                   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <SetupUILanguage>
+                <UILanguage>en-US</UILanguage>
+            </SetupUILanguage>
+            <InputLocale>0409:00000409</InputLocale>
+            <SystemLocale>en-US</SystemLocale>
+            <UILanguage>en-US</UILanguage>
+            <UserLocale>en-US</UserLocale>
+        </component>
+
+        <!-- Windows Setup configuration -->
+        <component name="Microsoft-Windows-Setup" 
+                   processorArchitecture="arm64" 
+                   publicKeyToken="31bf3856ad364e35" 
+                   language="neutral" 
+                   versionScope="nonSxS" 
+                   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            
+            <!-- Disk partitioning for UEFI/GPT boot (required for ARM64) -->
+            <DiskConfiguration>
+                <Disk wcm:action="add">
+                    <DiskID>0</DiskID>
+                    <WillWipeDisk>true</WillWipeDisk>
+                    <CreatePartitions>
+                        <!-- EFI System Partition -->
+                        <CreatePartition wcm:action="add">
+                            <Order>1</Order>
+                            <Size>260</Size>
+                            <Type>EFI</Type>
+                        </CreatePartition>
+                        <!-- Microsoft Reserved Partition -->
+                        <CreatePartition wcm:action="add">
+                            <Order>2</Order>
+                            <Size>16</Size>
+                            <Type>MSR</Type>
+                        </CreatePartition>
+                        <!-- Windows Partition (use remaining space) -->
+                        <CreatePartition wcm:action="add">
+                            <Order>3</Order>
+                            <Extend>true</Extend>
+                            <Type>Primary</Type>
+                        </CreatePartition>
+                    </CreatePartitions>
+                    <ModifyPartitions>
+                        <!-- Format EFI partition -->
+                        <ModifyPartition wcm:action="add">
+                            <Order>1</Order>
+                            <PartitionID>1</PartitionID>
+                            <Format>FAT32</Format>
+                            <Label>System</Label>
+                        </ModifyPartition>
+                        <!-- MSR partition - no formatting needed -->
+                        <ModifyPartition wcm:action="add">
+                            <Order>2</Order>
+                            <PartitionID>2</PartitionID>
+                        </ModifyPartition>
+                        <!-- Format Windows partition -->
+                        <ModifyPartition wcm:action="add">
+                            <Order>3</Order>
+                            <PartitionID>3</PartitionID>
+                            <Format>NTFS</Format>
+                            <Label>Windows</Label>
+                            <Letter>C</Letter>
+                        </ModifyPartition>
+                    </ModifyPartitions>
+                </Disk>
+            </DiskConfiguration>
+            
+            <!-- Image installation settings -->
+            <ImageInstall>
+                <OSImage>
+                    <InstallTo>
+                        <DiskID>0</DiskID>
+                        <PartitionID>3</PartitionID>
+                    </InstallTo>
+                    <!-- Let Windows select the first available image index -->
+                    <InstallToAvailablePartition>false</InstallToAvailablePartition>
+                </OSImage>
+            </ImageInstall>
+            
+            <!-- User data - skip product key entry -->
+            <UserData>
+                <AcceptEula>true</AcceptEula>
+                <FullName>WinRun</FullName>
+                <Organization>WinRun</Organization>
+                <!-- Empty key = evaluation/generic key will be used -->
+                <ProductKey>
+                    <WillShowUI>OnError</WillShowUI>
+                </ProductKey>
+            </UserData>
+            
+            <!-- Upgrade settings (not applicable for clean install, but prevents prompts) -->
+            <UpgradeData>
+                <Upgrade>false</Upgrade>
+            </UpgradeData>
+
+        </component>
+
+    </settings>
+
+    <!-- ============================================== -->
+    <!-- PASS 4: specialize - Machine-specific config  -->
+    <!-- ============================================== -->
+    <settings pass="specialize">
+        
+        <!-- Computer name and timezone -->
+        <component name="Microsoft-Windows-Shell-Setup" 
+                   processorArchitecture="arm64" 
+                   publicKeyToken="31bf3856ad364e35" 
+                   language="neutral" 
+                   versionScope="nonSxS" 
+                   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <ComputerName>WINRUN-VM</ComputerName>
+            <!-- UTC - host handles timezone display -->
+            <TimeZone>UTC</TimeZone>
+            <!-- Disable Cortana during OOBE -->
+            <DisableAutoDaylightTimeSet>false</DisableAutoDaylightTimeSet>
+        </component>
+
+        <!-- Disable Windows Defender SmartScreen prompts during setup -->
+        <component name="Microsoft-Windows-Security-SPP-UX" 
+                   processorArchitecture="arm64" 
+                   publicKeyToken="31bf3856ad364e35" 
+                   language="neutral" 
+                   versionScope="nonSxS" 
+                   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <SkipAutoActivation>true</SkipAutoActivation>
+        </component>
+
+        <!-- Deployment settings -->
+        <component name="Microsoft-Windows-Deployment" 
+                   processorArchitecture="arm64" 
+                   publicKeyToken="31bf3856ad364e35" 
+                   language="neutral" 
+                   versionScope="nonSxS" 
+                   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <RunSynchronous>
+                <!-- Copy provisioning scripts from floppy to local disk -->
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Path>cmd /c mkdir C:\WinRun\provision</Path>
+                    <Description>Create provisioning directory</Description>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>2</Order>
+                    <Path>cmd /c if exist A:\*.PS1 copy A:\*.PS1 C:\WinRun\provision\</Path>
+                    <Description>Copy provisioning scripts from floppy root</Description>
+                </RunSynchronousCommand>
+            </RunSynchronous>
+        </component>
+        
+    </settings>
+
+    <!-- ============================================== -->
+    <!-- PASS 7: oobeSystem - First user experience    -->
+    <!-- ============================================== -->
+    <settings pass="oobeSystem">
+        
+        <component name="Microsoft-Windows-Shell-Setup" 
+                   processorArchitecture="arm64" 
+                   publicKeyToken="31bf3856ad364e35" 
+                   language="neutral" 
+                   versionScope="nonSxS" 
+                   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            
+            <!-- Skip all OOBE screens -->
+            <OOBE>
+                <HideEULAPage>true</HideEULAPage>
+                <HideLocalAccountScreen>true</HideLocalAccountScreen>
+                <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+                <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+                <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+                <NetworkLocation>Work</NetworkLocation>
+                <ProtectYourPC>3</ProtectYourPC>
+                <SkipMachineOOBE>true</SkipMachineOOBE>
+                <SkipUserOOBE>true</SkipUserOOBE>
+            </OOBE>
+            
+            <!-- Create local admin user "WinRun" with blank password -->
+            <UserAccounts>
+                <LocalAccounts>
+                    <LocalAccount wcm:action="add">
+                        <Name>WinRun</Name>
+                        <DisplayName>WinRun</DisplayName>
+                        <Description>WinRun VM User</Description>
+                        <Group>Administrators</Group>
+                        <Password>
+                            <!-- Empty password (encoded as empty base64) -->
+                            <Value></Value>
+                            <PlainText>true</PlainText>
+                        </Password>
+                    </LocalAccount>
+                </LocalAccounts>
+            </UserAccounts>
+            
+            <!-- Auto-login as WinRun user -->
+            <AutoLogon>
+                <Enabled>true</Enabled>
+                <Username>WinRun</Username>
+                <Password>
+                    <Value></Value>
+                    <PlainText>true</PlainText>
+                </Password>
+                <!-- Number of auto-logons (0 = unlimited for provisioning, then finalize.ps1 resets) -->
+                <LogonCount>9999</LogonCount>
+            </AutoLogon>
+            
+            <!-- Run provisioning script on first logon -->
+            <FirstLogonCommands>
+                <SynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <CommandLine>powershell.exe -ExecutionPolicy Bypass -NoProfile -File C:\WinRun\provision\provision.ps1</CommandLine>
+                    <Description>Run WinRun provisioning</Description>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+            </FirstLogonCommands>
+            
+            <!-- Disable first-run animations and tips -->
+            <RegisteredOrganization>WinRun</RegisteredOrganization>
+            <RegisteredOwner>WinRun</RegisteredOwner>
+            
+        </component>
+
+        <!-- International settings for the user -->
+        <component name="Microsoft-Windows-International-Core" 
+                   processorArchitecture="arm64" 
+                   publicKeyToken="31bf3856ad364e35" 
+                   language="neutral" 
+                   versionScope="nonSxS" 
+                   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <InputLocale>0409:00000409</InputLocale>
+            <SystemLocale>en-US</SystemLocale>
+            <UILanguage>en-US</UILanguage>
+            <UserLocale>en-US</UserLocale>
+        </component>
+
+    </settings>
+
+</unattend>

@@ -37,13 +37,13 @@ public actor SetupCoordinator {
 
     /// Creates a setup coordinator with default dependencies.
     public init(
-        isoValidator: ISOValidator = ISOValidator(),
-        diskCreator: DiskImageCreator = DiskImageCreator(),
-        vmProvisioner: VMProvisioner = VMProvisioner()
+        isoValidator: ISOValidator? = nil,
+        diskCreator: DiskImageCreator? = nil,
+        vmProvisioner: VMProvisioner? = nil
     ) {
-        self.isoValidator = isoValidator
-        self.diskCreator = diskCreator
-        self.vmProvisioner = vmProvisioner
+        self.isoValidator = isoValidator ?? ISOValidator()
+        self.diskCreator = diskCreator ?? DiskImageCreator()
+        self.vmProvisioner = vmProvisioner ?? VMProvisioner()
     }
 
     // MARK: - Public API
