@@ -42,6 +42,9 @@ public enum SpiceMessageType : byte
     ClipboardChanged = 0x86,
     Heartbeat = 0x87,
     TelemetryReport = 0x88,
+    ProvisionProgress = 0x89,
+    ProvisionError = 0x8A,
+    ProvisionComplete = 0x8B,
     Error = 0xFE,
     Ack = 0xFF
 }
@@ -326,6 +329,93 @@ public sealed record AckMessage : GuestMessage
 }
 
 // ============================================================================
+// Provisioning Messages
+// ============================================================================
+
+/// <summary>
+/// Phase of post-install provisioning running in the guest.
+/// Values must match host's GuestProvisioningPhase enum exactly for protocol compatibility.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ProvisioningPhase
+{
+    /// <summary>Installing VirtIO drivers.</summary>
+    Drivers,
+
+    /// <summary>Installing WinRun Agent.</summary>
+    Agent,
+
+    /// <summary>Optimizing Windows (removing bloat, disabling services).</summary>
+    Optimize,
+
+    /// <summary>Finalizing configuration before shutdown.</summary>
+    Finalize,
+
+    /// <summary>Provisioning complete.</summary>
+    Complete
+}
+
+/// <summary>
+/// Progress update during guest provisioning.
+/// Sent by the guest during post-install provisioning to report progress
+/// on driver installation, agent setup, and Windows optimization.
+/// </summary>
+public sealed record ProvisionProgressMessage : GuestMessage
+{
+    /// <summary>Current provisioning phase.</summary>
+    public required ProvisioningPhase Phase { get; init; }
+
+    /// <summary>Progress within the current phase (0-100).</summary>
+    public required byte Percent { get; init; }
+
+    /// <summary>Human-readable status message.</summary>
+    public required string Message { get; init; }
+}
+
+/// <summary>
+/// Error during guest provisioning.
+/// Sent when a provisioning step fails. The host may choose to retry,
+/// continue with warnings, or abort provisioning.
+/// </summary>
+public sealed record ProvisionErrorMessage : GuestMessage
+{
+    /// <summary>Phase where the error occurred.</summary>
+    public required ProvisioningPhase Phase { get; init; }
+
+    /// <summary>Windows error code (HRESULT or Win32 error).</summary>
+    public required uint ErrorCode { get; init; }
+
+    /// <summary>Human-readable error message.</summary>
+    public required string Message { get; init; }
+
+    /// <summary>Whether provisioning can continue despite this error.</summary>
+    public bool IsRecoverable { get; init; }
+}
+
+/// <summary>
+/// Provisioning completion notification.
+/// Sent when guest provisioning completes successfully or fails terminally.
+/// Contains final status information about the provisioned VM.
+/// </summary>
+public sealed record ProvisionCompleteMessage : GuestMessage
+{
+    /// <summary>Whether provisioning completed successfully.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Disk space used by Windows in megabytes.</summary>
+    public required ulong DiskUsageMB { get; init; }
+
+    /// <summary>Windows version string (e.g., "Windows 11 23H2").</summary>
+    public required string WindowsVersion { get; init; }
+
+    /// <summary>WinRun Agent version installed.</summary>
+    public required string AgentVersion { get; init; }
+
+    /// <summary>Error message if provisioning failed.</summary>
+    public string? ErrorMessage { get; init; }
+}
+
+// ============================================================================
 // Supporting Types
 // ============================================================================
 
@@ -483,6 +573,9 @@ public static class SpiceMessageSerializer
             GuestClipboardMessage => SpiceMessageType.ClipboardChanged,
             HeartbeatMessage => SpiceMessageType.Heartbeat,
             TelemetryReportMessage => SpiceMessageType.TelemetryReport,
+            ProvisionProgressMessage => SpiceMessageType.ProvisionProgress,
+            ProvisionErrorMessage => SpiceMessageType.ProvisionError,
+            ProvisionCompleteMessage => SpiceMessageType.ProvisionComplete,
             ErrorMessage => SpiceMessageType.Error,
             AckMessage => SpiceMessageType.Ack,
             _ => throw new ArgumentException($"Unknown message type: {message.GetType()}")
@@ -543,6 +636,9 @@ public static class SpiceMessageSerializer
             SpiceMessageType.ClipboardChanged => null,
             SpiceMessageType.Heartbeat => null,
             SpiceMessageType.TelemetryReport => null,
+            SpiceMessageType.ProvisionProgress => null,
+            SpiceMessageType.ProvisionError => null,
+            SpiceMessageType.ProvisionComplete => null,
             SpiceMessageType.Error => null,
             SpiceMessageType.Ack => null,
 
@@ -715,4 +811,60 @@ public static class SpiceMessageSerializer
 
         return hash.ToString("X8");
     }
+
+    /// <summary>
+    /// Creates a provisioning progress message.
+    /// </summary>
+    public static ProvisionProgressMessage CreateProvisionProgress(
+        ProvisioningPhase phase,
+        byte percent,
+        string message) => new()
+        {
+            Phase = phase,
+            Percent = Math.Min((byte)100, percent),
+            Message = message
+        };
+
+    /// <summary>
+    /// Creates a provisioning error message.
+    /// </summary>
+    public static ProvisionErrorMessage CreateProvisionError(
+        ProvisioningPhase phase,
+        uint errorCode,
+        string message,
+        bool isRecoverable = false) => new()
+        {
+            Phase = phase,
+            ErrorCode = errorCode,
+            Message = message,
+            IsRecoverable = isRecoverable
+        };
+
+    /// <summary>
+    /// Creates a provisioning complete message for successful completion.
+    /// </summary>
+    public static ProvisionCompleteMessage CreateProvisionComplete(
+        ulong diskUsageMB,
+        string windowsVersion,
+        string agentVersion) => new()
+        {
+            Success = true,
+            DiskUsageMB = diskUsageMB,
+            WindowsVersion = windowsVersion,
+            AgentVersion = agentVersion
+        };
+
+    /// <summary>
+    /// Creates a provisioning complete message for failed provisioning.
+    /// </summary>
+    public static ProvisionCompleteMessage CreateProvisionFailed(
+        string errorMessage,
+        string windowsVersion = "Unknown") => new()
+        {
+            Success = false,
+            DiskUsageMB = 0,
+            WindowsVersion = windowsVersion,
+            AgentVersion = "Unknown",
+            ErrorMessage = errorMessage
+        };
 }

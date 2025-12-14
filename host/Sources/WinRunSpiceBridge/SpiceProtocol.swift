@@ -74,6 +74,9 @@ public enum SpiceMessageType: UInt8, Codable {
     case clipboardChanged = 0x86
     case heartbeat = 0x87
     case telemetryReport = 0x88
+    case provisionProgress = 0x89
+    case provisionError = 0x8A
+    case provisionComplete = 0x8B
     case error = 0xFE
     case ack = 0xFF
 

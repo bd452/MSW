@@ -160,6 +160,12 @@ public enum SpiceMessageSerializer {
         case .telemetryReport:
             // TelemetryReport decoded as raw JSON for flexibility
             return try JSONSerialization.jsonObject(with: payload)
+        case .provisionProgress:
+            return try decoder.decode(ProvisionProgressMessage.self, from: payload)
+        case .provisionError:
+            return try decoder.decode(ProvisionErrorMessage.self, from: payload)
+        case .provisionComplete:
+            return try decoder.decode(ProvisionCompleteMessage.self, from: payload)
         case .error:
             return try decoder.decode(GuestErrorMessage.self, from: payload)
         case .ack:
