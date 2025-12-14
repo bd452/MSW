@@ -19,15 +19,19 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Cache Homebrew downloads
+      - name: Cache Homebrew
         uses: actions/cache@v4
         with:
-          path: ~/Library/Caches/Homebrew
-          key: homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-v1
-          restore-keys: |
-            homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-
+          path: |
+            ~/Library/Caches/Homebrew
+            /opt/homebrew/Cellar
+            /opt/homebrew/opt
+          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build') }}
+          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
-        run: brew install spice-gtk pkg-config
+        run: |
+          brew bundle install --file=.github/Brewfile.host-build
+          pkg-config --modversion spice-client-glib-2.0
       - name: Build
         working-directory: host
         run: swift build
@@ -40,15 +44,19 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Cache Homebrew downloads
+      - name: Cache Homebrew
         uses: actions/cache@v4
         with:
-          path: ~/Library/Caches/Homebrew
-          key: homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-v1
-          restore-keys: |
-            homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-
+          path: |
+            ~/Library/Caches/Homebrew
+            /opt/homebrew/Cellar
+            /opt/homebrew/opt
+          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-lint') }}
+          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
       - name: Install SwiftLint
-        run: brew install swiftlint
+        run: |
+          brew bundle install --file=.github/Brewfile.host-lint
+          swiftlint version
       - name: Run SwiftLint
         working-directory: host
         run: swiftlint lint --strict --no-cache --reporter github-actions-logging
