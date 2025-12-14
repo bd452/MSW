@@ -34,7 +34,7 @@ A seamless Windows-on-macOS solution using Virtualization.framework + Spice prot
 
 **VM Configuration:**
 
-- Headless Windows Server Core
+- Windows 11 IoT Enterprise LTSC 2024 ARM64 (shell disabled, minimal footprint)
 - 4 CPU cores, 4GB RAM (configurable)
 - VirtioFS for filesystem sharing (`/Users` → `Z:\`)
 - Spice display/agent devices
@@ -280,16 +280,19 @@ winrun init
 
 ### 1. Windows Base System
 
-**OS:** Windows Server 2022 Core (or latest)
+**OS:** Windows 11 IoT Enterprise LTSC 2024 ARM64
 
-- Minimal installation, no GUI shell
-- ~4GB disk footprint
+- Minimal installation with removable packages stripped
+- ~16GB disk footprint (can be reduced further with aggressive stripping)
 - Includes .NET runtime, PowerShell Core
+- Prism x86/x64 emulation layer included (runs legacy Windows apps)
+
+**Why ARM64:** Apple Silicon Macs run ARM64 VMs natively via Virtualization.framework. Windows 11 ARM64 includes Prism for x86/x64 app compatibility. Windows Server does not include Prism, so IoT Enterprise LTSC is required.
 
 **Boot configuration:**
 
-- No Explorer.exe (desktop shell disabled)
-- Services only mode
+- Explorer.exe disabled (desktop shell replaced by WinRunAgent)
+- Kiosk-like configuration
 - Auto-login to dedicated user account
 - Network configured (DHCP)
 
@@ -599,9 +602,9 @@ $ winrun init
 
 WinRun Setup
 ============
-WinRun needs to download Windows Server (4GB). Continue? [Y/n] y
+WinRun needs to download Windows 11 IoT Enterprise LTSC (~8GB). Continue? [Y/n] y
 
-Downloading Windows Server 2022 Core...
+Downloading Windows 11 IoT Enterprise LTSC ARM64...
 [████████████████████] 100%
 
 Creating virtual machine...

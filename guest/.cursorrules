@@ -142,12 +142,14 @@ dotnet build WinRunAgent.sln
 # Run tests
 dotnet test WinRunAgent.sln
 
-# Publish release
-dotnet publish -c Release -r win-x64
+# Publish release (ARM64 for Apple Silicon Mac VMs)
+dotnet publish -c Release -r win-arm64
 
 # Create self-contained deployment
-dotnet publish -c Release -r win-x64 --self-contained
+dotnet publish -c Release -r win-arm64 --self-contained
 ```
+
+> **Architecture Note:** Use `win-arm64` because Apple Silicon Macs run ARM64 VMs natively via Virtualization.framework. The .NET code is architecture-neutral (IL), but the published output must target the guest OS architecture.
 
 ## Deployment
 
