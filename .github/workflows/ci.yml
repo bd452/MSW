@@ -19,6 +19,13 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-v1
+          restore-keys: |
+            homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
         run: brew install spice-gtk pkg-config
       - name: Build
@@ -33,6 +40,13 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-v1
+          restore-keys: |
+            homebrew-downloads-${{ runner.os }}-${{ runner.arch }}-
       - name: Install SwiftLint
         run: brew install swiftlint
       - name: Run SwiftLint
