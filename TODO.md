@@ -54,11 +54,11 @@
     - [X] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
     - [X] Generate warnings for suboptimal ISOs (Server, Win10, consumer bloat) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for ISO validation with mock metadata { new:host/Tests/WinRunSetupTests/ISOValidatorTests.swift } <docs/development.md>
-  - [ ] Disk image creation + VM provisioning { new:host/Sources/WinRunSetup/DiskImageCreator.swift, new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Disk image creation + VM provisioning { new:host/Sources/WinRunSetup/DiskImageCreator.swift, new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
     - [X] Create sparse disk images with configurable size { new:host/Sources/WinRunSetup/DiskImageCreator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Configure VM with ISO as boot CD-ROM + autounattend injection { new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
     - [X] Drive unattended Windows installation lifecycle { new:host/Sources/WinRunSetup/VMProvisioner.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Add unit tests for disk creation and provisioning state machine { new:host/Tests/WinRunSetupTests/DiskImageCreatorTests.swift, new:host/Tests/WinRunSetupTests/VMProvisionerTests.swift } <docs/development.md>
+    - [X] Add unit tests for disk creation and provisioning state machine { new:host/Tests/WinRunSetupTests/DiskImageCreatorTests.swift, new:host/Tests/WinRunSetupTests/VMProvisionerTests.swift } <docs/development.md>
   - [ ] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Define provisioning phases and state transitions { new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Orchestrate full setup flow from ISO to ready state { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
