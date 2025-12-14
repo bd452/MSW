@@ -16,12 +16,7 @@ public final class FloppyImageCreator: Sendable {
     private static let numberOfHeads: UInt16 = 2
     private static let totalSectors: UInt16 = 2880
 
-    /// - Note: FileManager.default is thread-safe for the operations we perform.
-    private nonisolated(unsafe) let fileManager: FileManager
-
-    public init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
-    }
+    public init() {}
 
     // MARK: - Public API
 
@@ -36,7 +31,7 @@ public final class FloppyImageCreator: Sendable {
     ) throws -> URL {
         // Validate input files exist
         for (name, url) in files {
-            guard fileManager.fileExists(atPath: url.path) else {
+            guard FileManager.default.fileExists(atPath: url.path) else {
                 throw WinRunError.configInvalid(reason: "File not found: \(url.path) (for \(name))")
             }
         }
@@ -145,7 +140,7 @@ public final class FloppyImageCreator: Sendable {
             files[filename] = script
         }
 
-        let destination = outputPath ?? fileManager.temporaryDirectory
+        let destination = outputPath ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("autounattend-\(UUID().uuidString).img")
 
         return try createFloppyImage(files: files, at: destination)

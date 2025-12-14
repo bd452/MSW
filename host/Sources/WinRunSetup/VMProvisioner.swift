@@ -106,20 +106,13 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
 
 /// Creates and validates VM configurations for Windows provisioning.
 public final class VMProvisioner: Sendable {
-    /// - Note: FileManager.default is thread-safe for the operations we perform.
-    private nonisolated(unsafe) let fileManager: FileManager
     private let resourcesDirectory: URL?
     private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()
 
-    public init(
-        fileManager: FileManager = .default,
-        resourcesDirectory: URL? = nil,
-        floppyImageCreator: FloppyImageCreator? = nil
-    ) {
-        self.fileManager = fileManager
+    public init(resourcesDirectory: URL? = nil) {
         self.resourcesDirectory = resourcesDirectory
-        self.floppyImageCreator = floppyImageCreator ?? FloppyImageCreator(fileManager: fileManager)
+        self.floppyImageCreator = FloppyImageCreator()
     }
 
     // MARK: - Configuration Creation
@@ -193,7 +186,7 @@ public final class VMProvisioner: Sendable {
     public func bundledAutounattendPath() -> URL? {
         guard let resources = resourcesDirectory else { return nil }
         let path = resources.appendingPathComponent("provision/autounattend.xml")
-        return fileManager.fileExists(atPath: path.path) ? path : nil
+        return FileManager.default.fileExists(atPath: path.path) ? path : nil
     }
 
     // MARK: - Installation Lifecycle
@@ -281,7 +274,7 @@ public final class VMProvisioner: Sendable {
     // MARK: - Private Helpers
 
     private func validateFileExists(at url: URL, description: String) throws {
-        guard fileManager.fileExists(atPath: url.path) else {
+        guard FileManager.default.fileExists(atPath: url.path) else {
             throw WinRunError.configInvalid(reason: "\(description) not found at \(url.path)")
         }
     }
@@ -293,7 +286,7 @@ public final class VMProvisioner: Sendable {
         var provisionScripts: [URL] = []
         if let resources = resourcesDirectory {
             let provisionDir = resources.appendingPathComponent("provision")
-            if fileManager.fileExists(atPath: provisionDir.path) {
+            if FileManager.default.fileExists(atPath: provisionDir.path) {
                 let scriptNames = [
                     "provision.ps1",
                     "install-drivers.ps1",
@@ -303,7 +296,7 @@ public final class VMProvisioner: Sendable {
                 ]
                 for scriptName in scriptNames {
                     let scriptPath = provisionDir.appendingPathComponent(scriptName)
-                    if fileManager.fileExists(atPath: scriptPath.path) {
+                    if FileManager.default.fileExists(atPath: scriptPath.path) {
                         provisionScripts.append(scriptPath)
                     }
                 }

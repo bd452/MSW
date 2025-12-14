@@ -9,19 +9,12 @@ import WinRunShared
 /// `sources/install.wim` or `sources/install.esd`, and determines the
 /// Windows edition and architecture.
 public actor ISOValidator {
-    /// File manager for filesystem operations.
-    /// - Note: FileManager.default is thread-safe for the operations we perform.
-    private nonisolated(unsafe) let fileManager: FileManager
-
-    /// Logger for diagnostic output
+    /// Logger for diagnostic output.
     private let logger: Logger?
 
     /// Creates a new ISO validator
-    /// - Parameters:
-    ///   - fileManager: File manager to use (defaults to shared instance)
-    ///   - logger: Optional logger for diagnostic output
-    public init(fileManager: FileManager = .default, logger: Logger? = nil) {
-        self.fileManager = fileManager
+    /// - Parameter logger: Optional logger for diagnostic output
+    public init(logger: Logger? = nil) {
         self.logger = logger
     }
 
@@ -33,13 +26,13 @@ public actor ISOValidator {
         logger?.info("Validating ISO: \(isoURL.path)")
 
         // Verify file exists
-        guard fileManager.fileExists(atPath: isoURL.path) else {
+        guard FileManager.default.fileExists(atPath: isoURL.path) else {
             throw WinRunError.isoInvalid(reason: "File not found: \(isoURL.path)")
         }
 
         // Verify it's a file (not directory)
         var isDirectory: ObjCBool = false
-        fileManager.fileExists(atPath: isoURL.path, isDirectory: &isDirectory)
+        FileManager.default.fileExists(atPath: isoURL.path, isDirectory: &isDirectory)
         if isDirectory.boolValue {
             throw WinRunError.isoInvalid(reason: "Path is a directory, not an ISO file")
         }
@@ -173,9 +166,9 @@ public actor ISOValidator {
         let esdPath = sourcesDir.appendingPathComponent("install.esd")
 
         let installImagePath: URL
-        if fileManager.fileExists(atPath: wimPath.path) {
+        if FileManager.default.fileExists(atPath: wimPath.path) {
             installImagePath = wimPath
-        } else if fileManager.fileExists(atPath: esdPath.path) {
+        } else if FileManager.default.fileExists(atPath: esdPath.path) {
             installImagePath = esdPath
         } else {
             // Not a valid Windows installation ISO
@@ -434,7 +427,7 @@ public actor ISOValidator {
 
     /// Attempts to infer architecture from boot.wim
     private func inferArchitectureFromBootWim(at bootWimPath: URL) async throws -> String? {
-        guard fileManager.fileExists(atPath: bootWimPath.path) else {
+        guard FileManager.default.fileExists(atPath: bootWimPath.path) else {
             return nil
         }
 
