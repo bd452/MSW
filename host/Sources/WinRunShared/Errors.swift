@@ -144,6 +144,18 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
     /// Failed to parse Windows image metadata (install.wim/esd).
     case isoMetadataParseFailed(reason: String)
 
+    /// Failed to create disk image.
+    case diskCreationFailed(path: String, reason: String)
+
+    /// Disk image already exists at the specified location.
+    case diskAlreadyExists(path: String)
+
+    /// Invalid disk size specified.
+    case diskInvalidSize(sizeGB: UInt64, reason: String)
+
+    /// Insufficient disk space for the operation.
+    case diskInsufficientSpace(requiredGB: UInt64, availableGB: UInt64)
+
     // MARK: - General Errors
 
     /// Operation was cancelled.
@@ -176,7 +188,8 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
         case .launcherAlreadyExists, .launcherCreationFailed, .launcherIconMissing:
             return .launcher
         case .isoMountFailed, .isoInvalid, .isoArchitectureUnsupported,
-             .isoVersionWarning, .isoMetadataParseFailed:
+             .isoVersionWarning, .isoMetadataParseFailed,
+             .diskCreationFailed, .diskAlreadyExists, .diskInvalidSize, .diskInsufficientSpace:
             return .setup
         case .cancelled, .internalError, .notSupported:
             return .general
@@ -258,6 +271,14 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "\(version) has compatibility limitations"
         case .isoMetadataParseFailed:
             return "Could not read Windows image metadata"
+        case .diskCreationFailed:
+            return "Could not create disk image"
+        case .diskAlreadyExists:
+            return "Disk image already exists"
+        case .diskInvalidSize:
+            return "Invalid disk size"
+        case .diskInsufficientSpace:
+            return "Insufficient disk space"
 
         // General errors
         case .cancelled:
@@ -341,6 +362,14 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return warning
         case .isoMetadataParseFailed(let reason):
             return reason
+        case .diskCreationFailed(let path, let reason):
+            return "Could not create disk image at '\(path)': \(reason)"
+        case .diskAlreadyExists(let path):
+            return "A disk image already exists at '\(path)'."
+        case .diskInvalidSize(let sizeGB, let reason):
+            return "The specified size of \(sizeGB)GB is invalid: \(reason)"
+        case .diskInsufficientSpace(let requiredGB, let availableGB):
+            return "Requires \(requiredGB)GB but only \(availableGB)GB is available."
 
         case .cancelled:
             return "The operation was cancelled by the user or system."
@@ -413,6 +442,14 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "Consider using Windows 11 IoT Enterprise LTSC 2024 ARM64 for best compatibility."
         case .isoMetadataParseFailed:
             return "The ISO may be corrupted. Try re-downloading from Microsoft."
+        case .diskCreationFailed:
+            return "Check disk permissions and available space, then try again."
+        case .diskAlreadyExists:
+            return "Delete the existing disk image or use a different location."
+        case .diskInvalidSize:
+            return "Specify a disk size between 32GB and 2TB."
+        case .diskInsufficientSpace:
+            return "Free up disk space or choose a smaller VM disk size."
 
         case .cancelled:
             return nil
@@ -500,6 +537,14 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             base = "ISO version warning (\(version)): \(warning)"
         case .isoMetadataParseFailed(let reason):
             base = "ISO metadata parse failed: \(reason)"
+        case .diskCreationFailed(let path, let reason):
+            base = "Disk creation failed at '\(path)': \(reason)"
+        case .diskAlreadyExists(let path):
+            base = "Disk exists: \(path)"
+        case .diskInvalidSize(let sizeGB, let reason):
+            base = "Invalid disk size \(sizeGB)GB: \(reason)"
+        case .diskInsufficientSpace(let requiredGB, let availableGB):
+            base = "Insufficient space: need \(requiredGB)GB, have \(availableGB)GB"
 
         case .cancelled:
             base = "Operation cancelled"
@@ -509,77 +554,5 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             base = "Not supported: \(feature)"
         }
         return "[\(domain.rawValue)] \(base)"
-    }
-}
-
-// MARK: - Error Wrapping Helpers
-
-public extension WinRunError {
-    /// Wraps an arbitrary error as an internal WinRunError.
-    static func wrap(_ error: Error, context: String? = nil) -> WinRunError {
-        if let winRunError = error as? WinRunError {
-            return winRunError
-        }
-        let message = context.map { "\($0): \(error.localizedDescription)" }
-            ?? error.localizedDescription
-        return .internalError(message: message)
-    }
-}
-
-// MARK: - Error Code (for bridging)
-
-public extension WinRunError {
-    /// Integer error code for bridging to C APIs or XPC.
-    var code: Int {
-        switch self {
-        case .vmNotInitialized: return 1001
-        case .vmAlreadyStopped: return 1002
-        case .vmOperationTimeout: return 1003
-        case .vmSnapshotFailed: return 1004
-        case .virtualizationUnavailable: return 1005
-
-        case .configReadFailed: return 2001
-        case .configWriteFailed: return 2002
-        case .configInvalid: return 2003
-        case .configSchemaUnsupported: return 2004
-        case .configMissingValue: return 2005
-
-        case .spiceConnectionFailed: return 3001
-        case .spiceDisconnected: return 3002
-        case .spiceSharedMemoryUnavailable: return 3003
-        case .spiceAuthenticationFailed: return 3004
-
-        case .daemonUnreachable: return 4001
-        case .xpcConnectionRejected: return 4002
-        case .xpcThrottled: return 4003
-        case .xpcUnauthorized: return 4004
-
-        case .launchFailed: return 5001
-        case .invalidExecutable: return 5002
-        case .programExitedWithError: return 5003
-
-        case .launcherAlreadyExists: return 6001
-        case .launcherCreationFailed: return 6002
-        case .launcherIconMissing: return 6003
-
-        case .isoMountFailed: return 7001
-        case .isoInvalid: return 7002
-        case .isoArchitectureUnsupported: return 7003
-        case .isoVersionWarning: return 7004
-        case .isoMetadataParseFailed: return 7005
-
-        case .cancelled: return 9001
-        case .internalError: return 9002
-        case .notSupported: return 9003
-        }
-    }
-}
-
-// MARK: - Equatable
-
-extension WinRunError: Equatable {
-    public static func == (lhs: WinRunError, rhs: WinRunError) -> Bool {
-        // Compare by code and domain for equality (ignoring associated value details)
-        lhs.code == rhs.code
     }
 }
