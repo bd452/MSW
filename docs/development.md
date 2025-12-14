@@ -28,6 +28,8 @@
 | Windows Server 2022                 | ❌ None            | Low         | ⚠️ No x86/x64 apps    |
 | Windows 10 ARM                      | ⚠️ x86 only        | Medium      | ⚠️ No 64-bit apps     |
 
+> **Note:** Apple Silicon Macs run ARM64 VMs natively. Windows 11 ARM64 includes Prism for x86/x64 app emulation. Windows Server does not include Prism, making IoT Enterprise LTSC the required guest OS.
+
 ### SDK Version Strategy
 
 The project uses a **split strategy** for maximum stability:
@@ -181,7 +183,7 @@ For human contributors:
 4. Squash-merge or rebase as appropriate
 
 ## Windows Agent Deployment
-1. Build the solution on Windows: `dotnet publish -c Release -r win-x64`.
+1. Build the solution on Windows ARM64: `dotnet publish -c Release -r win-arm64`.
 2. Copy published bits to `C:\Program Files\WinRun`.
 3. Register as Windows service using `sc create WinRunAgent binPath= "C:\Program Files\WinRun\WinRunAgent.exe" start= auto`.
 4. Ensure Spice guest tools are installed so virtio-serial channels are available.
