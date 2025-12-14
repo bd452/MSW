@@ -1,46 +1,195 @@
-# WinRun Monorepo
+# WinRun
 
-WinRun delivers seamless Windows application windows on macOS using Virtualization.framework and the Spice remote display stack. This repository is a fully-structured monorepo that houses every component needed to build the experience end-to-end: the privileged macOS daemon (`winrund`), the GUI app wrapper (`WinRun.app`), the CLI (`winrun`), launcher templates, infrastructure assets, and the Windows guest agent.
+Run Windows applications seamlessly on macOS. WinRun uses Apple's Virtualization.framework and the Spice protocol to display Windows apps as native-feeling macOS windows.
 
-## Layout
+## Features
+
+- **Seamless Windows apps** — Windows applications appear as individual macOS windows, not a full desktop
+- **Native integration** — Clipboard sync, drag-and-drop, Retina display support
+- **Fast startup** — VM suspends when idle, resumes in ~2 seconds
+- **Auto-generated launchers** — Install Windows apps and they appear in Launchpad
+- **No kernel extensions** — Uses Apple's built-in virtualization technology
+
+## Requirements
+
+- **macOS 13 (Ventura) or later** on Apple Silicon (M1/M2/M3/M4)
+- **Windows 11 ARM64 ISO** (you provide your own license)
+- **~20GB free disk space** for Windows VM
+
+## Quick Start
+
+### 1. Download WinRun
+
+Download the latest `WinRun.dmg` from the [Releases](https://github.com/winrun/winrun/releases) page and drag `WinRun.app` to your Applications folder.
+
+### 2. Get Windows 11 ARM64
+
+WinRun requires a Windows 11 ARM64 installation image. You can obtain one from:
+
+- **[Microsoft Evaluation Center](https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise)** — Free 90-day evaluation
+- **[Windows Insider Program](https://www.microsoft.com/en-us/software-download/windowsinsiderpreviewiso)** — Free for Insiders
+- **Volume Licensing** — For enterprise users
+
+#### Recommended: Windows 11 IoT Enterprise LTSC 2024 ARM64
+
+For the best experience, we recommend **Windows 11 IoT Enterprise LTSC 2024 ARM64**:
+
+| Feature           | IoT Enterprise LTSC | Consumer (Home/Pro) |
+| ----------------- | ------------------- | ------------------- |
+| Bloatware         | None                | Heavy               |
+| Update frequency  | Security only       | Feature updates     |
+| Support lifecycle | 10 years            | ~2 years            |
+| x86/x64 emulation | ✅ Full              | ✅ Full              |
+
+#### ⚠️ Avoid Windows Server
+
+Windows Server ARM64 **does not include x86/x64 app emulation**. Most Windows applications won't work. Use Windows 11 instead.
+
+### 3. First-Run Setup
+
+1. Launch `WinRun.app`
+2. The setup wizard will guide you through:
+   - Dropping or selecting your Windows ISO
+   - Automated Windows installation (~10-15 minutes)
+   - Driver and agent configuration
+3. Once complete, you're ready to run Windows apps!
+
+### 4. Running Windows Apps
+
+**From Finder:**
+- Right-click any `.exe` file → Open With → WinRun
+- Or drag an `.exe` onto the WinRun dock icon
+
+**From Terminal:**
+```bash
+winrun notepad.exe
+winrun "C:\Program Files\App\app.exe" --arg1 --arg2
+```
+
+**Installing Windows software:**
+- Double-click any `.msi` or `setup.exe` installer
+- After installation, a macOS launcher is automatically created
+- Find your new app in Launchpad or Spotlight
+
+## Architecture
+
+WinRun is a monorepo containing:
 
 ```
-├── host/                 # Swift Package containing all macOS targets
-├── guest/                # Windows/.NET guest agent code
-├── apps/launchers/       # Resources for generated macOS .app launchers
-├── infrastructure/       # LaunchDaemon plist and future packaging bits
-├── scripts/              # Bootstrap + build helpers
-└── docs/                 # Architecture & development guides
+├── host/                 # Swift Package (macOS daemon, app, CLI)
+├── guest/                # C# Windows agent service
+├── infrastructure/       # LaunchDaemon plist, provisioning scripts
+├── scripts/              # Build and packaging automation
+└── docs/                 # Architecture and decision documentation
 ```
 
-See `docs/architecture.md` for a deeper component breakdown.
+See `docs/architecture.md` for detailed component breakdown.
 
-## Getting Started
+## Development
 
-1. **Install prerequisites** (macOS): run `./scripts/bootstrap.sh` to pull down Homebrew dependencies and prep the Application Support directory.
-2. **Build everything:** `./scripts/build-all.sh`. The script compiles host Swift targets and, when `dotnet` is available, the guest Windows agent.
-3. **Read the guides:**
-   - `docs/architecture.md` — how each module fits together.
-   - `docs/development.md` — day-to-day workflows, build/test commands, and deployment steps.
+### Prerequisites
 
-## Key Components
+**macOS Host:**
+- Xcode 15+
+- Swift 5.9+
+- Homebrew
 
-- **winrund (Swift daemon)** — Manages Windows VM lifecycle, exposes XPC, interfaces with LaunchDaemon, and coordinates Spice shared-memory transports.
-- **WinRun.app (Swift/AppKit)** — One instance per Windows window. Renders Spice frames, keeps NSWindow metadata in sync, and forwards input/clipboard events.
-- **winrun CLI (Swift CLI)** — Power-user tooling for launching programs, managing VM state, configuring resources, and creating `.app` launchers.
-- **WinRunAgent (C#)** — Guest-side Windows service built on .NET 8. Tracks window metadata, captures per-window frames, forwards events over Spice channels, and notifies the host about shortcut installations and icon extraction.
+**Windows Guest (for agent development):**
+- .NET 9 SDK
+- Visual Studio 2022 or VS Code
 
-## Monorepo Principles
+### Building
 
-- **Shared Swift modules** (`WinRunShared`, `WinRunXPC`, `WinRunVirtualMachine`, `WinRunSpiceBridge`) provide reusable configuration, IPC models, and virtualization helpers consumed by all host executables.
-- **Single source of truth for infrastructure** — LaunchDaemon plist, bootstrap scripts, and launcher templates live alongside the code they configure.
-- **Language-appropriate tooling** — Swift Package Manager for macOS targets, dotnet/Visual Studio solution for Windows agent, shell scripts for automation, and Markdown for documentation.
+```bash
+# Install dependencies and prepare environment
+./scripts/bootstrap.sh
 
-## Next Steps
+# Build all components
+./scripts/build-all.sh
 
-- Replace mock Spice bridge + VM controller implementations with production bindings.
-- Flesh out the WinRun guest agent with real Win32 hooks, Desktop Duplication, and Spice protocol extensions described in the architecture.
-- Add CI workflows targeting macOS (host) and Windows (guest) to gate pull requests.
-- Integrate installer packaging (pkg + MSI) for host and guest artifacts respectively.
+# Or build individually
+cd host && swift build
+cd guest && dotnet build WinRunAgent.sln
+```
 
-Contributions welcome—open issues and PRs to discuss design decisions or propose enhancements.
+### Testing
+
+```bash
+# Run all tests
+make test
+
+# Host tests only
+make test-host
+
+# Guest tests (requires Windows or use remote)
+make test-guest-remote  # Runs on Windows via GitHub Actions
+```
+
+### Documentation
+
+- `docs/architecture.md` — System design and component interaction
+- `docs/development.md` — Build, test, and deployment workflows
+- `docs/decisions/` — Architecture Decision Records (ADRs)
+
+## CLI Reference
+
+```bash
+# Launch programs
+winrun notepad.exe
+winrun "C:\path\to\app.exe" --arg1 --arg2
+
+# VM management
+winrun vm start      # Start the Windows VM
+winrun vm stop       # Stop the VM
+winrun vm suspend    # Suspend to disk
+winrun vm status     # Show VM state
+
+# Session management
+winrun session list  # List running Windows apps
+winrun session close <id>  # Close a specific app
+
+# Shortcuts and launchers
+winrun shortcut list    # List detected Windows shortcuts
+winrun shortcut sync    # Create macOS launchers for all shortcuts
+winrun create-launcher "C:\path\to\app.exe"  # Create single launcher
+
+# Configuration
+winrun config show      # Display current configuration
+winrun config set memory 8G   # Set VM memory
+winrun config set cpus 6      # Set VM CPU cores
+
+# Setup
+winrun init             # Initialize Windows VM (CLI alternative to GUI wizard)
+```
+
+## Troubleshooting
+
+### Windows apps are slow
+
+- Ensure you're using Windows 11 ARM64 (not Windows Server)
+- Close unused Windows apps to free VM resources
+- Increase VM memory: `winrun config set memory 8G`
+
+### x86/x64 apps don't work
+
+- Windows Server doesn't include x86/x64 emulation — use Windows 11 instead
+- Windows 10 ARM only supports 32-bit apps — upgrade to Windows 11
+
+### Setup stuck or failed
+
+- Verify your ISO is Windows 11 ARM64 (not x64)
+- Ensure you have at least 20GB free disk space
+- Check Console.app for detailed error logs
+
+## Contributing
+
+Contributions welcome! Please read `docs/development.md` for guidelines.
+
+1. Fork the repository
+2. Create a feature branch
+3. Run `make check` before submitting
+4. Open a Pull Request
+
+## License
+
+See [LICENSE](LICENSE) for details.

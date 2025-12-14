@@ -592,22 +592,67 @@ Z:\                                     # Mounted macOS /Users
 
 ## User Experience Flow
 
-### First Time Setup
+### First Time Setup (GUI)
+
+When a user launches WinRun.app without an existing Windows VM, the setup wizard appears:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Welcome to WinRun                            │
+│                                                                  │
+│  Run Windows apps natively on your Mac.                         │
+│                                                                  │
+│  To get started, you need a Windows 11 ARM64 installation       │
+│  image (.iso file).                                             │
+│                                                                  │
+│  Recommended: Windows 11 IoT Enterprise LTSC 2024 ARM64         │
+│  [Get Windows from Microsoft →]                                 │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                                                           │  │
+│  │     Drop Windows ISO here or click to browse              │  │
+│  │                                                           │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│                                     [Continue]                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+After the user provides an ISO:
+1. WinRun validates the ISO (ARM64 architecture, edition detection)
+2. Displays warnings if ISO is suboptimal (e.g., Windows Server lacks x86 emulation)
+3. Creates disk image and begins automated Windows installation (~10-15 min)
+4. Installs VirtIO drivers, WinRun agent, and optimizes Windows
+5. Shows "Ready!" screen with quick-start tips
+
+### First Time Setup (CLI)
 
 ```
 $ winrun init
 
 WinRun Setup
 ============
-WinRun needs to download Windows Server (4GB). Continue? [Y/n] y
+Please provide a Windows 11 ARM64 ISO file.
+Recommended: Windows 11 IoT Enterprise LTSC 2024 ARM64
 
-Downloading Windows Server 2022 Core...
-[████████████████████] 100%
+ISO path: ~/Downloads/Win11_ARM64.iso
+
+Validating ISO...
+✓ Architecture: ARM64
+✓ Edition: Windows 11 IoT Enterprise LTSC
+✓ Build: 26100
 
 Creating virtual machine...
-Starting Windows...
-Installing Spice guest tools...
-Installing WinRun agent...
+[████████████████████] 100%
+
+Installing Windows (unattended)...
+[████████████████████] 100%
+
+Installing drivers and WinRun agent...
+[████████████████████] 100%
+
+Optimizing Windows...
+[████████████████████] 100%
 
 Setup complete! 
 

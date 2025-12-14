@@ -10,9 +10,23 @@
 - (Optional) .NET 9 SDK for running guest linting locally: `brew install dotnet`
 
 ### Windows Guest
-- Windows Server 2022 (Desktop Experience disabled)
-- .NET 9 SDK (pinned via `guest/global.json`)
-- Visual Studio Build Tools (for testing the agent)
+- Windows 11 ARM64 ISO (user-provided during first-run setup)
+- .NET 9 SDK (pinned via `guest/global.json`) for agent development
+- Visual Studio Build Tools or VS Code for testing
+
+> **Recommended:** Windows 11 IoT Enterprise LTSC 2024 ARM64 for minimal bloat and 10-year support.
+>
+> **Note:** Apple Silicon Macs run ARM64 VMs natively. Windows 11 ARM64 includes Prism for x86/x64 app emulation. Windows Server does **not** include Prism — most Windows apps won't work on Server editions.
+
+### Windows Version Compatibility
+
+| Windows Version                     | x86/x64 Emulation | Bloat Level | Setup Warning        |
+| ----------------------------------- | ----------------- | ----------- | -------------------- |
+| Windows 11 IoT Enterprise LTSC 2024 | ✅ Full            | None        | ✅ Recommended        |
+| Windows 11 Enterprise               | ✅ Full            | Low         | None                 |
+| Windows 11 Pro/Home                 | ✅ Full            | High        | ⚠️ Bloatware detected |
+| Windows Server 2022                 | ❌ None            | Low         | ⚠️ No x86/x64 apps    |
+| Windows 10 ARM                      | ⚠️ x86 only        | Medium      | ⚠️ No 64-bit apps     |
 
 ### SDK Version Strategy
 
@@ -171,6 +185,58 @@ For human contributors:
 2. Copy published bits to `C:\Program Files\WinRun`.
 3. Register as Windows service using `sc create WinRunAgent binPath= "C:\Program Files\WinRun\WinRunAgent.exe" start= auto`.
 4. Ensure Spice guest tools are installed so virtio-serial channels are available.
+
+> **Architecture Note:** Use `win-arm64` for Apple Silicon Mac VMs. The .NET code is architecture-neutral, but the published output must match the guest OS architecture.
+
+## Host Module Overview
+
+The Swift host package contains several modules:
+
+| Module                 | Purpose                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `WinRunShared`         | Configuration, logging, error types, input models         |
+| `WinRunXPC`            | IPC contracts and async client for daemon communication   |
+| `WinRunVirtualMachine` | VM lifecycle management via Virtualization.framework      |
+| `WinRunSpiceBridge`    | Spice protocol binding and host↔guest messaging           |
+| `WinRunSetup`          | Windows provisioning, ISO validation, setup orchestration |
+| `WinRunDaemon`         | Background service entry point (`winrund`)                |
+| `WinRunApp`            | AppKit app for rendering windows + setup wizard UI        |
+| `WinRunCLI`            | Command-line interface (`winrun`)                         |
+
+### WinRunSetup Module
+
+The setup module handles first-run experience and Windows provisioning:
+
+```
+WinRunSetup/
+├── ISOValidator.swift           # Validate Windows ISO, detect edition
+├── WindowsEditionInfo.swift     # Edition metadata and compatibility checks
+├── DiskImageCreator.swift       # Create sparse VM disk images
+├── VMProvisioner.swift          # Drive unattended Windows installation
+├── ProvisioningState.swift      # State machine for setup phases
+├── SetupCoordinator.swift       # Orchestrate full setup flow
+└── SetupError.swift             # Setup-specific error types
+```
+
+Key responsibilities:
+- **ISO Validation**: Mount ISO, read install.wim/esd, detect ARM64 architecture and Windows edition
+- **Edition Warnings**: Flag suboptimal ISOs (Windows Server lacks x86 emulation, consumer editions have bloat)
+- **Provisioning**: Boot VM with ISO, drive unattended install, install drivers and agent
+- **Progress Tracking**: Report phase-based progress to UI via async streams
+
+### Testing Setup Components
+
+```bash
+# Run setup module tests
+swift test --filter WinRunSetupTests
+
+# Tests cover:
+# - ISO metadata parsing (mock data)
+# - Edition detection and warning generation
+# - Provisioning state machine transitions
+# - Disk image creation
+# - Error recovery scenarios
+```
 
 ## Testing Strategy
 

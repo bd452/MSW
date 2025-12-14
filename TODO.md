@@ -28,7 +28,7 @@
     - [X] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [X] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
 
-- [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
+- [X] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
   - [X] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
@@ -44,22 +44,101 @@
   - [X] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [X] Replace mock logger with structured sinks + ETW providers { guest/WinRunAgent/Services/Logging.cs } <docs/development.md>
     - [X] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
-  - [ ] Guest test coverage { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, guest/WinRunAgent.Tests/DesktopDuplicationBridgeTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
+  - [X] Guest test coverage { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, guest/WinRunAgent.Tests/DesktopDuplicationBridgeTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [X] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
+- [ ] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
+  - [ ] ISO validation + Windows version detection { new:host/Sources/WinRunSetup/ISOValidator.swift, new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Mount and parse Windows ISO metadata (install.wim/esd) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Generate warnings for suboptimal ISOs (Server, Win10, consumer bloat) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Add unit tests for ISO validation with mock metadata { new:host/Tests/WinRunSetupTests/ISOValidatorTests.swift } <docs/development.md>
+  - [ ] Disk image creation + VM provisioning { new:host/Sources/WinRunSetup/DiskImageCreator.swift, new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Create sparse disk images with configurable size { new:host/Sources/WinRunSetup/DiskImageCreator.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Configure VM with ISO as boot CD-ROM + autounattend injection { new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Drive unattended Windows installation lifecycle { new:host/Sources/WinRunSetup/VMProvisioner.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Add unit tests for disk creation and provisioning state machine { new:host/Tests/WinRunSetupTests/DiskImageCreatorTests.swift, new:host/Tests/WinRunSetupTests/VMProvisionerTests.swift } <docs/development.md>
+  - [ ] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Define provisioning phases and state transitions { new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Orchestrate full setup flow from ISO to ready state { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Handle host↔guest progress signaling via Spice channel { new:host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Implement error recovery and rollback for failed provisioning { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Add unit tests for state machine transitions and error handling { new:host/Tests/WinRunSetupTests/SetupCoordinatorTests.swift, new:host/Tests/WinRunSetupTests/ProvisioningStateTests.swift } <docs/development.md>
+  - [ ] Windows unattended installation assets { new:infrastructure/windows/autounattend.xml, new:infrastructure/windows/provision/ } <docs/decisions/windows-provisioning.md>
+    - [ ] Create autounattend.xml for silent Windows install { new:infrastructure/windows/autounattend.xml } <docs/decisions/windows-provisioning.md>
+    - [ ] Write VirtIO driver installation script { new:infrastructure/windows/provision/install-drivers.ps1 } <docs/decisions/windows-provisioning.md>
+    - [ ] Write WinRunAgent installation script { new:infrastructure/windows/provision/install-agent.ps1 } <docs/decisions/windows-provisioning.md>
+    - [ ] Write Windows optimization/debloat script { new:infrastructure/windows/provision/optimize-windows.ps1 } <docs/decisions/windows-provisioning.md>
+    - [ ] Write finalization script with host signaling { new:infrastructure/windows/provision/finalize.ps1 } <docs/decisions/windows-provisioning.md>
+  - [ ] Guest provisioning protocol messages { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Add ProvisionProgress, ProvisionError, ProvisionComplete message types { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Implement provisioning status reporter in guest agent { new:guest/WinRunAgent/Services/ProvisioningReporter.cs } <docs/decisions/windows-provisioning.md>
+    - [ ] Add unit tests for provisioning message serialization { guest/WinRunAgent.Tests/MessagesTests.cs, host/Tests/WinRunSpiceBridgeTests/SpiceProtocolTests.swift } <docs/development.md>
+
+- [ ] Setup UI (First-Run Experience) { host/Sources/WinRunApp/Setup/, host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] First-run detection + setup flow routing { host/Sources/WinRunApp/AppMain.swift, new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Detect missing VM disk image on app launch { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Route to setup wizard vs normal operation { new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] Welcome + ISO acquisition view { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Display welcome message and Windows requirements { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Link to Microsoft Windows ARM download page { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Recommend Windows 11 IoT Enterprise LTSC 2024 ARM64 { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] ISO import view with drag-drop { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Implement drag-drop zone for ISO files { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Add file picker fallback for accessibility { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Display validation results and warnings inline { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] Installation progress view { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Show phase-based progress with descriptive status { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Display estimated time remaining when possible { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Provide cancel option with confirmation dialog { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] Setup complete + getting started view { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Show success message with disk usage summary { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Display quick-start tips for running Windows apps { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] Error handling + recovery UI { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Display actionable error messages with recovery options { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Offer retry, choose different ISO, or contact support { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] Setup UI tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
+    - [ ] Add unit tests for first-run detection logic { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
+    - [ ] Add view controller state transition tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
+
+- [ ] Guest Agent Installer { new:guest/WinRunAgent.Installer/, guest/WinRunAgent/WinRunAgent.csproj } <docs/decisions/windows-provisioning.md>
+  - [ ] MSI installer project { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+    - [ ] Create WiX installer project with service registration { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+    - [ ] Configure auto-start service on Windows boot { new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+    - [ ] Add upgrade/uninstall support { new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+  - [ ] Silent installation scripts { new:guest/WinRunAgent.Installer/install-silent.ps1, new:guest/WinRunAgent.Installer/uninstall-silent.ps1 } <docs/decisions/windows-provisioning.md>
+    - [ ] Create silent install script for provisioning automation { new:guest/WinRunAgent.Installer/install-silent.ps1 } <docs/decisions/windows-provisioning.md>
+    - [ ] Create uninstall script for clean removal { new:guest/WinRunAgent.Installer/uninstall-silent.ps1 } <docs/decisions/windows-provisioning.md>
+  - [ ] Build integration { scripts/build-all.sh, new:scripts/build-guest-installer.ps1, .github/workflows/ci.yml } <docs/decisions/operations.md>
+    - [ ] Add MSI build step to Windows CI { .github/workflows/ci.yml, new:scripts/build-guest-installer.ps1 } <docs/decisions/operations.md>
+    - [ ] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
+
+- [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
+  - [ ] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
+    - [ ] Create script to build complete WinRun.app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [ ] Embed CLI and daemon binaries in app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [ ] Bundle provisioning assets (autounattend.xml, scripts, MSI) { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [ ] Bundle or configure download of VirtIO drivers { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [ ] Embed Spice libraries (libspice-glib and dependencies) { new:scripts/package-app.sh } <docs/decisions/operations.md>
+  - [ ] Code signing + notarization { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+    - [ ] Sign app bundle with Developer ID certificate { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+    - [ ] Notarize with Apple for Gatekeeper approval { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+    - [ ] Staple notarization ticket to app bundle { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+  - [ ] DMG creation { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
+    - [ ] Create DMG with drag-to-Applications layout { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
+    - [ ] Add background image and icon positioning { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
+    - [ ] Sign and notarize final DMG { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
+  - [ ] CI artifact publishing { .github/workflows/ci.yml } <docs/decisions/operations.md>
+    - [ ] Build and sign app bundle in CI { .github/workflows/ci.yml } <docs/decisions/operations.md>
+    - [ ] Upload DMG and MSI as release artifacts { .github/workflows/ci.yml } <docs/decisions/operations.md>
+
 - [ ] Cross-Cutting & Operations { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, README.md } <docs/decisions/operations.md, docs/development.md>
-  - [X] Host/guest protocol contracts { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-    - [X] Define Spice payload schemas + version negotiation { host/Sources/WinRunXPC/XPCInterfaces.swift, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-    - [X] Document channel capabilities + security expectations { docs/architecture.md, docs/decisions/protocols.md }
-  - [ ] Build + packaging automation { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, new:scripts/package-host.sh, new:scripts/package-guest.ps1 } <docs/decisions/operations.md>
-    - [ ] Add macOS pkg build step hooking pkgbuild/productbuild { scripts/build-all.sh, new:scripts/package-host.sh } <docs/decisions/operations.md>
-    - [ ] Add Windows MSI/installer packaging { scripts/build-all.sh, new:scripts/package-guest.ps1 } <docs/decisions/operations.md>
+  - [ ] Build + packaging automation { scripts/build-all.sh, scripts/bootstrap.sh, Makefile } <docs/decisions/operations.md>
+    - [ ] Update build-all.sh to include setup module and app packaging { scripts/build-all.sh } <docs/decisions/operations.md>
     - [ ] Ensure bootstrap seeds Application Support + plist assets { scripts/bootstrap.sh, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions/operations.md>
   - [ ] Documentation updates { README.md, docs/architecture.md, docs/development.md, docs/decisions/operations.md }
+    - [ ] Update architecture.md with setup + provisioning components { docs/architecture.md } <docs/decisions/windows-provisioning.md>
+    - [ ] Add end-user installation guide to README { README.md }
+    - [ ] Document Windows ISO acquisition and recommendations { README.md, docs/decisions/windows-provisioning.md }
     - [ ] Reflect production architecture + workflows { docs/architecture.md, docs/development.md, docs/decisions/operations.md }
-    - [ ] Update README with installation + usage once stable { README.md }
-  - [X] Continuous integration { scripts/build-all.sh, scripts/bootstrap.sh, .github/workflows/ci.yml } <docs/decisions/operations.md>
-    - [X] Add macOS CI pipeline for Swift targets { .github/workflows/ci.yml } <docs/decisions/operations.md>
-    - [X] Add Windows CI pipeline for dotnet agent { .github/workflows/ci.yml } <docs/decisions/operations.md>
-    - [ ] Publish artifacts + aggregated test results { .github/workflows/ci.yml } <docs/decisions/operations.md>
