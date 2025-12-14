@@ -108,14 +108,17 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
 public final class VMProvisioner: Sendable {
     private let fileManager: FileManager
     private let resourcesDirectory: URL?
+    private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()
 
     public init(
         fileManager: FileManager = .default,
-        resourcesDirectory: URL? = nil
+        resourcesDirectory: URL? = nil,
+        floppyImageCreator: FloppyImageCreator? = nil
     ) {
         self.fileManager = fileManager
         self.resourcesDirectory = resourcesDirectory
+        self.floppyImageCreator = floppyImageCreator ?? FloppyImageCreator(fileManager: fileManager)
     }
 
     // MARK: - Configuration Creation
@@ -285,34 +288,32 @@ public final class VMProvisioner: Sendable {
     private func createAutounattendFloppy(from autounattendPath: URL) async throws -> URL {
         try validateFileExists(at: autounattendPath, description: "Autounattend.xml")
 
-        let tempDir = fileManager.temporaryDirectory
-        let floppyPath = tempDir.appendingPathComponent("autounattend-\(UUID().uuidString).img")
-        let floppySize: UInt64 = 1_474_560
-
-        let created = fileManager.createFile(
-            atPath: floppyPath.path, contents: nil, attributes: nil)
-        guard created else {
-            throw WinRunError.diskCreationFailed(
-                path: floppyPath.path, reason: "Could not create floppy image")
+        // Collect provisioning scripts if available in resources
+        var provisionScripts: [URL] = []
+        if let resources = resourcesDirectory {
+            let provisionDir = resources.appendingPathComponent("provision")
+            if fileManager.fileExists(atPath: provisionDir.path) {
+                let scriptNames = [
+                    "provision.ps1",
+                    "install-drivers.ps1",
+                    "install-agent.ps1",
+                    "optimize-windows.ps1",
+                    "finalize.ps1",
+                ]
+                for scriptName in scriptNames {
+                    let scriptPath = provisionDir.appendingPathComponent(scriptName)
+                    if fileManager.fileExists(atPath: scriptPath.path) {
+                        provisionScripts.append(scriptPath)
+                    }
+                }
+            }
         }
 
-        guard let fileHandle = FileHandle(forWritingAtPath: floppyPath.path) else {
-            throw WinRunError.diskCreationFailed(
-                path: floppyPath.path, reason: "Could not open floppy image")
-        }
-
-        defer { try? fileHandle.close() }
-
-        do {
-            try fileHandle.truncate(atOffset: floppySize)
-        } catch {
-            throw WinRunError.diskCreationFailed(
-                path: floppyPath.path,
-                reason: "Could not set floppy size: \(error.localizedDescription)"
-            )
-        }
-
-        return floppyPath
+        // Create the FAT12 floppy image with autounattend.xml and scripts
+        return try floppyImageCreator.createAutounattendFloppy(
+            autounattendPath: autounattendPath,
+            provisionScripts: provisionScripts
+        )
     }
 
     private func reportProgress(
