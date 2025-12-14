@@ -1,6 +1,7 @@
-import XCTest
-@testable import WinRunSetup
 import WinRunShared
+import XCTest
+
+@testable import WinRunSetup
 
 final class ISOValidatorTests: XCTestCase {
     // MARK: - WindowsEditionInfo Tests

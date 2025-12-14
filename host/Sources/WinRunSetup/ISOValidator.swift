@@ -376,7 +376,8 @@ public actor ISOValidator {
     private func parseWIMXML(_ data: Data) -> WindowsEditionInfo? {
         guard let xmlString = decodeWIMXMLString(from: data) else { return nil }
 
-        let editionName = extractXMLValue(from: xmlString, tag: "DISPLAYNAME")
+        let editionName =
+            extractXMLValue(from: xmlString, tag: "DISPLAYNAME")
             ?? extractXMLValue(from: xmlString, tag: "NAME")
         let architecture = extractArchitecture(from: xmlString)
         let version = extractVersion(from: xmlString)
@@ -405,8 +406,10 @@ public actor ISOValidator {
 
     /// Extracts architecture from WIM XML (ARCH: 0=x86, 9=x64, 12=ARM64)
     private func extractArchitecture(from xml: String) -> String? {
-        guard let archValue = extractXMLValue(from: xml, tag: "ARCH")?
-            .trimmingCharacters(in: .whitespaces) else { return nil }
+        guard
+            let archValue = extractXMLValue(from: xml, tag: "ARCH")?
+                .trimmingCharacters(in: .whitespaces)
+        else { return nil }
         switch archValue {
         case "0": return "x86"
         case "9": return "x64"
@@ -417,8 +420,10 @@ public actor ISOValidator {
 
     /// Extracts version from WIM XML BUILD tag
     private func extractVersion(from xml: String) -> String? {
-        guard let build = extractXMLValue(from: xml, tag: "BUILD")?
-            .trimmingCharacters(in: .whitespaces) else { return nil }
+        guard
+            let build = extractXMLValue(from: xml, tag: "BUILD")?
+                .trimmingCharacters(in: .whitespaces)
+        else { return nil }
         return "10.0.\(build).0"
     }
 
