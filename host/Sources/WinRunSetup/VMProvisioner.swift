@@ -206,8 +206,11 @@ public final class VMProvisioner: Sendable {
             try validateConfiguration(configuration)
         } catch {
             return handleInstallationError(
-                error, startTime: startTime, diskPath: configuration.diskImagePath,
-                delegate: delegate)
+                error,
+                startTime: startTime,
+                diskPath: configuration.diskImagePath,
+                delegate: delegate
+            )
         }
 
         let isCancelled = { @Sendable in self.installationTask.isCancelled }
@@ -224,8 +227,11 @@ public final class VMProvisioner: Sendable {
             _ = try await createProvisioningConfiguration(configuration)
 
             reportProgress(
-                delegate, phase: .booting, overall: 0.05,
-                message: "Starting Windows Setup from ISO...")
+                delegate,
+                phase: .booting,
+                overall: 0.05,
+                message: "Starting Windows Setup from ISO..."
+            )
 
             if isCancelled() {
                 return createCancelledResult(
@@ -250,8 +256,11 @@ public final class VMProvisioner: Sendable {
             return result
         } catch {
             return handleInstallationError(
-                error, startTime: startTime, diskPath: configuration.diskImagePath,
-                delegate: delegate)
+                error,
+                startTime: startTime,
+                diskPath: configuration.diskImagePath,
+                delegate: delegate
+            )
         }
     }
 
@@ -342,8 +351,11 @@ public final class VMProvisioner: Sendable {
             if isCancelled() { throw WinRunError.cancelled }
 
             try await runSinglePhase(
-                phaseInfo, baseProgress: overallProgress, delegate: delegate,
-                isCancelled: isCancelled)
+                phaseInfo,
+                baseProgress: overallProgress,
+                delegate: delegate,
+                isCancelled: isCancelled
+            )
             overallProgress += phaseInfo.weight
         }
     }
