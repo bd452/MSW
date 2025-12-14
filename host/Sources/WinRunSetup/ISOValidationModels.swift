@@ -93,7 +93,7 @@ public struct ISOValidationWarning: Equatable, Sendable {
 // MARK: - Validation Result
 
 /// Result of validating a Windows ISO file.
-public struct ISOValidationResult: Sendable {
+public struct ISOValidationResult: Equatable, Sendable {
     /// Path to the validated ISO file
     public let isoPath: URL
 
