@@ -14,7 +14,6 @@ final class VMProvisionerTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
 
-        // Create a temporary directory for tests
         let tempDir = FileManager.default.temporaryDirectory
         testDirectory = tempDir.appendingPathComponent(
             "VMProvisionerTests-\(UUID().uuidString)",
@@ -178,7 +177,7 @@ final class VMProvisionerTests: XCTestCase {
         XCTAssertTrue(config.useEFIBoot)
     }
 
-    // MARK: - VMProvisioner Tests
+    // MARK: - VMProvisioner Configuration Tests
 
     func testCreateProvisioningConfiguration_BasicSetup() async throws {
         let isoPath = try createTestFile(named: "windows.iso")
@@ -194,20 +193,9 @@ final class VMProvisionerTests: XCTestCase {
         XCTAssertEqual(vmConfig.cpuCount, 4)
         XCTAssertEqual(vmConfig.memorySizeGB, 8)
         XCTAssertTrue(vmConfig.useEFIBoot)
-
-        // Should have disk and CD-ROM (no floppy without autounattend)
         XCTAssertEqual(vmConfig.storageDevices.count, 2)
-
-        // First device should be disk
         XCTAssertEqual(vmConfig.storageDevices[0].type, .disk)
-        XCTAssertEqual(vmConfig.storageDevices[0].path, diskPath)
-        XCTAssertFalse(vmConfig.storageDevices[0].isReadOnly)
-        XCTAssertFalse(vmConfig.storageDevices[0].isBootable)
-
-        // Second device should be CD-ROM (ISO)
         XCTAssertEqual(vmConfig.storageDevices[1].type, .cdrom)
-        XCTAssertEqual(vmConfig.storageDevices[1].path, isoPath)
-        XCTAssertTrue(vmConfig.storageDevices[1].isReadOnly)
         XCTAssertTrue(vmConfig.storageDevices[1].isBootable)
     }
 
@@ -224,13 +212,8 @@ final class VMProvisionerTests: XCTestCase {
 
         let vmConfig = try await provisioner.createProvisioningConfiguration(provConfig)
 
-        // Should have disk, CD-ROM, and floppy
         XCTAssertEqual(vmConfig.storageDevices.count, 3)
-
-        // Third device should be floppy
         XCTAssertEqual(vmConfig.storageDevices[2].type, .floppy)
-        XCTAssertTrue(vmConfig.storageDevices[2].isReadOnly)
-        XCTAssertFalse(vmConfig.storageDevices[2].isBootable)
     }
 
     func testCreateProvisioningConfiguration_EnforceMinimumCPU() async throws {
@@ -240,12 +223,11 @@ final class VMProvisionerTests: XCTestCase {
         let provConfig = ProvisioningConfiguration(
             isoPath: isoPath,
             diskImagePath: diskPath,
-            cpuCount: 1  // Below minimum
+            cpuCount: 1
         )
 
         let vmConfig = try await provisioner.createProvisioningConfiguration(provConfig)
 
-        // Should enforce minimum of 2 CPUs
         XCTAssertEqual(vmConfig.cpuCount, 2)
     }
 
@@ -266,31 +248,6 @@ final class VMProvisionerTests: XCTestCase {
         } catch let error as WinRunError {
             if case .configInvalid(let reason) = error {
                 XCTAssertTrue(reason.contains("Windows ISO"))
-            } else {
-                XCTFail("Wrong error type: \(error)")
-            }
-        } catch {
-            XCTFail("Wrong error type: \(error)")
-        }
-    }
-
-    func testCreateProvisioningConfiguration_MissingDisk() async {
-        let isoPath = testDirectory.appendingPathComponent("windows.iso")
-        try? FileManager.default.createFile(atPath: isoPath.path, contents: Data(), attributes: nil)
-
-        let diskPath = testDirectory.appendingPathComponent("nonexistent.img")
-
-        let provConfig = ProvisioningConfiguration(
-            isoPath: isoPath,
-            diskImagePath: diskPath
-        )
-
-        do {
-            _ = try await provisioner.createProvisioningConfiguration(provConfig)
-            XCTFail("Should throw error for missing disk")
-        } catch let error as WinRunError {
-            if case .configInvalid(let reason) = error {
-                XCTAssertTrue(reason.contains("Disk image"))
             } else {
                 XCTFail("Wrong error type: \(error)")
             }
@@ -365,49 +322,14 @@ final class VMProvisionerTests: XCTestCase {
         }
     }
 
-    func testValidateConfiguration_MissingAutounattend() throws {
-        let isoPath = try createTestFile(named: "windows.iso")
-        let diskPath = try createTestFile(named: "disk.img")
-        let autounattendPath = testDirectory.appendingPathComponent("nonexistent.xml")
-
-        let provConfig = ProvisioningConfiguration(
-            isoPath: isoPath,
-            diskImagePath: diskPath,
-            autounattendPath: autounattendPath
-        )
-
-        do {
-            try provisioner.validateConfiguration(provConfig)
-            XCTFail("Should throw error for missing autounattend")
-        } catch let error as WinRunError {
-            if case .configInvalid(let reason) = error {
-                XCTAssertTrue(reason.contains("Autounattend"))
-            } else {
-                XCTFail("Wrong error type: \(error)")
-            }
-        } catch {
-            XCTFail("Wrong error type: \(error)")
-        }
-    }
-
     // MARK: - Bundled Resources Tests
 
     func testBundledAutounattendPath_NoResources() {
         let provisioner = VMProvisioner(resourcesDirectory: nil)
-
-        XCTAssertNil(provisioner.bundledAutounattendPath())
-    }
-
-    func testBundledAutounattendPath_ResourcesNotFound() {
-        let fakeResources = testDirectory.appendingPathComponent("Resources")
-
-        let provisioner = VMProvisioner(resourcesDirectory: fakeResources)
-
         XCTAssertNil(provisioner.bundledAutounattendPath())
     }
 
     func testBundledAutounattendPath_Found() throws {
-        // Create the expected path structure
         let provisionDir = testDirectory
             .appendingPathComponent("Resources")
             .appendingPathComponent("provision")

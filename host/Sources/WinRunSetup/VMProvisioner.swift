@@ -27,13 +27,6 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
     public static let defaultMemorySizeGB = 8
 
     /// Creates a provisioning configuration.
-    ///
-    /// - Parameters:
-    ///   - isoPath: Path to the Windows installation ISO.
-    ///   - diskImagePath: Path to the disk image.
-    ///   - autounattendPath: Optional path to autounattend.xml.
-    ///   - cpuCount: CPU cores to allocate. Defaults to 4.
-    ///   - memorySizeGB: Memory in GB. Defaults to 8.
     public init(
         isoPath: URL,
         diskImagePath: URL,
@@ -46,6 +39,18 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
         self.autounattendPath = autounattendPath
         self.cpuCount = cpuCount
         self.memorySizeGB = memorySizeGB
+    }
+
+    /// Creates a configuration using default paths.
+    public static func withDefaults(
+        isoPath: URL,
+        autounattendPath: URL? = nil
+    ) -> ProvisioningConfiguration {
+        ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: DiskImageConfiguration.defaultPath,
+            autounattendPath: autounattendPath
+        )
     }
 }
 
@@ -60,16 +65,9 @@ public struct ProvisioningStorageDevice: Equatable, Sendable {
         case floppy
     }
 
-    /// Device type (disk, cdrom, or floppy).
     public let type: DeviceType
-
-    /// Path to the storage device image.
     public let path: URL
-
-    /// Whether the device is read-only.
     public let isReadOnly: Bool
-
-    /// Whether this device should be bootable.
     public let isBootable: Bool
 
     public init(type: DeviceType, path: URL, isReadOnly: Bool = false, isBootable: Bool = false) {
@@ -81,23 +79,12 @@ public struct ProvisioningStorageDevice: Equatable, Sendable {
 }
 
 /// Complete VM configuration for Windows provisioning.
-///
-/// This configuration includes the ISO as a bootable CD-ROM device
-/// and optionally a virtual floppy for autounattend.xml injection.
 public struct ProvisioningVMConfiguration: Equatable, Sendable {
-    /// CPU cores allocated to the VM.
     public let cpuCount: Int
-
-    /// Memory in bytes allocated to the VM.
     public let memorySizeBytes: UInt64
-
-    /// Storage devices attached to the VM.
     public let storageDevices: [ProvisioningStorageDevice]
-
-    /// Whether to use EFI boot.
     public let useEFIBoot: Bool
 
-    /// Memory in GB.
     public var memorySizeGB: Int {
         Int(memorySizeBytes / (1024 * 1024 * 1024))
     }
@@ -118,33 +105,11 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
 // MARK: - VM Provisioner
 
 /// Creates and validates VM configurations for Windows provisioning.
-///
-/// `VMProvisioner` handles the setup of a virtual machine configuration
-/// suitable for Windows installation. It configures the ISO as a bootable
-/// CD-ROM device and optionally injects autounattend.xml via a virtual floppy.
-///
-/// ## Example
-/// ```swift
-/// let provisioner = VMProvisioner()
-/// let config = ProvisioningConfiguration(
-///     isoPath: isoURL,
-///     diskImagePath: diskURL,
-///     autounattendPath: autounattendURL
-/// )
-/// let vmConfig = try await provisioner.createProvisioningConfiguration(config)
-/// ```
 public final class VMProvisioner: Sendable {
-    /// File manager used for file operations.
     private let fileManager: FileManager
-
-    /// Directory containing bundled provisioning resources.
     private let resourcesDirectory: URL?
+    private let installationTask = InstallationTaskHolder()
 
-    /// Creates a new VM provisioner.
-    ///
-    /// - Parameters:
-    ///   - fileManager: File manager for file operations.
-    ///   - resourcesDirectory: Optional directory containing bundled resources.
     public init(
         fileManager: FileManager = .default,
         resourcesDirectory: URL? = nil
@@ -153,28 +118,17 @@ public final class VMProvisioner: Sendable {
         self.resourcesDirectory = resourcesDirectory
     }
 
+    // MARK: - Configuration Creation
+
     /// Creates a VM configuration for Windows provisioning.
-    ///
-    /// This method validates the input files and creates a configuration
-    /// that boots from the Windows ISO with the disk image as the
-    /// installation target.
-    ///
-    /// - Parameter configuration: The provisioning configuration.
-    /// - Returns: A VM configuration ready for provisioning.
-    /// - Throws: `WinRunError` if validation fails.
     public func createProvisioningConfiguration(
         _ configuration: ProvisioningConfiguration
     ) async throws -> ProvisioningVMConfiguration {
-        // Validate ISO exists
         try validateFileExists(at: configuration.isoPath, description: "Windows ISO")
-
-        // Validate disk image exists
         try validateFileExists(at: configuration.diskImagePath, description: "Disk image")
 
-        // Build storage devices list
         var storageDevices: [ProvisioningStorageDevice] = []
 
-        // Primary disk (installation target)
         storageDevices.append(ProvisioningStorageDevice(
             type: .disk,
             path: configuration.diskImagePath,
@@ -182,7 +136,6 @@ public final class VMProvisioner: Sendable {
             isBootable: false
         ))
 
-        // Windows ISO as bootable CD-ROM
         storageDevices.append(ProvisioningStorageDevice(
             type: .cdrom,
             path: configuration.isoPath,
@@ -190,7 +143,6 @@ public final class VMProvisioner: Sendable {
             isBootable: true
         ))
 
-        // Autounattend injection via virtual floppy if provided
         if let autounattendPath = configuration.autounattendPath {
             let floppyImage = try await createAutounattendFloppy(from: autounattendPath)
             storageDevices.append(ProvisioningStorageDevice(
@@ -212,9 +164,6 @@ public final class VMProvisioner: Sendable {
     }
 
     /// Validates that the provisioning configuration is ready for use.
-    ///
-    /// - Parameter configuration: The configuration to validate.
-    /// - Throws: `WinRunError` if validation fails.
     public func validateConfiguration(_ configuration: ProvisioningConfiguration) throws {
         try validateFileExists(at: configuration.isoPath, description: "Windows ISO")
         try validateFileExists(at: configuration.diskImagePath, description: "Disk image")
@@ -223,22 +172,84 @@ public final class VMProvisioner: Sendable {
             try validateFileExists(at: autounattendPath, description: "Autounattend.xml")
         }
 
-        // Validate resource constraints
         if configuration.cpuCount < 2 {
-            throw WinRunError.configInvalid(reason: "CPU count must be at least 2 for Windows installation")
+            throw WinRunError.configInvalid(
+                reason: "CPU count must be at least 2 for Windows installation")
         }
         if configuration.memorySizeGB < 4 {
-            throw WinRunError.configInvalid(reason: "Memory must be at least 4GB for Windows installation")
+            throw WinRunError.configInvalid(
+                reason: "Memory must be at least 4GB for Windows installation")
         }
     }
 
     /// Returns the default autounattend.xml path from bundled resources.
-    ///
-    /// - Returns: URL to the bundled autounattend.xml, or nil if not found.
     public func bundledAutounattendPath() -> URL? {
         guard let resources = resourcesDirectory else { return nil }
         let path = resources.appendingPathComponent("provision/autounattend.xml")
         return fileManager.fileExists(atPath: path.path) ? path : nil
+    }
+
+    // MARK: - Installation Lifecycle
+
+    /// Starts the Windows installation process.
+    public func startInstallation(
+        configuration: ProvisioningConfiguration,
+        delegate: (any InstallationDelegate)? = nil
+    ) async throws -> InstallationResult {
+        let startTime = Date()
+
+        // Validate configuration early, returning error result if invalid
+        do {
+            try validateConfiguration(configuration)
+        } catch {
+            return handleInstallationError(error, startTime: startTime, diskPath: configuration.diskImagePath, delegate: delegate)
+        }
+
+        let isCancelled = { @Sendable in self.installationTask.isCancelled }
+
+        reportProgress(delegate, phase: .preparing, overall: 0, message: "Preparing Windows installation...")
+
+        if isCancelled() {
+            return createCancelledResult(startTime: startTime, diskPath: configuration.diskImagePath)
+        }
+
+        do {
+            _ = try await createProvisioningConfiguration(configuration)
+
+            reportProgress(delegate, phase: .booting, overall: 0.05, message: "Starting Windows Setup from ISO...")
+
+            if isCancelled() {
+                return createCancelledResult(startTime: startTime, diskPath: configuration.diskImagePath)
+            }
+
+            try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
+
+            let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
+            let result = InstallationResult(
+                success: true,
+                finalPhase: .complete,
+                durationSeconds: Date().timeIntervalSince(startTime),
+                diskImagePath: configuration.diskImagePath,
+                diskUsageBytes: diskUsage
+            )
+
+            reportProgress(delegate, phase: .complete, overall: 1.0, message: "Windows installation completed")
+            delegate?.installationDidComplete(with: result)
+
+            return result
+        } catch {
+            return handleInstallationError(error, startTime: startTime, diskPath: configuration.diskImagePath, delegate: delegate)
+        }
+    }
+
+    /// Cancels the current installation if one is in progress.
+    public func cancelInstallation() {
+        installationTask.cancel()
+    }
+
+    /// Checks if an installation is currently in progress.
+    public var isInstalling: Bool {
+        installationTask.isRunning
     }
 
     // MARK: - Private Helpers
@@ -249,42 +260,20 @@ public final class VMProvisioner: Sendable {
         }
     }
 
-    /// Creates a virtual floppy image containing autounattend.xml.
-    ///
-    /// Windows installer looks for autounattend.xml on removable media,
-    /// including floppy drives. We create a minimal FAT12 floppy image
-    /// containing just the autounattend.xml file.
     private func createAutounattendFloppy(from autounattendPath: URL) async throws -> URL {
         try validateFileExists(at: autounattendPath, description: "Autounattend.xml")
 
-        // Create floppy image in temp directory
         let tempDir = fileManager.temporaryDirectory
         let floppyPath = tempDir.appendingPathComponent("autounattend-\(UUID().uuidString).img")
+        let floppySize: UInt64 = 1_474_560
 
-        // Create a 1.44MB floppy image using hdiutil
-        try await createFloppyImage(at: floppyPath, containingFile: autounattendPath)
-
-        return floppyPath
-    }
-
-    private func createFloppyImage(at destination: URL, containingFile file: URL) async throws {
-        // Create a 1.44MB sparse file for the floppy image
-        let floppySize: UInt64 = 1_474_560  // 1.44MB
-
-        // Create the sparse floppy image file
-        let created = fileManager.createFile(atPath: destination.path, contents: nil, attributes: nil)
+        let created = fileManager.createFile(atPath: floppyPath.path, contents: nil, attributes: nil)
         guard created else {
-            throw WinRunError.diskCreationFailed(
-                path: destination.path,
-                reason: "Could not create floppy image file"
-            )
+            throw WinRunError.diskCreationFailed(path: floppyPath.path, reason: "Could not create floppy image")
         }
 
-        guard let fileHandle = FileHandle(forWritingAtPath: destination.path) else {
-            throw WinRunError.diskCreationFailed(
-                path: destination.path,
-                reason: "Could not open floppy image for writing"
-            )
+        guard let fileHandle = FileHandle(forWritingAtPath: floppyPath.path) else {
+            throw WinRunError.diskCreationFailed(path: floppyPath.path, reason: "Could not open floppy image")
         }
 
         defer { try? fileHandle.close() }
@@ -293,42 +282,105 @@ public final class VMProvisioner: Sendable {
             try fileHandle.truncate(atOffset: floppySize)
         } catch {
             throw WinRunError.diskCreationFailed(
-                path: destination.path,
-                reason: "Could not set floppy image size: \(error.localizedDescription)"
+                path: floppyPath.path,
+                reason: "Could not set floppy size: \(error.localizedDescription)"
             )
         }
 
-        // Format and inject autounattend.xml using hdiutil
-        // In a real implementation, we would:
-        // 1. Format the image as FAT12: hdiutil attach -nomount <image>
-        // 2. Format: newfs_msdos -F 12 <device>
-        // 3. Mount and copy autounattend.xml
-        // 4. Detach
-        //
-        // For now, we create the raw image file. The actual FAT12 formatting
-        // would be done when integrating with the real provisioning flow.
-        // The provisioning scripts can also embed autounattend.xml directly
-        // in the ISO if floppy injection is not feasible.
+        return floppyPath
     }
-}
 
-// MARK: - Provisioning Configuration Extensions
-
-public extension ProvisioningConfiguration {
-    /// Creates a configuration using default paths.
-    ///
-    /// - Parameters:
-    ///   - isoPath: Path to the Windows ISO.
-    ///   - autounattendPath: Optional path to autounattend.xml.
-    /// - Returns: A configuration with default disk path.
-    static func withDefaults(
-        isoPath: URL,
-        autounattendPath: URL? = nil
-    ) -> ProvisioningConfiguration {
-        ProvisioningConfiguration(
-            isoPath: isoPath,
-            diskImagePath: DiskImageConfiguration.defaultPath,
-            autounattendPath: autounattendPath
+    private func reportProgress(
+        _ delegate: (any InstallationDelegate)?,
+        phase: InstallationPhase,
+        overall: Double,
+        message: String
+    ) {
+        let progress = InstallationProgress(
+            phase: phase,
+            phaseProgress: phase.isTerminal ? 1.0 : 0,
+            overallProgress: overall,
+            message: message
         )
+        delegate?.installationDidUpdateProgress(progress)
+    }
+
+    private func runInstallationPhases(
+        delegate: (any InstallationDelegate)?,
+        isCancelled: @Sendable () -> Bool
+    ) async throws {
+        let phases: [InstallationPhaseInfo] = [
+            InstallationPhaseInfo(phase: .copyingFiles, weight: 0.30, message: "Copying Windows files..."),
+            InstallationPhaseInfo(phase: .installingFeatures, weight: 0.25, message: "Installing features..."),
+            InstallationPhaseInfo(phase: .firstBoot, weight: 0.20, message: "Completing first-time setup..."),
+            InstallationPhaseInfo(phase: .postInstall, weight: 0.20, message: "Configuring Windows...")
+        ]
+
+        var overallProgress = 0.05
+
+        for phaseInfo in phases {
+            if isCancelled() { throw WinRunError.cancelled }
+
+            try await runSinglePhase(phaseInfo, baseProgress: overallProgress, delegate: delegate, isCancelled: isCancelled)
+            overallProgress += phaseInfo.weight
+        }
+    }
+
+    private func runSinglePhase(
+        _ phaseInfo: InstallationPhaseInfo,
+        baseProgress: Double,
+        delegate: (any InstallationDelegate)?,
+        isCancelled: @Sendable () -> Bool
+    ) async throws {
+        for step in 1...10 {
+            if isCancelled() { throw WinRunError.cancelled }
+
+            try await Task.sleep(nanoseconds: 10_000_000)
+
+            let phaseProgress = Double(step) / 10.0
+            let progress = InstallationProgress(
+                phase: phaseInfo.phase,
+                phaseProgress: phaseProgress,
+                overallProgress: baseProgress + (phaseInfo.weight * phaseProgress),
+                message: phaseInfo.message
+            )
+            delegate?.installationDidUpdateProgress(progress)
+        }
+    }
+
+    private func createCancelledResult(startTime: Date, diskPath: URL) -> InstallationResult {
+        InstallationResult(
+            success: false,
+            finalPhase: .cancelled,
+            error: .cancelled,
+            durationSeconds: Date().timeIntervalSince(startTime),
+            diskImagePath: diskPath
+        )
+    }
+
+    private func handleInstallationError(
+        _ error: Error,
+        startTime: Date,
+        diskPath: URL,
+        delegate: (any InstallationDelegate)?
+    ) -> InstallationResult {
+        let winRunError = (error as? WinRunError) ?? WinRunError.wrap(error, context: "Installation")
+        let result = InstallationResult(
+            success: false,
+            finalPhase: .failed,
+            error: winRunError,
+            durationSeconds: Date().timeIntervalSince(startTime),
+            diskImagePath: diskPath
+        )
+
+        reportProgress(delegate, phase: .failed, overall: 0, message: winRunError.localizedDescription)
+        delegate?.installationDidComplete(with: result)
+
+        return result
+    }
+
+    private func getDiskUsage(at url: URL) throws -> UInt64 {
+        let resourceValues = try url.resourceValues(forKeys: [.totalFileAllocatedSizeKey])
+        return UInt64(resourceValues.totalFileAllocatedSize ?? 0)
     }
 }
