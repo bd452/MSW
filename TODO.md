@@ -49,11 +49,11 @@
     - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
 - [ ] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
-  - [ ] ISO validation + Windows version detection { new:host/Sources/WinRunSetup/ISOValidator.swift, new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
+  - [X] ISO validation + Windows version detection { new:host/Sources/WinRunSetup/ISOValidator.swift, new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
     - [X] Mount and parse Windows ISO metadata (install.wim/esd) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Generate warnings for suboptimal ISOs (Server, Win10, consumer bloat) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Add unit tests for ISO validation with mock metadata { new:host/Tests/WinRunSetupTests/ISOValidatorTests.swift } <docs/development.md>
+    - [X] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Generate warnings for suboptimal ISOs (Server, Win10, consumer bloat) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Add unit tests for ISO validation with mock metadata { new:host/Tests/WinRunSetupTests/ISOValidatorTests.swift } <docs/development.md>
   - [ ] Disk image creation + VM provisioning { new:host/Sources/WinRunSetup/DiskImageCreator.swift, new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Create sparse disk images with configurable size { new:host/Sources/WinRunSetup/DiskImageCreator.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Configure VM with ISO as boot CD-ROM + autounattend injection { new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>

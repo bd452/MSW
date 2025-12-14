@@ -252,51 +252,123 @@ final class ISOValidatorTests: XCTestCase {
         XCTAssertFalse(notIoT.isRecommended)
     }
 
-    // MARK: - ISOValidator Warning Generation Tests
+    // MARK: - Warning Generation Tests with Mock Metadata
 
-    func testValidator_GeneratesArchitectureWarning() async {
-        // We test warning generation by examining the validation result for non-ARM64
+    func testGenerateWarnings_NonARM64Architecture() async {
+        let validator = ISOValidator()
         let info = WindowsEditionInfo(
             editionName: "Windows 11 Pro",
             version: "10.0.22000.1",
             architecture: "x64"
         )
 
-        // Create a result with this info to verify warnings would be generated
-        XCTAssertFalse(info.isARM64)
+        let warnings = await validator.generateWarnings(for: info)
+
+        XCTAssertTrue(warnings.contains { $0.severity == .critical })
+        XCTAssertTrue(warnings.contains { $0.message.contains("x64") })
+        XCTAssertTrue(warnings.contains { $0.message.contains("Apple Silicon") })
     }
 
-    func testValidator_GeneratesServerWarning() async {
+    func testGenerateWarnings_ServerEdition() async {
+        let validator = ISOValidator()
         let info = WindowsEditionInfo(
             editionName: "Windows Server 2022",
             version: "10.0.20348.1",
             architecture: "ARM64"
         )
 
-        XCTAssertTrue(info.isServer)
-        XCTAssertTrue(info.isARM64)
+        let warnings = await validator.generateWarnings(for: info)
+
+        XCTAssertTrue(warnings.contains { $0.severity == .critical })
+        XCTAssertTrue(warnings.contains { $0.message.contains("Server") })
+        XCTAssertTrue(warnings.contains { $0.message.contains("x86/x64 app compatibility") })
     }
 
-    func testValidator_GeneratesWindows10Warning() async {
+    func testGenerateWarnings_Windows10ARM() async {
+        let validator = ISOValidator()
         let info = WindowsEditionInfo(
             editionName: "Windows 10 Pro",
             version: "10.0.19045.1",
             architecture: "ARM64"
         )
 
-        XCTAssertFalse(info.isWindows11)
-        XCTAssertTrue(info.isARM64)
+        let warnings = await validator.generateWarnings(for: info)
+
+        XCTAssertTrue(warnings.contains { $0.severity == .warning })
+        XCTAssertTrue(warnings.contains { $0.message.contains("32-bit") })
+        XCTAssertTrue(warnings.contains { $0.suggestion?.contains("Windows 11") ?? false })
     }
 
-    func testValidator_GeneratesConsumerWarning() async {
+    func testGenerateWarnings_ConsumerEdition() async {
+        let validator = ISOValidator()
         let info = WindowsEditionInfo(
             editionName: "Windows 11 Home",
             version: "10.0.22000.1",
             architecture: "ARM64"
         )
 
-        XCTAssertTrue(info.isConsumer)
-        XCTAssertTrue(info.isWindows11)
+        let warnings = await validator.generateWarnings(for: info)
+
+        XCTAssertTrue(warnings.contains { $0.severity == .info })
+        XCTAssertTrue(warnings.contains { $0.message.contains("consumer apps") })
+    }
+
+    func testGenerateWarnings_NonLTSCEdition() async {
+        let validator = ISOValidator()
+        let info = WindowsEditionInfo(
+            editionName: "Windows 11 Enterprise",
+            version: "10.0.22000.1",
+            architecture: "ARM64"
+        )
+
+        let warnings = await validator.generateWarnings(for: info)
+
+        XCTAssertTrue(warnings.contains { $0.severity == .info })
+        XCTAssertTrue(warnings.contains { $0.message.contains("Non-LTSC") })
+        XCTAssertTrue(warnings.contains { $0.message.contains("feature updates") })
+    }
+
+    func testGenerateWarnings_RecommendedEditionNoWarnings() async {
+        let validator = ISOValidator()
+        let info = WindowsEditionInfo(
+            editionName: "Windows 11 IoT Enterprise LTSC",
+            version: "10.0.26100.1",
+            architecture: "ARM64"
+        )
+
+        let warnings = await validator.generateWarnings(for: info)
+
+        // Recommended edition should have no warnings
+        XCTAssertTrue(warnings.isEmpty, "Expected no warnings for recommended edition")
+    }
+
+    func testGenerateWarnings_MultipleIssues() async {
+        let validator = ISOValidator()
+        // x64 + Server = two critical warnings
+        let info = WindowsEditionInfo(
+            editionName: "Windows Server 2022",
+            version: "10.0.20348.1",
+            architecture: "x64"
+        )
+
+        let warnings = await validator.generateWarnings(for: info)
+
+        let criticalCount = warnings.filter { $0.severity == .critical }.count
+        XCTAssertEqual(criticalCount, 2, "Expected two critical warnings for x64 Server edition")
+    }
+
+    func testGenerateWarnings_x86Architecture() async {
+        let validator = ISOValidator()
+        let info = WindowsEditionInfo(
+            editionName: "Windows 11 Pro",
+            version: "10.0.22000.1",
+            architecture: "x86"
+        )
+
+        let warnings = await validator.generateWarnings(for: info)
+
+        XCTAssertTrue(warnings.contains { $0.severity == .critical })
+        XCTAssertTrue(warnings.contains { $0.message.contains("x86") })
     }
 
     // MARK: - Error Handling Tests

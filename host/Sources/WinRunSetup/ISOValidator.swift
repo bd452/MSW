@@ -65,7 +65,7 @@ public actor ISOValidator {
             metadata: [
                 "edition": .string(editionInfo?.editionName ?? "unknown"),
                 "architecture": .string(editionInfo?.architecture ?? "unknown"),
-                "warnings": .int(warnings.count)
+                "warnings": .int(warnings.count),
             ]
         )
 
@@ -104,16 +104,19 @@ public actor ISOValidator {
         guard process.terminationStatus == 0 else {
             let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-            throw WinRunError.isoMountFailed(path: isoURL.path, reason: errorString.trimmingCharacters(in: .whitespacesAndNewlines))
+            throw WinRunError.isoMountFailed(
+                path: isoURL.path,
+                reason: errorString.trimmingCharacters(in: .whitespacesAndNewlines))
         }
 
         // Parse plist output to find mount point
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard let plist = try? PropertyListSerialization.propertyList(
-            from: outputData,
-            options: [],
-            format: nil
-        ) as? [String: Any],
+        guard
+            let plist = try? PropertyListSerialization.propertyList(
+                from: outputData,
+                options: [],
+                format: nil
+            ) as? [String: Any],
             let entities = plist["system-entities"] as? [[String: Any]]
         else {
             throw WinRunError.isoMountFailed(
@@ -172,7 +175,8 @@ public actor ISOValidator {
         } else {
             // Not a valid Windows installation ISO
             throw WinRunError.isoInvalid(
-                reason: "No install.wim or install.esd found. This may not be a Windows installation ISO."
+                reason:
+                    "No install.wim or install.esd found. This may not be a Windows installation ISO."
             )
         }
 
@@ -199,11 +203,12 @@ public actor ISOValidator {
         }
 
         // If we couldn't parse metadata, add a warning but don't fail
-        warnings.append(ISOValidationWarning(
-            severity: .warning,
-            message: "Could not read detailed Windows version information",
-            suggestion: "Install wimlib (brew install wimlib) for better ISO validation"
-        ))
+        warnings.append(
+            ISOValidationWarning(
+                severity: .warning,
+                message: "Could not read detailed Windows version information",
+                suggestion: "Install wimlib (brew install wimlib) for better ISO validation"
+            ))
 
         // Try to infer architecture from boot.wim if available
         let bootWimPath = wimPath.deletingLastPathComponent().appendingPathComponent("boot.wim")
@@ -241,7 +246,8 @@ public actor ISOValidator {
         }
 
         let wiminfoBinaryData = whichPipe.fileHandleForReading.readDataToEndOfFile()
-        let wiminfoBinary = String(data: wiminfoBinaryData, encoding: .utf8)?
+        let wiminfoBinary =
+            String(data: wiminfoBinaryData, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? "wiminfo"
 
         // Run wiminfo to get metadata
@@ -299,8 +305,8 @@ public actor ISOValidator {
         }
 
         guard let name = editionName,
-              let ver = version,
-              let arch = architecture
+            let ver = version,
+            let arch = architecture
         else {
             return nil
         }
@@ -334,8 +340,8 @@ public actor ISOValidator {
 
         // Read magic
         guard let magicData = try? fileHandle.read(upToCount: 8),
-              let magic = String(data: magicData, encoding: .utf8),
-              magic.hasPrefix("MSWIM")
+            let magic = String(data: magicData, encoding: .utf8),
+            magic.hasPrefix("MSWIM")
         else {
             return nil
         }
@@ -343,7 +349,7 @@ public actor ISOValidator {
         // Seek to XML offset location (offset 0x48 = 72 bytes)
         try? fileHandle.seek(toOffset: 0x48)
         guard let xmlOffsetData = try? fileHandle.read(upToCount: 8),
-              let xmlSizeData = try? fileHandle.read(upToCount: 8)
+            let xmlSizeData = try? fileHandle.read(upToCount: 8)
         else {
             return nil
         }
@@ -368,74 +374,52 @@ public actor ISOValidator {
 
     /// Parses the WIM XML metadata
     private func parseWIMXML(_ data: Data) -> WindowsEditionInfo? {
-        // The XML is UTF-16 encoded
-        guard let xmlString = String(data: data, encoding: .utf16LittleEndian) ??
-                              String(data: data, encoding: .utf16BigEndian) ??
-                              String(data: data, encoding: .utf8)
-        else {
+        guard let xmlString = decodeWIMXMLString(from: data) else { return nil }
+
+        let editionName = extractXMLValue(from: xmlString, tag: "DISPLAYNAME")
+            ?? extractXMLValue(from: xmlString, tag: "NAME")
+        let architecture = extractArchitecture(from: xmlString)
+        let version = extractVersion(from: xmlString)
+
+        guard let name = editionName, let arch = architecture, let ver = version else {
             return nil
         }
+        return WindowsEditionInfo(editionName: name, version: ver, architecture: arch)
+    }
 
-        // Simple XML parsing for the first IMAGE element
-        // Looking for: <NAME>, <DESCRIPTION>, <WINDOWS>/<ARCH>, <WINDOWS>/<VERSION>/<BUILD>
+    /// Decodes WIM XML data (UTF-16 or UTF-8)
+    private func decodeWIMXMLString(from data: Data) -> String? {
+        String(data: data, encoding: .utf16LittleEndian)
+            ?? String(data: data, encoding: .utf16BigEndian)
+            ?? String(data: data, encoding: .utf8)
+    }
 
-        var editionName: String?
-        var version: String?
-        var architecture: String?
+    /// Extracts a simple XML tag value
+    private func extractXMLValue(from xml: String, tag: String) -> String? {
+        let pattern = "<\(tag)>([^<]+)</\(tag)>"
+        guard let match = xml.range(of: pattern, options: .regularExpression) else { return nil }
+        return xml[match]
+            .replacingOccurrences(of: "<\(tag)>", with: "")
+            .replacingOccurrences(of: "</\(tag)>", with: "")
+    }
 
-        // Parse NAME or DISPLAYNAME
-        if let nameMatch = xmlString.range(of: "<DISPLAYNAME>([^<]+)</DISPLAYNAME>", options: .regularExpression) {
-            let nameSubstring = xmlString[nameMatch]
-            let cleaned = nameSubstring
-                .replacingOccurrences(of: "<DISPLAYNAME>", with: "")
-                .replacingOccurrences(of: "</DISPLAYNAME>", with: "")
-            editionName = cleaned
-        } else if let nameMatch = xmlString.range(of: "<NAME>([^<]+)</NAME>", options: .regularExpression) {
-            let nameSubstring = xmlString[nameMatch]
-            let cleaned = nameSubstring
-                .replacingOccurrences(of: "<NAME>", with: "")
-                .replacingOccurrences(of: "</NAME>", with: "")
-            editionName = cleaned
+    /// Extracts architecture from WIM XML (ARCH: 0=x86, 9=x64, 12=ARM64)
+    private func extractArchitecture(from xml: String) -> String? {
+        guard let archValue = extractXMLValue(from: xml, tag: "ARCH")?
+            .trimmingCharacters(in: .whitespaces) else { return nil }
+        switch archValue {
+        case "0": return "x86"
+        case "9": return "x64"
+        case "12": return "ARM64"
+        default: return archValue
         }
+    }
 
-        // Parse ARCH (0=x86, 9=x64, 12=ARM64)
-        if let archMatch = xmlString.range(of: "<ARCH>([^<]+)</ARCH>", options: .regularExpression) {
-            let archSubstring = xmlString[archMatch]
-            let archValue = archSubstring
-                .replacingOccurrences(of: "<ARCH>", with: "")
-                .replacingOccurrences(of: "</ARCH>", with: "")
-                .trimmingCharacters(in: .whitespaces)
-
-            switch archValue {
-            case "0": architecture = "x86"
-            case "9": architecture = "x64"
-            case "12": architecture = "ARM64"
-            default: architecture = archValue
-            }
-        }
-
-        // Parse BUILD
-        if let buildMatch = xmlString.range(of: "<BUILD>([^<]+)</BUILD>", options: .regularExpression) {
-            let buildSubstring = xmlString[buildMatch]
-            let buildValue = buildSubstring
-                .replacingOccurrences(of: "<BUILD>", with: "")
-                .replacingOccurrences(of: "</BUILD>", with: "")
-                .trimmingCharacters(in: .whitespaces)
-            version = "10.0.\(buildValue).0"
-        }
-
-        guard let name = editionName,
-              let ver = version,
-              let arch = architecture
-        else {
-            return nil
-        }
-
-        return WindowsEditionInfo(
-            editionName: name,
-            version: ver,
-            architecture: arch
-        )
+    /// Extracts version from WIM XML BUILD tag
+    private func extractVersion(from xml: String) -> String? {
+        guard let build = extractXMLValue(from: xml, tag: "BUILD")?
+            .trimmingCharacters(in: .whitespaces) else { return nil }
+        return "10.0.\(build).0"
     }
 
     /// Attempts to infer architecture from boot.wim
@@ -449,55 +433,70 @@ public actor ISOValidator {
 
     // MARK: - Warning Generation
 
-    /// Generates warnings based on the detected Windows edition
-    private func generateWarnings(for info: WindowsEditionInfo) -> [ISOValidationWarning] {
+    /// Generates warnings based on the detected Windows edition.
+    /// - Parameter info: The Windows edition info to generate warnings for
+    /// - Returns: Array of validation warnings
+    ///
+    /// This method is internal for testing purposes.
+    func generateWarnings(for info: WindowsEditionInfo) -> [ISOValidationWarning] {
         var warnings: [ISOValidationWarning] = []
 
         // Check architecture
         if !info.isARM64 {
-            warnings.append(ISOValidationWarning(
-                severity: .critical,
-                message: "This ISO is for \(info.architecture) processors and cannot run on Apple Silicon.",
-                suggestion: "Download the ARM64 version of Windows from Microsoft."
-            ))
+            warnings.append(
+                ISOValidationWarning(
+                    severity: .critical,
+                    message:
+                        "This ISO is for \(info.architecture) processors and cannot run on Apple Silicon.",
+                    suggestion: "Download the ARM64 version of Windows from Microsoft."
+                ))
         }
 
         // Check for Server edition
         if info.isServer {
-            warnings.append(ISOValidationWarning(
-                severity: .critical,
-                message: "Windows Server does not include x86/x64 app compatibility.",
-                suggestion: "Most Windows applications won't run. Consider Windows 11 IoT Enterprise LTSC instead."
-            ))
+            warnings.append(
+                ISOValidationWarning(
+                    severity: .critical,
+                    message: "Windows Server does not include x86/x64 app compatibility.",
+                    suggestion:
+                        "Most Windows applications won't run. Consider Windows 11 IoT Enterprise LTSC instead."
+                ))
         }
 
         // Check for Windows 10 ARM
         if !info.isWindows11 && info.isARM64 {
-            warnings.append(ISOValidationWarning(
-                severity: .warning,
-                message: "Windows 10 ARM only supports 32-bit (x86) app emulation.",
-                suggestion: "64-bit Windows apps won't work. Consider Windows 11 for full compatibility."
-            ))
+            warnings.append(
+                ISOValidationWarning(
+                    severity: .warning,
+                    message: "Windows 10 ARM only supports 32-bit (x86) app emulation.",
+                    suggestion:
+                        "64-bit Windows apps won't work. Consider Windows 11 for full compatibility."
+                ))
         }
 
         // Check for consumer editions
         if info.isConsumer {
-            warnings.append(ISOValidationWarning(
-                severity: .info,
-                message: "This Windows version includes consumer apps that may increase disk usage.",
-                suggestion: "For best results, use Windows 11 IoT Enterprise LTSC."
-            ))
+            warnings.append(
+                ISOValidationWarning(
+                    severity: .info,
+                    message:
+                        "This Windows version includes consumer apps that may increase disk usage.",
+                    suggestion: "For best results, use Windows 11 IoT Enterprise LTSC."
+                ))
         }
 
         // Positive note for recommended edition
         if info.isRecommended {
             // No warnings for recommended edition
         } else if info.isWindows11 && !info.isServer && info.isARM64 && !info.isLTSC {
-            warnings.append(ISOValidationWarning(
-                severity: .info,
-                message: "Non-LTSC editions receive feature updates that may require more maintenance.",
-                suggestion: "Windows 11 IoT Enterprise LTSC 2024 receives only security updates for 10 years."
-            ))
+            warnings.append(
+                ISOValidationWarning(
+                    severity: .info,
+                    message:
+                        "Non-LTSC editions receive feature updates that may require more maintenance.",
+                    suggestion:
+                        "Windows 11 IoT Enterprise LTSC 2024 receives only security updates for 10 years."
+                ))
         }
 
         return warnings
