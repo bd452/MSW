@@ -10,9 +10,11 @@
 - (Optional) .NET 9 SDK for running guest linting locally: `brew install dotnet`
 
 ### Windows Guest
-- Windows Server 2022 (Desktop Experience disabled)
+- Windows 11 IoT Enterprise LTSC 2024 ARM64 (shell disabled, minimal footprint)
 - .NET 9 SDK (pinned via `guest/global.json`)
 - Visual Studio Build Tools (for testing the agent)
+
+> **Note:** Apple Silicon Macs run ARM64 VMs natively. Windows 11 ARM64 includes Prism for x86/x64 app emulation. Windows Server does not include Prism, making IoT Enterprise LTSC the required guest OS.
 
 ### SDK Version Strategy
 
@@ -167,10 +169,12 @@ For human contributors:
 4. Squash-merge or rebase as appropriate
 
 ## Windows Agent Deployment
-1. Build the solution on Windows: `dotnet publish -c Release -r win-x64`.
+1. Build the solution on Windows ARM64: `dotnet publish -c Release -r win-arm64`.
 2. Copy published bits to `C:\Program Files\WinRun`.
 3. Register as Windows service using `sc create WinRunAgent binPath= "C:\Program Files\WinRun\WinRunAgent.exe" start= auto`.
 4. Ensure Spice guest tools are installed so virtio-serial channels are available.
+
+> **Architecture Note:** Use `win-arm64` for Apple Silicon Mac VMs. The .NET code is architecture-neutral, but the published output must match the guest OS architecture.
 
 ## Testing Strategy
 
