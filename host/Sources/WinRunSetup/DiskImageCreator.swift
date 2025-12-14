@@ -99,7 +99,8 @@ public struct DiskImageResult: Equatable, Sendable {
 /// ```
 public final class DiskImageCreator: Sendable {
     /// File manager used for disk operations.
-    private let fileManager: FileManager
+    /// - Note: FileManager.default is thread-safe for the operations we perform.
+    private nonisolated(unsafe) let fileManager: FileManager
 
     /// Creates a new disk image creator.
     ///
