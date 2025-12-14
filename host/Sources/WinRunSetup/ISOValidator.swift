@@ -9,8 +9,9 @@ import WinRunShared
 /// `sources/install.wim` or `sources/install.esd`, and determines the
 /// Windows edition and architecture.
 public actor ISOValidator {
-    /// File manager for filesystem operations
-    private let fileManager: FileManager
+    /// File manager for filesystem operations.
+    /// - Note: FileManager.default is thread-safe for the operations we perform.
+    private nonisolated(unsafe) let fileManager: FileManager
 
     /// Logger for diagnostic output
     private let logger: Logger?

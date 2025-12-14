@@ -106,7 +106,8 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
 
 /// Creates and validates VM configurations for Windows provisioning.
 public final class VMProvisioner: Sendable {
-    private let fileManager: FileManager
+    /// - Note: FileManager.default is thread-safe for the operations we perform.
+    private nonisolated(unsafe) let fileManager: FileManager
     private let resourcesDirectory: URL?
     private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()

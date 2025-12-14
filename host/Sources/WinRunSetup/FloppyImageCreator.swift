@@ -16,7 +16,8 @@ public final class FloppyImageCreator: Sendable {
     private static let numberOfHeads: UInt16 = 2
     private static let totalSectors: UInt16 = 2880
 
-    private let fileManager: FileManager
+    /// - Note: FileManager.default is thread-safe for the operations we perform.
+    private nonisolated(unsafe) let fileManager: FileManager
 
     public init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
