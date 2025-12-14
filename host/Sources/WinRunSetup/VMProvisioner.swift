@@ -129,28 +129,31 @@ public final class VMProvisioner: Sendable {
 
         var storageDevices: [ProvisioningStorageDevice] = []
 
-        storageDevices.append(ProvisioningStorageDevice(
-            type: .disk,
-            path: configuration.diskImagePath,
-            isReadOnly: false,
-            isBootable: false
-        ))
+        storageDevices.append(
+            ProvisioningStorageDevice(
+                type: .disk,
+                path: configuration.diskImagePath,
+                isReadOnly: false,
+                isBootable: false
+            ))
 
-        storageDevices.append(ProvisioningStorageDevice(
-            type: .cdrom,
-            path: configuration.isoPath,
-            isReadOnly: true,
-            isBootable: true
-        ))
+        storageDevices.append(
+            ProvisioningStorageDevice(
+                type: .cdrom,
+                path: configuration.isoPath,
+                isReadOnly: true,
+                isBootable: true
+            ))
 
         if let autounattendPath = configuration.autounattendPath {
             let floppyImage = try await createAutounattendFloppy(from: autounattendPath)
-            storageDevices.append(ProvisioningStorageDevice(
-                type: .floppy,
-                path: floppyImage,
-                isReadOnly: true,
-                isBootable: false
-            ))
+            storageDevices.append(
+                ProvisioningStorageDevice(
+                    type: .floppy,
+                    path: floppyImage,
+                    isReadOnly: true,
+                    isBootable: false
+                ))
         }
 
         let memorySizeBytes = UInt64(configuration.memorySizeGB) * 1024 * 1024 * 1024
@@ -202,24 +205,31 @@ public final class VMProvisioner: Sendable {
         do {
             try validateConfiguration(configuration)
         } catch {
-            return handleInstallationError(error, startTime: startTime, diskPath: configuration.diskImagePath, delegate: delegate)
+            return handleInstallationError(
+                error, startTime: startTime, diskPath: configuration.diskImagePath,
+                delegate: delegate)
         }
 
         let isCancelled = { @Sendable in self.installationTask.isCancelled }
 
-        reportProgress(delegate, phase: .preparing, overall: 0, message: "Preparing Windows installation...")
+        reportProgress(
+            delegate, phase: .preparing, overall: 0, message: "Preparing Windows installation...")
 
         if isCancelled() {
-            return createCancelledResult(startTime: startTime, diskPath: configuration.diskImagePath)
+            return createCancelledResult(
+                startTime: startTime, diskPath: configuration.diskImagePath)
         }
 
         do {
             _ = try await createProvisioningConfiguration(configuration)
 
-            reportProgress(delegate, phase: .booting, overall: 0.05, message: "Starting Windows Setup from ISO...")
+            reportProgress(
+                delegate, phase: .booting, overall: 0.05,
+                message: "Starting Windows Setup from ISO...")
 
             if isCancelled() {
-                return createCancelledResult(startTime: startTime, diskPath: configuration.diskImagePath)
+                return createCancelledResult(
+                    startTime: startTime, diskPath: configuration.diskImagePath)
             }
 
             try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
@@ -233,12 +243,15 @@ public final class VMProvisioner: Sendable {
                 diskUsageBytes: diskUsage
             )
 
-            reportProgress(delegate, phase: .complete, overall: 1.0, message: "Windows installation completed")
+            reportProgress(
+                delegate, phase: .complete, overall: 1.0, message: "Windows installation completed")
             delegate?.installationDidComplete(with: result)
 
             return result
         } catch {
-            return handleInstallationError(error, startTime: startTime, diskPath: configuration.diskImagePath, delegate: delegate)
+            return handleInstallationError(
+                error, startTime: startTime, diskPath: configuration.diskImagePath,
+                delegate: delegate)
         }
     }
 
@@ -267,13 +280,16 @@ public final class VMProvisioner: Sendable {
         let floppyPath = tempDir.appendingPathComponent("autounattend-\(UUID().uuidString).img")
         let floppySize: UInt64 = 1_474_560
 
-        let created = fileManager.createFile(atPath: floppyPath.path, contents: nil, attributes: nil)
+        let created = fileManager.createFile(
+            atPath: floppyPath.path, contents: nil, attributes: nil)
         guard created else {
-            throw WinRunError.diskCreationFailed(path: floppyPath.path, reason: "Could not create floppy image")
+            throw WinRunError.diskCreationFailed(
+                path: floppyPath.path, reason: "Could not create floppy image")
         }
 
         guard let fileHandle = FileHandle(forWritingAtPath: floppyPath.path) else {
-            throw WinRunError.diskCreationFailed(path: floppyPath.path, reason: "Could not open floppy image")
+            throw WinRunError.diskCreationFailed(
+                path: floppyPath.path, reason: "Could not open floppy image")
         }
 
         defer { try? fileHandle.close() }
@@ -310,10 +326,14 @@ public final class VMProvisioner: Sendable {
         isCancelled: @Sendable () -> Bool
     ) async throws {
         let phases: [InstallationPhaseInfo] = [
-            InstallationPhaseInfo(phase: .copyingFiles, weight: 0.30, message: "Copying Windows files..."),
-            InstallationPhaseInfo(phase: .installingFeatures, weight: 0.25, message: "Installing features..."),
-            InstallationPhaseInfo(phase: .firstBoot, weight: 0.20, message: "Completing first-time setup..."),
-            InstallationPhaseInfo(phase: .postInstall, weight: 0.20, message: "Configuring Windows...")
+            InstallationPhaseInfo(
+                phase: .copyingFiles, weight: 0.30, message: "Copying Windows files..."),
+            InstallationPhaseInfo(
+                phase: .installingFeatures, weight: 0.25, message: "Installing features..."),
+            InstallationPhaseInfo(
+                phase: .firstBoot, weight: 0.20, message: "Completing first-time setup..."),
+            InstallationPhaseInfo(
+                phase: .postInstall, weight: 0.20, message: "Configuring Windows..."),
         ]
 
         var overallProgress = 0.05
@@ -321,7 +341,9 @@ public final class VMProvisioner: Sendable {
         for phaseInfo in phases {
             if isCancelled() { throw WinRunError.cancelled }
 
-            try await runSinglePhase(phaseInfo, baseProgress: overallProgress, delegate: delegate, isCancelled: isCancelled)
+            try await runSinglePhase(
+                phaseInfo, baseProgress: overallProgress, delegate: delegate,
+                isCancelled: isCancelled)
             overallProgress += phaseInfo.weight
         }
     }
@@ -364,7 +386,8 @@ public final class VMProvisioner: Sendable {
         diskPath: URL,
         delegate: (any InstallationDelegate)?
     ) -> InstallationResult {
-        let winRunError = (error as? WinRunError) ?? WinRunError.wrap(error, context: "Installation")
+        let winRunError =
+            (error as? WinRunError) ?? WinRunError.wrap(error, context: "Installation")
         let result = InstallationResult(
             success: false,
             finalPhase: .failed,
@@ -373,7 +396,8 @@ public final class VMProvisioner: Sendable {
             diskImagePath: diskPath
         )
 
-        reportProgress(delegate, phase: .failed, overall: 0, message: winRunError.localizedDescription)
+        reportProgress(
+            delegate, phase: .failed, overall: 0, message: winRunError.localizedDescription)
         delegate?.installationDidComplete(with: result)
 
         return result
