@@ -245,7 +245,7 @@ public final class DiskImageCreator: Sendable {
         let attributes = try fileManager.attributesOfFileSystem(forPath: parentDirectory.path)
 
         guard let freeSpace = attributes[.systemFreeSize] as? UInt64 else {
-            return // Skip check if we can't determine free space
+            return  // Skip check if we can't determine free space
         }
 
         let freeSpaceGB = freeSpace / (1024 * 1024 * 1024)

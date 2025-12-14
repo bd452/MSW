@@ -2,13 +2,14 @@ import Foundation
 
 // MARK: - Error Wrapping Helpers
 
-public extension WinRunError {
+extension WinRunError {
     /// Wraps an arbitrary error as an internal WinRunError.
-    static func wrap(_ error: Error, context: String? = nil) -> WinRunError {
+    public static func wrap(_ error: Error, context: String? = nil) -> WinRunError {
         if let winRunError = error as? WinRunError {
             return winRunError
         }
-        let message = context.map { "\($0): \(error.localizedDescription)" }
+        let message =
+            context.map { "\($0): \(error.localizedDescription)" }
             ?? error.localizedDescription
         return .internalError(message: message)
     }
@@ -16,9 +17,9 @@ public extension WinRunError {
 
 // MARK: - Error Code (for bridging)
 
-public extension WinRunError {
+extension WinRunError {
     /// Integer error code for bridging to C APIs or XPC.
-    var code: Int {
+    public var code: Int {
         switch self {
         case .vmNotInitialized: return 1001
         case .vmAlreadyStopped: return 1002
