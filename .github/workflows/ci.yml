@@ -19,18 +19,15 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Cache Homebrew
+      - name: Cache Homebrew downloads
         uses: actions/cache@v4
         with:
-          path: |
-            ~/Library/Caches/Homebrew
-            /opt/homebrew/Cellar
-            /opt/homebrew/opt
-          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build') }}
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
+          path: ~/Library/Caches/Homebrew
+          key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build') }}
+          restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
         run: |
-          brew bundle install --file=.github/Brewfile.host-build
+          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
           pkg-config --modversion spice-client-glib-2.0
       - name: Build
         working-directory: host
@@ -44,18 +41,15 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Cache Homebrew
+      - name: Cache Homebrew downloads
         uses: actions/cache@v4
         with:
-          path: |
-            ~/Library/Caches/Homebrew
-            /opt/homebrew/Cellar
-            /opt/homebrew/opt
-          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-lint') }}
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
+          path: ~/Library/Caches/Homebrew
+          key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-lint') }}
+          restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
       - name: Install SwiftLint
         run: |
-          brew bundle install --file=.github/Brewfile.host-lint
+          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
           swiftlint version
       - name: Run SwiftLint
         working-directory: host
