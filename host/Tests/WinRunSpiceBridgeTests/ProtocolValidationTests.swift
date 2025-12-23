@@ -6,180 +6,59 @@ import XCTest
 /// Tests that validate existing protocol constants match the generated source of truth.
 /// These tests ensure the existing types stay in sync with shared/protocol.def.
 final class ProtocolValidationTests: XCTestCase {
-
     // MARK: - Protocol Version
 
     func testProtocolVersionMatchesGenerated() {
-        XCTAssertEqual(
-            SpiceProtocolVersion.major, GeneratedProtocolVersion.major,
-            "Protocol major version mismatch - update SpiceProtocol.swift or shared/protocol.def"
-        )
-        XCTAssertEqual(
-            SpiceProtocolVersion.minor, GeneratedProtocolVersion.minor,
-            "Protocol minor version mismatch - update SpiceProtocol.swift or shared/protocol.def"
-        )
-        XCTAssertEqual(
-            SpiceProtocolVersion.combined, GeneratedProtocolVersion.combined,
-            "Protocol combined version mismatch"
-        )
+        XCTAssertEqual(SpiceProtocolVersion.major, GeneratedProtocolVersion.major)
+        XCTAssertEqual(SpiceProtocolVersion.minor, GeneratedProtocolVersion.minor)
+        XCTAssertEqual(SpiceProtocolVersion.combined, GeneratedProtocolVersion.combined)
     }
 
-    // MARK: - Message Types
+    // MARK: - Message Types (Host → Guest)
 
-    func testMessageTypesMatchGenerated() {
-        // Host → Guest
-        XCTAssertEqual(
-            SpiceMessageType.launchProgram.rawValue,
-            GeneratedMessageType.launchProgram.rawValue,
-            "launchProgram message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.requestIcon.rawValue,
-            GeneratedMessageType.requestIcon.rawValue,
-            "requestIcon message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.clipboardData.rawValue,
-            GeneratedMessageType.clipboardData.rawValue,
-            "clipboardData message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.mouseInput.rawValue,
-            GeneratedMessageType.mouseInput.rawValue,
-            "mouseInput message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.keyboardInput.rawValue,
-            GeneratedMessageType.keyboardInput.rawValue,
-            "keyboardInput message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.dragDropEvent.rawValue,
-            GeneratedMessageType.dragDropEvent.rawValue,
-            "dragDropEvent message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.shutdown.rawValue,
-            GeneratedMessageType.shutdown.rawValue,
-            "shutdown message type mismatch"
-        )
+    func testHostToGuestMessageTypesMatchGenerated() {
+        XCTAssertEqual(SpiceMessageType.launchProgram.rawValue, GeneratedMessageType.launchProgram.rawValue)
+        XCTAssertEqual(SpiceMessageType.requestIcon.rawValue, GeneratedMessageType.requestIcon.rawValue)
+        XCTAssertEqual(SpiceMessageType.clipboardData.rawValue, GeneratedMessageType.clipboardData.rawValue)
+        XCTAssertEqual(SpiceMessageType.mouseInput.rawValue, GeneratedMessageType.mouseInput.rawValue)
+        XCTAssertEqual(SpiceMessageType.keyboardInput.rawValue, GeneratedMessageType.keyboardInput.rawValue)
+        XCTAssertEqual(SpiceMessageType.dragDropEvent.rawValue, GeneratedMessageType.dragDropEvent.rawValue)
+        XCTAssertEqual(SpiceMessageType.shutdown.rawValue, GeneratedMessageType.shutdown.rawValue)
+    }
 
-        // Guest → Host
-        XCTAssertEqual(
-            SpiceMessageType.windowMetadata.rawValue,
-            GeneratedMessageType.windowMetadata.rawValue,
-            "windowMetadata message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.frameData.rawValue,
-            GeneratedMessageType.frameData.rawValue,
-            "frameData message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.capabilityFlags.rawValue,
-            GeneratedMessageType.capabilityFlags.rawValue,
-            "capabilityFlags message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.dpiInfo.rawValue,
-            GeneratedMessageType.dpiInfo.rawValue,
-            "dpiInfo message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.iconData.rawValue,
-            GeneratedMessageType.iconData.rawValue,
-            "iconData message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.shortcutDetected.rawValue,
-            GeneratedMessageType.shortcutDetected.rawValue,
-            "shortcutDetected message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.clipboardChanged.rawValue,
-            GeneratedMessageType.clipboardChanged.rawValue,
-            "clipboardChanged message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.heartbeat.rawValue,
-            GeneratedMessageType.heartbeat.rawValue,
-            "heartbeat message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.telemetryReport.rawValue,
-            GeneratedMessageType.telemetryReport.rawValue,
-            "telemetryReport message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.provisionProgress.rawValue,
-            GeneratedMessageType.provisionProgress.rawValue,
-            "provisionProgress message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.provisionError.rawValue,
-            GeneratedMessageType.provisionError.rawValue,
-            "provisionError message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.provisionComplete.rawValue,
-            GeneratedMessageType.provisionComplete.rawValue,
-            "provisionComplete message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.error.rawValue,
-            GeneratedMessageType.error.rawValue,
-            "error message type mismatch"
-        )
-        XCTAssertEqual(
-            SpiceMessageType.ack.rawValue,
-            GeneratedMessageType.ack.rawValue,
-            "ack message type mismatch"
-        )
+    // MARK: - Message Types (Guest → Host)
+
+    func testGuestToHostMessageTypesMatchGenerated() {
+        XCTAssertEqual(SpiceMessageType.windowMetadata.rawValue, GeneratedMessageType.windowMetadata.rawValue)
+        XCTAssertEqual(SpiceMessageType.frameData.rawValue, GeneratedMessageType.frameData.rawValue)
+        XCTAssertEqual(SpiceMessageType.capabilityFlags.rawValue, GeneratedMessageType.capabilityFlags.rawValue)
+        XCTAssertEqual(SpiceMessageType.dpiInfo.rawValue, GeneratedMessageType.dpiInfo.rawValue)
+        XCTAssertEqual(SpiceMessageType.iconData.rawValue, GeneratedMessageType.iconData.rawValue)
+        XCTAssertEqual(SpiceMessageType.shortcutDetected.rawValue, GeneratedMessageType.shortcutDetected.rawValue)
+        XCTAssertEqual(SpiceMessageType.clipboardChanged.rawValue, GeneratedMessageType.clipboardChanged.rawValue)
+        XCTAssertEqual(SpiceMessageType.heartbeat.rawValue, GeneratedMessageType.heartbeat.rawValue)
+        XCTAssertEqual(SpiceMessageType.telemetryReport.rawValue, GeneratedMessageType.telemetryReport.rawValue)
+    }
+
+    func testProvisioningMessageTypesMatchGenerated() {
+        XCTAssertEqual(SpiceMessageType.provisionProgress.rawValue, GeneratedMessageType.provisionProgress.rawValue)
+        XCTAssertEqual(SpiceMessageType.provisionError.rawValue, GeneratedMessageType.provisionError.rawValue)
+        XCTAssertEqual(SpiceMessageType.provisionComplete.rawValue, GeneratedMessageType.provisionComplete.rawValue)
+        XCTAssertEqual(SpiceMessageType.error.rawValue, GeneratedMessageType.error.rawValue)
+        XCTAssertEqual(SpiceMessageType.ack.rawValue, GeneratedMessageType.ack.rawValue)
     }
 
     // MARK: - Guest Capabilities
 
     func testCapabilitiesMatchGenerated() {
-        XCTAssertEqual(
-            GuestCapabilities.windowTracking.rawValue,
-            GeneratedCapabilities.windowTracking.rawValue,
-            "windowTracking capability mismatch"
-        )
-        XCTAssertEqual(
-            GuestCapabilities.desktopDuplication.rawValue,
-            GeneratedCapabilities.desktopDuplication.rawValue,
-            "desktopDuplication capability mismatch"
-        )
-        XCTAssertEqual(
-            GuestCapabilities.clipboardSync.rawValue,
-            GeneratedCapabilities.clipboardSync.rawValue,
-            "clipboardSync capability mismatch"
-        )
-        XCTAssertEqual(
-            GuestCapabilities.dragDrop.rawValue,
-            GeneratedCapabilities.dragDrop.rawValue,
-            "dragDrop capability mismatch"
-        )
-        XCTAssertEqual(
-            GuestCapabilities.iconExtraction.rawValue,
-            GeneratedCapabilities.iconExtraction.rawValue,
-            "iconExtraction capability mismatch"
-        )
-        XCTAssertEqual(
-            GuestCapabilities.shortcutDetection.rawValue,
-            GeneratedCapabilities.shortcutDetection.rawValue,
-            "shortcutDetection capability mismatch"
-        )
-        XCTAssertEqual(
-            GuestCapabilities.highDpiSupport.rawValue,
-            GeneratedCapabilities.highDpiSupport.rawValue,
-            "highDpiSupport capability mismatch"
-        )
-        XCTAssertEqual(
-            GuestCapabilities.multiMonitor.rawValue,
-            GeneratedCapabilities.multiMonitor.rawValue,
-            "multiMonitor capability mismatch"
-        )
+        XCTAssertEqual(GuestCapabilities.windowTracking.rawValue, GeneratedCapabilities.windowTracking.rawValue)
+        XCTAssertEqual(GuestCapabilities.desktopDuplication.rawValue, GeneratedCapabilities.desktopDuplication.rawValue)
+        XCTAssertEqual(GuestCapabilities.clipboardSync.rawValue, GeneratedCapabilities.clipboardSync.rawValue)
+        XCTAssertEqual(GuestCapabilities.dragDrop.rawValue, GeneratedCapabilities.dragDrop.rawValue)
+        XCTAssertEqual(GuestCapabilities.iconExtraction.rawValue, GeneratedCapabilities.iconExtraction.rawValue)
+        XCTAssertEqual(GuestCapabilities.shortcutDetection.rawValue, GeneratedCapabilities.shortcutDetection.rawValue)
+        XCTAssertEqual(GuestCapabilities.highDpiSupport.rawValue, GeneratedCapabilities.highDpiSupport.rawValue)
+        XCTAssertEqual(GuestCapabilities.multiMonitor.rawValue, GeneratedCapabilities.multiMonitor.rawValue)
     }
 
     // MARK: - Input Types
@@ -257,25 +136,11 @@ final class ProtocolValidationTests: XCTestCase {
     }
 
     func testProvisioningPhasesMatchGenerated() {
-        XCTAssertEqual(
-            GuestProvisioningPhase.drivers.rawValue.lowercased(),
-            GeneratedProvisioningPhase.drivers.rawValue.lowercased()
-        )
-        XCTAssertEqual(
-            GuestProvisioningPhase.agent.rawValue.lowercased(),
-            GeneratedProvisioningPhase.agent.rawValue.lowercased()
-        )
-        XCTAssertEqual(
-            GuestProvisioningPhase.optimize.rawValue.lowercased(),
-            GeneratedProvisioningPhase.optimize.rawValue.lowercased()
-        )
-        XCTAssertEqual(
-            GuestProvisioningPhase.finalize.rawValue.lowercased(),
-            GeneratedProvisioningPhase.finalize.rawValue.lowercased()
-        )
-        XCTAssertEqual(
-            GuestProvisioningPhase.complete.rawValue.lowercased(),
-            GeneratedProvisioningPhase.complete.rawValue.lowercased()
-        )
+        // Case-insensitive comparison since existing uses lowercase enum case names
+        XCTAssertEqual(GuestProvisioningPhase.drivers.rawValue.lowercased(), "drivers")
+        XCTAssertEqual(GuestProvisioningPhase.agent.rawValue.lowercased(), "agent")
+        XCTAssertEqual(GuestProvisioningPhase.optimize.rawValue.lowercased(), "optimize")
+        XCTAssertEqual(GuestProvisioningPhase.finalize.rawValue.lowercased(), "finalize")
+        XCTAssertEqual(GuestProvisioningPhase.complete.rawValue.lowercased(), "complete")
     }
 }
