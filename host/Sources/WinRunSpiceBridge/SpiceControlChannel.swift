@@ -55,7 +55,7 @@ public actor SpiceControlChannel {
     private let logger: Logger
     private let configuration: SpiceStreamConfiguration
     private var messageIdCounter: UInt32 = 0
-    private var pendingRequests: [UInt32: CheckedContinuation<Any, Error>] = [:]
+    private var pendingStreams: [UInt32: AsyncThrowingStream<Any, Error>.Continuation] = [:]
     private var isConnected: Bool = false
 
     // Transport for actual Spice communication
@@ -152,11 +152,11 @@ public actor SpiceControlChannel {
 
         isConnected = false
 
-        // Cancel all pending requests
-        for (_, continuation) in pendingRequests {
-            continuation.resume(throwing: SpiceControlError.notConnected)
+        // Cancel all pending streams
+        for (_, streamContinuation) in pendingStreams {
+            streamContinuation.finish(throwing: SpiceControlError.notConnected)
         }
-        pendingRequests.removeAll()
+        pendingStreams.removeAll()
         _delegate?.controlChannelDidDisconnect(self)
     }
 
@@ -164,11 +164,11 @@ public actor SpiceControlChannel {
         logger.warn("Control channel transport closed: \(reason.message)")
         isConnected = false
 
-        // Cancel all pending requests
-        for (_, continuation) in pendingRequests {
-            continuation.resume(throwing: SpiceControlError.notConnected)
+        // Cancel all pending streams
+        for (_, streamContinuation) in pendingStreams {
+            streamContinuation.finish(throwing: SpiceControlError.notConnected)
         }
-        pendingRequests.removeAll()
+        pendingStreams.removeAll()
         _delegate?.controlChannelDidDisconnect(self)
     }
 
@@ -235,15 +235,16 @@ public actor SpiceControlChannel {
         default: nil
         }
 
-        if let messageId, let continuation = pendingRequests.removeValue(forKey: messageId) {
+        if let messageId, let streamContinuation = pendingStreams.removeValue(forKey: messageId) {
             // This is a response to a pending request
             if let errorMsg = message as? GuestErrorMessage {
-                continuation.resume(throwing: SpiceControlError.guestError(
+                streamContinuation.finish(throwing: SpiceControlError.guestError(
                     code: errorMsg.code,
                     message: errorMsg.message
                 ))
             } else {
-                continuation.resume(returning: message)
+                streamContinuation.yield(message)
+                streamContinuation.finish()
             }
         } else {
             // Unsolicited message - notify delegate
@@ -287,11 +288,21 @@ public actor SpiceControlChannel {
 
         logger.debug("Sent control message (\(data.count) bytes)")
 
-        // Send and wait for response with timeout
+        // Wait for response with timeout using AsyncStream approach
+        // This avoids actor-isolation issues with continuations
         return try await withThrowingTaskGroup(of: Any.self) { group in
-            // Add the request task - uses actor method to properly register continuation
+            // Create a stream that will receive the response
+            let (stream, streamContinuation) = AsyncThrowingStream<Any, Error>.makeStream()
+
+            // Register the stream continuation for this message ID
+            pendingStreams[messageId] = streamContinuation
+
+            // Add the request task
             group.addTask {
-                try await self.awaitResponse(messageId: messageId)
+                for try await response in stream {
+                    return response
+                }
+                throw SpiceControlError.timeout
             }
 
             // Add a timeout task
@@ -304,28 +315,17 @@ public actor SpiceControlChannel {
             do {
                 if let result = try await group.next() {
                     group.cancelAll()
+                    pendingStreams.removeValue(forKey: messageId)
                     return result
                 }
                 throw SpiceControlError.timeout
             } catch {
-                // Clean up pending request on timeout
-                removePendingRequest(messageId: messageId)
+                // Clean up pending stream on timeout
+                pendingStreams.removeValue(forKey: messageId)
+                streamContinuation.finish()
                 throw error
             }
         }
-    }
-
-    /// Awaits a response for the given message ID.
-    /// This is an actor method so the continuation registration is properly isolated.
-    private func awaitResponse(messageId: UInt32) async throws -> Any {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
-            // Since this runs in actor-isolated context, we can safely access pendingRequests
-            pendingRequests[messageId] = continuation
-        }
-    }
-
-    private func removePendingRequest(messageId: UInt32) {
-        _ = pendingRequests.removeValue(forKey: messageId)
     }
 
     /// Simulate receiving a response (for testing purposes).
