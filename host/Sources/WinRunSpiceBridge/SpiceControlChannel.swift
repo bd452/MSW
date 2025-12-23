@@ -289,13 +289,9 @@ public actor SpiceControlChannel {
 
         // Send and wait for response with timeout
         return try await withThrowingTaskGroup(of: Any.self) { group in
-            // Add the request task
+            // Add the request task - uses actor method to properly register continuation
             group.addTask {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
-                    Task {
-                        await self.registerPendingRequest(messageId: messageId, continuation: continuation)
-                    }
-                }
+                try await self.awaitResponse(messageId: messageId)
             }
 
             // Add a timeout task
@@ -313,14 +309,19 @@ public actor SpiceControlChannel {
                 throw SpiceControlError.timeout
             } catch {
                 // Clean up pending request on timeout
-                await self.removePendingRequest(messageId: messageId)
+                removePendingRequest(messageId: messageId)
                 throw error
             }
         }
     }
 
-    private func registerPendingRequest(messageId: UInt32, continuation: CheckedContinuation<Any, Error>) {
-        pendingRequests[messageId] = continuation
+    /// Awaits a response for the given message ID.
+    /// This is an actor method so the continuation registration is properly isolated.
+    private func awaitResponse(messageId: UInt32) async throws -> Any {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
+            // Since this runs in actor-isolated context, we can safely access pendingRequests
+            pendingRequests[messageId] = continuation
+        }
     }
 
     private func removePendingRequest(messageId: UInt32) {
