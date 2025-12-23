@@ -11,6 +11,9 @@ final class SetupCompleteViewController: NSViewController {
     private let messageLabel = NSTextField(wrappingLabelWithString: "Windows is ready to use.")
     private let diskUsageLabel = NSTextField(labelWithString: "")
     private let detailsLabel = NSTextField(wrappingLabelWithString: "")
+    private let tipsTitleLabel = NSTextField(labelWithString: "Getting started")
+    private let tipsBodyLabel = NSTextField(wrappingLabelWithString: "")
+    private let learnMoreButton = NSButton(title: "Learn more…", target: nil, action: nil)
     private let doneButton = NSButton(title: "Done", target: nil, action: nil)
  
     // MARK: - State
@@ -47,11 +50,36 @@ final class SetupCompleteViewController: NSViewController {
         detailsLabel.maximumNumberOfLines = 0
         detailsLabel.stringValue = formatDetails(result: result)
  
+        tipsTitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        tipsTitleLabel.textColor = .labelColor
+ 
+        tipsBodyLabel.font = .systemFont(ofSize: 12)
+        tipsBodyLabel.textColor = .secondaryLabelColor
+        tipsBodyLabel.maximumNumberOfLines = 0
+        tipsBodyLabel.stringValue = """
+        - Double-click a .exe or .msi in Finder to run/install it in WinRun
+        - Use the CLI: winrun \"C:\\Path\\To\\App.exe\" (or a macOS path under /Users)
+        - After installing, WinRun can generate native macOS .app launchers for Windows apps
+        """
+ 
+        learnMoreButton.target = self
+        learnMoreButton.action = #selector(openLearnMore)
+        learnMoreButton.bezelStyle = .rounded
+ 
         doneButton.target = self
         doneButton.action = #selector(done)
         doneButton.bezelStyle = .rounded
  
-        for subview in [titleLabel, messageLabel, diskUsageLabel, detailsLabel, doneButton] {
+        for subview in [
+            titleLabel,
+            messageLabel,
+            diskUsageLabel,
+            detailsLabel,
+            tipsTitleLabel,
+            tipsBodyLabel,
+            learnMoreButton,
+            doneButton,
+        ] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -73,7 +101,18 @@ final class SetupCompleteViewController: NSViewController {
             detailsLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             detailsLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
  
-            doneButton.topAnchor.constraint(greaterThanOrEqualTo: detailsLabel.bottomAnchor, constant: 20),
+            tipsTitleLabel.topAnchor.constraint(equalTo: detailsLabel.bottomAnchor, constant: 16),
+            tipsTitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            tipsTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+ 
+            tipsBodyLabel.topAnchor.constraint(equalTo: tipsTitleLabel.bottomAnchor, constant: 8),
+            tipsBodyLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            tipsBodyLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+ 
+            learnMoreButton.topAnchor.constraint(equalTo: tipsBodyLabel.bottomAnchor, constant: 14),
+            learnMoreButton.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+ 
+            doneButton.topAnchor.constraint(greaterThanOrEqualTo: learnMoreButton.bottomAnchor, constant: 20),
             doneButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             doneButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
         ])
@@ -114,5 +153,10 @@ final class SetupCompleteViewController: NSViewController {
  
     @objc private func done() {
         onDone?()
+    }
+ 
+    @objc private func openLearnMore() {
+        guard let url = URL(string: "https://github.com/winrun/winrun") else { return }
+        NSWorkspace.shared.open(url)
     }
 }
