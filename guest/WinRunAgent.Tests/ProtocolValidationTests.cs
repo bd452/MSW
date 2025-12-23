@@ -50,7 +50,7 @@ public sealed class ProtocolValidationTests
     // Cross-Platform Parity Tests
     // ========================================================================
 
-    [Fact]
+    [SkippableFact]
     public void MessageTypesMatchProtocolDef()
     {
         Skip.If(TestData.MessageTypesHostToGuest.Count == 0, "Test data not loaded");
@@ -96,7 +96,7 @@ public sealed class ProtocolValidationTests
             TestData.MessageTypesGuestToHost.GetValueOrDefault("msgAck"));
     }
 
-    [Fact]
+    [SkippableFact]
     public void CapabilitiesMatchProtocolDef()
     {
         Skip.If(TestData.Capabilities.Count == 0, "Test data not loaded");
@@ -208,7 +208,7 @@ public sealed class ProtocolValidationTests
         Assert.Equal(SpiceProtocolVersion.Minor, minor);
     }
 
-    [Fact]
+    [SkippableFact]
     public void ProtocolVersionMatchesTestData()
     {
         Skip.If(TestData.Version.Count == 0, "Test data not loaded");
