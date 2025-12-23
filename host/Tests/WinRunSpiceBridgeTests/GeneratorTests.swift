@@ -4,7 +4,6 @@ import XCTest
 /// Tests that verify the Swift protocol generator produces correct output.
 /// These tests help catch generator bugs before they affect the codebase.
 final class GeneratorTests: XCTestCase {
-
     // MARK: - Generator Script Existence
 
     func testGeneratorScriptExists() throws {

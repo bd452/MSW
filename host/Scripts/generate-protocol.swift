@@ -160,10 +160,11 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Message Types
 
-    /// Message type codes - generated from shared/protocol.def
-    public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
-        // Host → Guest (0x00-0x7F)
-    """
+/// Message type codes - generated from shared/protocol.def
+public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
+    // Host → Guest (0x00-0x7F)
+
+"""
     
     for (name, value) in def.messageTypesHostToGuest {
         let caseName = toSwiftEnumCase(name, prefix: "MSG_")
@@ -207,9 +208,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Mouse Input
 
-    /// Mouse button codes - generated from shared/protocol.def
-    public enum MouseButton: UInt8, Codable, Sendable {
-    """
+/// Mouse button codes - generated from shared/protocol.def
+public enum MouseButton: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.mouseButtons {
         let caseName = toSwiftEnumCase(name, prefix: "MOUSE_BUTTON_")
@@ -219,9 +221,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     out += """
     }
 
-    /// Mouse event types - generated from shared/protocol.def
-    public enum MouseEventType: UInt8, Codable, Sendable {
-    """
+/// Mouse event types - generated from shared/protocol.def
+public enum MouseEventType: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.mouseEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "MOUSE_EVENT_")
@@ -233,9 +236,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Keyboard Input
 
-    /// Key event types - generated from shared/protocol.def
-    public enum KeyEventType: UInt8, Codable, Sendable {
-    """
+/// Key event types - generated from shared/protocol.def
+public enum KeyEventType: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.keyEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "KEY_EVENT_")
@@ -263,9 +267,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Drag and Drop
 
-    /// Drag/drop event types - generated from shared/protocol.def
-    public enum DragDropEventType: UInt8, Codable, Sendable {
-    """
+/// Drag/drop event types - generated from shared/protocol.def
+public enum DragDropEventType: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.dragDropEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "DRAG_EVENT_")
@@ -275,9 +280,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     out += """
     }
 
-    /// Drag operation types - generated from shared/protocol.def
-    public enum DragOperation: UInt8, Codable, Sendable {
-    """
+/// Drag operation types - generated from shared/protocol.def
+public enum DragOperation: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.dragOperations {
         let caseName = toSwiftEnumCase(name, prefix: "DRAG_OP_")
@@ -289,9 +295,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Pixel Formats
 
-    /// Pixel format types - generated from shared/protocol.def
-    public enum SpicePixelFormat: UInt8, Codable, Sendable {
-    """
+/// Pixel format types - generated from shared/protocol.def
+public enum SpicePixelFormat: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.pixelFormats {
         let caseName = toSwiftEnumCase(name, prefix: "PIXEL_FORMAT_")
@@ -303,9 +310,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Window Events
 
-    /// Window event types - generated from shared/protocol.def
-    public enum WindowEventType: Int32, Codable, Sendable {
-    """
+/// Window event types - generated from shared/protocol.def
+public enum WindowEventType: Int32, Codable, Sendable {
+
+"""
     
     for (name, value) in def.windowEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "WINDOW_EVENT_")
@@ -317,9 +325,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Clipboard Formats
 
-    /// Clipboard format identifiers - generated from shared/protocol.def
-    public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
-    """
+/// Clipboard format identifiers - generated from shared/protocol.def
+public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
+
+"""
     
     for (name, value) in def.clipboardFormats {
         let caseName = toSwiftEnumCase(name, prefix: "CLIPBOARD_FORMAT_")
@@ -336,9 +345,10 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     // MARK: - Provisioning Phases
 
-    /// Provisioning phase identifiers - generated from shared/protocol.def
-    public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
-    """
+/// Provisioning phase identifiers - generated from shared/protocol.def
+public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
+
+"""
     
     for (name, value) in def.provisioningPhases {
         let caseName = toSwiftEnumCase(name, prefix: "PROVISION_PHASE_")
