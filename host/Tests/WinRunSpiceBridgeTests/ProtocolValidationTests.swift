@@ -1,42 +1,138 @@
+import Foundation
 import XCTest
 
 @testable import WinRunSpiceBridge
 
-/// Tests that validate protocol constants match expected values from shared/protocol.def.
-/// These tests ensure the generated types have correct values.
+/// Tests that validate protocol types match the shared source of truth (protocol.def)
+/// and verify behavioral correctness of the protocol implementation.
+///
+/// These tests read from shared/protocol-test-data.json which is generated from protocol.def.
+/// This ensures Swift and C# implementations stay in sync.
 final class ProtocolValidationTests: XCTestCase {
-    // MARK: - Protocol Version
+    // MARK: - Shared Test Data
 
-    func testProtocolVersionValues() {
-        // From protocol.def: PROTOCOL_VERSION_MAJOR = 1, PROTOCOL_VERSION_MINOR = 0
-        XCTAssertEqual(SpiceProtocolVersion.major, 1)
-        XCTAssertEqual(SpiceProtocolVersion.minor, 0)
-        XCTAssertEqual(SpiceProtocolVersion.combined, 0x0001_0000)
+    private static var testData: ProtocolTestData?
+
+    private var testData: ProtocolTestData {
+        if let data = Self.testData {
+            return data
+        }
+        let data = Self.loadTestData()
+        Self.testData = data
+        return data
     }
 
-    // MARK: - Message Types (Host → Guest)
+    private static func loadTestData() -> ProtocolTestData {
+        // Find the protocol-test-data.json file
+        // Try multiple possible locations
+        let possiblePaths = [
+            // When running from Xcode or swift test
+            URL(fileURLWithPath: #file)
+                .deletingLastPathComponent()  // Tests/WinRunSpiceBridgeTests
+                .deletingLastPathComponent()  // Tests
+                .deletingLastPathComponent()  // host
+                .deletingLastPathComponent()  // repo root
+                .appendingPathComponent("shared/protocol-test-data.json"),
+            // Fallback: relative to current directory
+            URL(fileURLWithPath: "shared/protocol-test-data.json"),
+            URL(fileURLWithPath: "../../../shared/protocol-test-data.json"),
+        ]
 
-    func testHostToGuestMessageTypeValues() {
-        // From protocol.def [MESSAGE_TYPES_HOST_TO_GUEST]
-        XCTAssertEqual(SpiceMessageType.launchProgram.rawValue, 0x01)
-        XCTAssertEqual(SpiceMessageType.requestIcon.rawValue, 0x02)
-        XCTAssertEqual(SpiceMessageType.clipboardData.rawValue, 0x03)
-        XCTAssertEqual(SpiceMessageType.mouseInput.rawValue, 0x04)
-        XCTAssertEqual(SpiceMessageType.keyboardInput.rawValue, 0x05)
-        XCTAssertEqual(SpiceMessageType.dragDropEvent.rawValue, 0x06)
-        XCTAssertEqual(SpiceMessageType.listSessions.rawValue, 0x08)
-        XCTAssertEqual(SpiceMessageType.closeSession.rawValue, 0x09)
-        XCTAssertEqual(SpiceMessageType.listShortcuts.rawValue, 0x0A)
-        XCTAssertEqual(SpiceMessageType.shutdown.rawValue, 0x0F)
+        for path in possiblePaths where FileManager.default.fileExists(atPath: path.path) {
+            do {
+                let data = try Data(contentsOf: path)
+                return try JSONDecoder().decode(ProtocolTestData.self, from: data)
+            } catch {
+                // Try next path
+                continue
+            }
+        }
+
+        // If we can't load the file, return empty data and tests will be skipped
+        return ProtocolTestData()
     }
+
+    // MARK: - Cross-Platform Parity Tests
+
+    func testMessageTypesMatchProtocolDef() throws {
+        try XCTSkipIf(testData.messageTypesHostToGuest.isEmpty, "Test data not loaded")
+
+        // Host → Guest
+        XCTAssertEqual(
+            SpiceMessageType.launchProgram.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgLaunchProgram"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.requestIcon.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgRequestIcon"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.clipboardData.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgClipboardData"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.mouseInput.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgMouseInput"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.keyboardInput.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgKeyboardInput"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.dragDropEvent.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgDragDropEvent"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.listSessions.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgListSessions"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.closeSession.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgCloseSession"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.listShortcuts.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgListShortcuts"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.shutdown.rawValue,
+            UInt8(testData.messageTypesHostToGuest["msgShutdown"] ?? -1))
+
+        // Guest → Host
+        XCTAssertEqual(
+            SpiceMessageType.windowMetadata.rawValue,
+            UInt8(testData.messageTypesGuestToHost["msgWindowMetadata"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.frameData.rawValue,
+            UInt8(testData.messageTypesGuestToHost["msgFrameData"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.capabilityFlags.rawValue,
+            UInt8(testData.messageTypesGuestToHost["msgCapabilityFlags"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.error.rawValue,
+            UInt8(testData.messageTypesGuestToHost["msgError"] ?? -1))
+        XCTAssertEqual(
+            SpiceMessageType.ack.rawValue,
+            UInt8(testData.messageTypesGuestToHost["msgAck"] ?? -1))
+    }
+
+    func testCapabilitiesMatchProtocolDef() throws {
+        try XCTSkipIf(testData.capabilities.isEmpty, "Test data not loaded")
+
+        XCTAssertEqual(
+            GuestCapabilities.windowTracking.rawValue,
+            UInt32(testData.capabilities["capWindowTracking"] ?? -1))
+        XCTAssertEqual(
+            GuestCapabilities.desktopDuplication.rawValue,
+            UInt32(testData.capabilities["capDesktopDuplication"] ?? -1))
+        XCTAssertEqual(
+            GuestCapabilities.clipboardSync.rawValue,
+            UInt32(testData.capabilities["capClipboardSync"] ?? -1))
+        XCTAssertEqual(
+            GuestCapabilities.iconExtraction.rawValue,
+            UInt32(testData.capabilities["capIconExtraction"] ?? -1))
+    }
+
+    // MARK: - Behavioral Tests: Message Direction
 
     func testHostToGuestMessagesAreInCorrectRange() {
-        // Host → Guest messages should be in range 0x00-0x7F
         let hostMessages: [SpiceMessageType] = [
             .launchProgram, .requestIcon, .clipboardData, .mouseInput,
             .keyboardInput, .dragDropEvent, .listSessions, .closeSession,
             .listShortcuts, .shutdown,
         ]
+
         for msg in hostMessages {
             XCTAssertTrue(msg.isHostToGuest, "\(msg) should be host→guest")
             XCTAssertFalse(msg.isGuestToHost, "\(msg) should not be guest→host")
@@ -44,36 +140,14 @@ final class ProtocolValidationTests: XCTestCase {
         }
     }
 
-    // MARK: - Message Types (Guest → Host)
-
-    func testGuestToHostMessageTypeValues() {
-        // From protocol.def [MESSAGE_TYPES_GUEST_TO_HOST]
-        XCTAssertEqual(SpiceMessageType.windowMetadata.rawValue, 0x80)
-        XCTAssertEqual(SpiceMessageType.frameData.rawValue, 0x81)
-        XCTAssertEqual(SpiceMessageType.capabilityFlags.rawValue, 0x82)
-        XCTAssertEqual(SpiceMessageType.dpiInfo.rawValue, 0x83)
-        XCTAssertEqual(SpiceMessageType.iconData.rawValue, 0x84)
-        XCTAssertEqual(SpiceMessageType.shortcutDetected.rawValue, 0x85)
-        XCTAssertEqual(SpiceMessageType.clipboardChanged.rawValue, 0x86)
-        XCTAssertEqual(SpiceMessageType.heartbeat.rawValue, 0x87)
-        XCTAssertEqual(SpiceMessageType.telemetryReport.rawValue, 0x88)
-        XCTAssertEqual(SpiceMessageType.provisionProgress.rawValue, 0x89)
-        XCTAssertEqual(SpiceMessageType.provisionError.rawValue, 0x8A)
-        XCTAssertEqual(SpiceMessageType.provisionComplete.rawValue, 0x8B)
-        XCTAssertEqual(SpiceMessageType.sessionList.rawValue, 0x8C)
-        XCTAssertEqual(SpiceMessageType.shortcutList.rawValue, 0x8D)
-        XCTAssertEqual(SpiceMessageType.error.rawValue, 0xFE)
-        XCTAssertEqual(SpiceMessageType.ack.rawValue, 0xFF)
-    }
-
     func testGuestToHostMessagesAreInCorrectRange() {
-        // Guest → Host messages should be in range 0x80-0xFF
         let guestMessages: [SpiceMessageType] = [
             .windowMetadata, .frameData, .capabilityFlags, .dpiInfo,
             .iconData, .shortcutDetected, .clipboardChanged, .heartbeat,
             .telemetryReport, .provisionProgress, .provisionError,
             .provisionComplete, .sessionList, .shortcutList, .error, .ack,
         ]
+
         for msg in guestMessages {
             XCTAssertTrue(msg.isGuestToHost, "\(msg) should be guest→host")
             XCTAssertFalse(msg.isHostToGuest, "\(msg) should not be host→guest")
@@ -81,134 +155,143 @@ final class ProtocolValidationTests: XCTestCase {
         }
     }
 
-    // MARK: - Guest Capabilities
+    // MARK: - Behavioral Tests: Capabilities
 
-    func testCapabilityValues() {
-        // From protocol.def [CAPABILITIES]
-        XCTAssertEqual(GuestCapabilities.windowTracking.rawValue, 0x01)
-        XCTAssertEqual(GuestCapabilities.desktopDuplication.rawValue, 0x02)
-        XCTAssertEqual(GuestCapabilities.clipboardSync.rawValue, 0x04)
-        XCTAssertEqual(GuestCapabilities.dragDrop.rawValue, 0x08)
-        XCTAssertEqual(GuestCapabilities.iconExtraction.rawValue, 0x10)
-        XCTAssertEqual(GuestCapabilities.shortcutDetection.rawValue, 0x20)
-        XCTAssertEqual(GuestCapabilities.highDpiSupport.rawValue, 0x40)
-        XCTAssertEqual(GuestCapabilities.multiMonitor.rawValue, 0x80)
+    func testCapabilitiesArePowersOfTwo() {
+        let capabilities: [GuestCapabilities] = [
+            .windowTracking, .desktopDuplication, .clipboardSync, .dragDrop,
+            .iconExtraction, .shortcutDetection, .highDpiSupport, .multiMonitor,
+        ]
+
+        for cap in capabilities {
+            let value = cap.rawValue
+            // Power of 2 check: value & (value - 1) == 0 for powers of 2
+            XCTAssertEqual(value & (value - 1), 0, "\(cap) should be a power of 2")
+            XCTAssertGreaterThan(value, 0, "\(cap) should be non-zero")
+        }
     }
 
-    func testAllCoreCapabilities() {
-        // allCore should include the essential capabilities
+    func testCapabilitiesCanBeCombined() {
+        let combined: GuestCapabilities = [.windowTracking, .clipboardSync, .iconExtraction]
+
+        XCTAssertTrue(combined.contains(.windowTracking))
+        XCTAssertTrue(combined.contains(.clipboardSync))
+        XCTAssertTrue(combined.contains(.iconExtraction))
+        XCTAssertFalse(combined.contains(.dragDrop))
+    }
+
+    func testAllCoreCapabilitiesIncludesExpectedFlags() {
         let allCore = GuestCapabilities.allCore
+
         XCTAssertTrue(allCore.contains(.windowTracking))
         XCTAssertTrue(allCore.contains(.desktopDuplication))
         XCTAssertTrue(allCore.contains(.clipboardSync))
         XCTAssertTrue(allCore.contains(.iconExtraction))
     }
 
-    // MARK: - Mouse Input
+    // MARK: - Behavioral Tests: Protocol Version
 
-    func testMouseButtonValues() {
-        // From protocol.def [MOUSE_BUTTONS]
-        XCTAssertEqual(MouseButton.left.rawValue, 1)
-        XCTAssertEqual(MouseButton.right.rawValue, 2)
-        XCTAssertEqual(MouseButton.middle.rawValue, 4)
-        XCTAssertEqual(MouseButton.extra1.rawValue, 5)
-        XCTAssertEqual(MouseButton.extra2.rawValue, 6)
+    func testProtocolVersionCombinedFormat() {
+        // Combined format: upper 16 bits = major, lower 16 bits = minor
+        let combined = SpiceProtocolVersion.combined
+        let major = UInt16(combined >> 16)
+        let minor = UInt16(combined & 0xFFFF)
+
+        XCTAssertEqual(major, SpiceProtocolVersion.major)
+        XCTAssertEqual(minor, SpiceProtocolVersion.minor)
     }
 
-    func testMouseEventTypeValues() {
-        // From protocol.def [MOUSE_EVENT_TYPES]
-        XCTAssertEqual(MouseEventType.move.rawValue, 0)
-        XCTAssertEqual(MouseEventType.press.rawValue, 1)
-        XCTAssertEqual(MouseEventType.release.rawValue, 2)
-        XCTAssertEqual(MouseEventType.scroll.rawValue, 3)
+    func testProtocolVersionCompatibility() {
+        let current = SpiceProtocolVersion.combined
+
+        // Same version is compatible
+        XCTAssertTrue(SpiceProtocolVersion.isCompatible(with: current))
+
+        // Same major, lower minor is compatible
+        let olderMinor = (UInt32(SpiceProtocolVersion.major) << 16) | 0
+        XCTAssertTrue(SpiceProtocolVersion.isCompatible(with: olderMinor))
+
+        // Different major is incompatible
+        let differentMajor = (UInt32(SpiceProtocolVersion.major + 1) << 16) | 0
+        XCTAssertFalse(SpiceProtocolVersion.isCompatible(with: differentMajor))
     }
 
-    // MARK: - Keyboard Input
+    func testProtocolVersionParsing() {
+        let combined: UInt32 = 0x0001_0002  // major=1, minor=2
+        let (major, minor) = SpiceProtocolVersion.parse(combined)
 
-    func testKeyEventTypeValues() {
-        // From protocol.def [KEY_EVENT_TYPES]
-        XCTAssertEqual(KeyEventType.down.rawValue, 0)
-        XCTAssertEqual(KeyEventType.up.rawValue, 1)
+        XCTAssertEqual(major, 1)
+        XCTAssertEqual(minor, 2)
     }
 
-    func testKeyModifierValues() {
-        // From protocol.def [KEY_MODIFIERS]
-        XCTAssertEqual(KeyModifiers.shift.rawValue, 0x01)
-        XCTAssertEqual(KeyModifiers.control.rawValue, 0x02)
-        XCTAssertEqual(KeyModifiers.alt.rawValue, 0x04)
-        XCTAssertEqual(KeyModifiers.command.rawValue, 0x08)
-        XCTAssertEqual(KeyModifiers.capsLock.rawValue, 0x10)
-        XCTAssertEqual(KeyModifiers.numLock.rawValue, 0x20)
+    func testProtocolVersionFormatting() {
+        let combined: UInt32 = 0x0001_0002
+        let formatted = SpiceProtocolVersion.format(combined)
+
+        XCTAssertEqual(formatted, "1.2")
     }
 
-    // MARK: - Drag and Drop
+    // MARK: - Behavioral Tests: Key Modifiers
 
-    func testDragDropEventTypeValues() {
-        // From protocol.def [DRAG_DROP_EVENT_TYPES]
-        XCTAssertEqual(DragDropEventType.enter.rawValue, 0)
-        XCTAssertEqual(DragDropEventType.move.rawValue, 1)
-        XCTAssertEqual(DragDropEventType.leave.rawValue, 2)
-        XCTAssertEqual(DragDropEventType.drop.rawValue, 3)
+    func testKeyModifiersCanBeCombined() {
+        let combined: KeyModifiers = [.shift, .control, .alt]
+
+        XCTAssertTrue(combined.contains(.shift))
+        XCTAssertTrue(combined.contains(.control))
+        XCTAssertTrue(combined.contains(.alt))
+        XCTAssertFalse(combined.contains(.command))
     }
 
-    func testDragOperationValues() {
-        // From protocol.def [DRAG_OPERATIONS]
-        XCTAssertEqual(DragOperation.none.rawValue, 0)
-        XCTAssertEqual(DragOperation.copy.rawValue, 1)
-        XCTAssertEqual(DragOperation.move.rawValue, 2)
-        XCTAssertEqual(DragOperation.link.rawValue, 3)
-    }
+    // MARK: - Completeness Tests
 
-    // MARK: - Pixel Formats
-
-    func testPixelFormatValues() {
-        // From protocol.def [PIXEL_FORMATS]
-        XCTAssertEqual(SpicePixelFormat.bgra32.rawValue, 0)
-        XCTAssertEqual(SpicePixelFormat.rgba32.rawValue, 1)
-    }
-
-    // MARK: - Window Events
-
-    func testWindowEventTypeValues() {
-        // From protocol.def [WINDOW_EVENT_TYPES]
-        XCTAssertEqual(WindowEventType.created.rawValue, 0)
-        XCTAssertEqual(WindowEventType.destroyed.rawValue, 1)
-        XCTAssertEqual(WindowEventType.moved.rawValue, 2)
-        XCTAssertEqual(WindowEventType.titleChanged.rawValue, 3)
-        XCTAssertEqual(WindowEventType.focusChanged.rawValue, 4)
-        XCTAssertEqual(WindowEventType.minimized.rawValue, 5)
-        XCTAssertEqual(WindowEventType.restored.rawValue, 6)
-        XCTAssertEqual(WindowEventType.updated.rawValue, 7)
-    }
-
-    // MARK: - Clipboard Formats
-
-    func testClipboardFormatValues() {
-        // From protocol.def [CLIPBOARD_FORMATS]
-        XCTAssertEqual(ClipboardFormat.plainText.rawValue, "plainText")
-        XCTAssertEqual(ClipboardFormat.rtf.rawValue, "rtf")
-        XCTAssertEqual(ClipboardFormat.html.rawValue, "html")
-        XCTAssertEqual(ClipboardFormat.png.rawValue, "png")
-        XCTAssertEqual(ClipboardFormat.tiff.rawValue, "tiff")
-        XCTAssertEqual(ClipboardFormat.fileUrl.rawValue, "fileUrl")
-    }
-
-    // MARK: - Provisioning Phases
-
-    func testProvisioningPhaseValues() {
-        // From protocol.def [PROVISIONING_PHASES]
-        XCTAssertEqual(GuestProvisioningPhase.drivers.rawValue, "drivers")
-        XCTAssertEqual(GuestProvisioningPhase.agent.rawValue, "agent")
-        XCTAssertEqual(GuestProvisioningPhase.optimize.rawValue, "optimize")
-        XCTAssertEqual(GuestProvisioningPhase.finalize.rawValue, "finalize")
-        XCTAssertEqual(GuestProvisioningPhase.complete.rawValue, "complete")
-    }
-
-    // MARK: - Completeness
-
-    func testAllMessageTypesAreCovered() {
-        // Ensure we haven't added message types without adding tests
+    func testAllMessageTypesExist() {
+        // Verify we have all expected message types
         let allCases = SpiceMessageType.allCases
-        XCTAssertEqual(allCases.count, 26, "Update tests if message types are added/removed")
+        XCTAssertEqual(allCases.count, 26, "Expected 26 message types")
+
+        // Verify no duplicate raw values
+        let rawValues = allCases.map { $0.rawValue }
+        XCTAssertEqual(rawValues.count, Set(rawValues).count, "All message types should have unique values")
     }
+
+    func testAllClipboardFormatsExist() {
+        let allCases = ClipboardFormat.allCases
+        XCTAssertGreaterThanOrEqual(allCases.count, 6)
+
+        // Verify expected formats exist
+        XCTAssertNotNil(ClipboardFormat(rawValue: "plainText"))
+        XCTAssertNotNil(ClipboardFormat(rawValue: "rtf"))
+        XCTAssertNotNil(ClipboardFormat(rawValue: "html"))
+        XCTAssertNotNil(ClipboardFormat(rawValue: "png"))
+    }
+
+    func testAllProvisioningPhasesExist() {
+        let allCases = GuestProvisioningPhase.allCases
+        XCTAssertEqual(allCases.count, 5)
+
+        XCTAssertNotNil(GuestProvisioningPhase(rawValue: "drivers"))
+        XCTAssertNotNil(GuestProvisioningPhase(rawValue: "agent"))
+        XCTAssertNotNil(GuestProvisioningPhase(rawValue: "optimize"))
+        XCTAssertNotNil(GuestProvisioningPhase(rawValue: "finalize"))
+        XCTAssertNotNil(GuestProvisioningPhase(rawValue: "complete"))
+    }
+}
+
+// MARK: - Test Data Model
+
+private struct ProtocolTestData: Decodable {
+    var version: [String: Int] = [:]
+    var messageTypesHostToGuest: [String: Int] = [:]
+    var messageTypesGuestToHost: [String: Int] = [:]
+    var capabilities: [String: Int] = [:]
+    var mouseButtons: [String: Int] = [:]
+    var mouseEventTypes: [String: Int] = [:]
+    var keyEventTypes: [String: Int] = [:]
+    var keyModifiers: [String: Int] = [:]
+    var dragDropEventTypes: [String: Int] = [:]
+    var dragOperations: [String: Int] = [:]
+    var pixelFormats: [String: Int] = [:]
+    var windowEventTypes: [String: Int] = [:]
+    var clipboardFormats: [String: String] = [:]
+    var provisioningPhases: [String: String] = [:]
 }

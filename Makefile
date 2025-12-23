@@ -9,7 +9,7 @@ DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
         test-guest-remote test-host-remote build-host-remote check-host-remote check-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
         check-linux install-daemon uninstall-daemon \
-        generate-protocol generate-protocol-host generate-protocol-guest \
+        generate-protocol generate-protocol-host generate-protocol-guest generate-test-data \
         validate-protocol validate-protocol-host validate-protocol-guest
 
 # Default target
@@ -339,8 +339,13 @@ check-remote:
 # Generated files: host/Sources/WinRunSpiceBridge/Protocol.generated.swift
 #                  guest/WinRunAgent/Protocol.generated.cs
 
-generate-protocol: generate-protocol-host generate-protocol-guest
+generate-protocol: generate-protocol-host generate-protocol-guest generate-test-data
 	@echo "✅ Protocol code regenerated!"
+
+generate-test-data:
+	@echo "🔄 Generating protocol test data..."
+	@chmod +x $(REPO_ROOT)/scripts/generate-test-data.sh
+	@$(REPO_ROOT)/scripts/generate-test-data.sh
 
 generate-protocol-host:
 	@echo "🔄 Generating Swift protocol code..."
