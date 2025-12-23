@@ -178,6 +178,7 @@ protocol SpiceStreamTransport {
         }
 
         func closeStream(_ subscription: SpiceStreamSubscription) {
+            releaseControlTrampoline()
             currentHandle = nil
             subscription.cleanup()
         }
@@ -306,16 +307,26 @@ protocol SpiceStreamTransport {
         // MARK: - Control Channel
 
         private var controlCallback: ((Data) -> Void)?
-        private var controlTrampoline: ControlCallbackTrampoline?
+        private var controlTrampolineRef: Unmanaged<ControlCallbackTrampoline>?
 
         func setControlCallback(_ callback: @escaping (Data) -> Void) {
             guard let handle = currentHandle else { return }
 
-            controlCallback = callback
-            controlTrampoline = ControlCallbackTrampoline(callback: callback)
+            // Release previous trampoline if any (avoid memory leak)
+            controlTrampolineRef?.release()
 
-            let unmanaged = Unmanaged.passRetained(controlTrampoline!)
-            winrun_spice_set_control_callback(handle, controlMessageThunk, unmanaged.toOpaque())
+            controlCallback = callback
+            let trampoline = ControlCallbackTrampoline(callback: callback)
+            controlTrampolineRef = Unmanaged.passRetained(trampoline)
+
+            winrun_spice_set_control_callback(handle, controlMessageThunk, controlTrampolineRef!.toOpaque())
+        }
+
+        /// Clean up control callback trampoline when stream closes
+        private func releaseControlTrampoline() {
+            controlTrampolineRef?.release()
+            controlTrampolineRef = nil
+            controlCallback = nil
         }
 
         func sendControlMessage(_ data: Data) -> Bool {

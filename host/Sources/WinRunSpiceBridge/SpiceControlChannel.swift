@@ -334,16 +334,60 @@ public actor SpiceControlChannel {
     }
 
     /// Simulate a connected state (for testing purposes).
-    /// This also sets up a mock transport that accepts but doesn't actually send messages.
+    /// This sets up a mock transport that accepts messages without actually sending them.
     public func simulateConnected() {
         isConnected = true
-        // Create mock transport for testing if not already set
+        // Always use mock transport for testing - it doesn't require a real connection
+        #if os(macOS)
+        // On macOS, we still need a mock for testing since LibSpiceStreamTransport
+        // requires an actual Spice connection
         if transport == nil {
-            #if os(macOS)
-            transport = LibSpiceStreamTransport(logger: logger)
-            #else
-            transport = MockSpiceStreamTransport(logger: logger)
-            #endif
+            // Create a minimal mock that just accepts sends
+            transport = MockTestTransport(logger: logger)
         }
+        #else
+        if transport == nil {
+            transport = MockSpiceStreamTransport(logger: logger)
+        }
+        #endif
     }
+}
+
+// MARK: - Mock Transport for Testing
+
+#if os(macOS)
+/// Minimal mock transport for testing on macOS without a real Spice connection
+private final class MockTestTransport: SpiceStreamTransport {
+    private let logger: Logger
+
+    init(logger: Logger) {
+        self.logger = logger
+    }
+
+    func openStream(
+        configuration: SpiceStreamConfiguration,
+        windowID: UInt64,
+        callbacks: SpiceStreamCallbacks
+    ) throws -> SpiceStreamSubscription {
+        SpiceStreamSubscription {}
+    }
+
+    func closeStream(_ subscription: SpiceStreamSubscription) {
+        subscription.cleanup()
+    }
+
+    func sendMouseEvent(_ event: MouseInputEvent) {}
+    func sendKeyboardEvent(_ event: KeyboardInputEvent) {}
+    func sendClipboard(_ clipboard: ClipboardData) {}
+    func requestClipboard(format: ClipboardFormat) {}
+    func sendDragDropEvent(_ event: DragDropEvent) {}
+
+    func setControlCallback(_ callback: @escaping (Data) -> Void) {}
+
+    func sendControlMessage(_ data: Data) -> Bool {
+        logger.debug("MockTestTransport: sendControlMessage size=\(data.count)")
+        return true
+    }
+}
+#endif
 }

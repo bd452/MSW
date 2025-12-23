@@ -5,8 +5,16 @@ namespace WinRun.Agent.Services;
 
 /// <summary>
 /// Handles communication with the host via Spice port channel.
-/// Reads messages from the named pipe and writes to an inbound channel.
-/// Reads from an outbound channel and writes to the pipe.
+/// <para>
+/// The Spice port channel is exposed to Windows guests via VirtIO serial.
+/// This class supports two connection methods:
+/// 1. Named pipe (for development with QEMU -chardev socket)
+/// 2. VirtIO serial device (for production with proper Spice setup)
+/// </para>
+/// <para>
+/// For VirtIO serial to work, the guest must have the virtio-serial driver
+/// installed (part of virtio-win drivers). The port appears as a COM device.
+/// </para>
 /// </summary>
 public sealed class SpiceControlPort : IDisposable
 {
@@ -16,14 +24,14 @@ public sealed class SpiceControlPort : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _readTask;
     private Task? _writeTask;
-    private NamedPipeClientStream? _pipe;
+    private Stream? _stream;
     private bool _disposed;
 
     /// <summary>
-    /// The named pipe path for the Spice control channel.
-    /// This matches the port name configured in the host.
+    /// The port name for the Spice control channel.
+    /// Must match WINRUN_CONTROL_PORT_NAME in the host C bridge.
     /// </summary>
-    private const string PipeName = "com.winrun.control";
+    private const string PortName = "com.winrun.control";
 
     /// <summary>
     /// Buffer for accumulating partial messages.
@@ -41,38 +49,81 @@ public sealed class SpiceControlPort : IDisposable
     }
 
     /// <summary>
-    /// Attempts to connect to the Spice control pipe.
+    /// Attempts to connect to the Spice control channel.
+    /// Tries multiple connection methods in order of preference.
     /// Returns true if successful, false otherwise.
     /// </summary>
     public bool TryOpen()
     {
-        // Try connecting to the named pipe
-        // The pipe is created by the VirtIO driver or QEMU
+        // Method 1: Try named pipe (for development/QEMU socket mode)
+        if (TryOpenNamedPipe())
+        {
+            return true;
+        }
+
+        // Method 2: Try VirtIO serial device file
+        // On Windows, virtio-serial ports appear as \\.\Global\<portname>
+        if (TryOpenVirtioSerial())
+        {
+            return true;
+        }
+
+        _logger.Warn("Could not connect to Spice control channel");
+        return false;
+    }
+
+    private bool TryOpenNamedPipe()
+    {
         try
         {
-            _pipe = new NamedPipeClientStream(
+            var pipe = new NamedPipeClientStream(
                 ".",
-                PipeName,
+                PortName,
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous);
 
             // Try to connect with a short timeout
-            _pipe.Connect(1000);
-            _logger.Info($"Connected to control pipe: {PipeName}");
+            pipe.Connect(500);
+            _stream = pipe;
+            _logger.Info($"Connected to control channel via named pipe: {PortName}");
             return true;
         }
         catch (TimeoutException)
         {
-            _logger.Debug($"Pipe {PipeName} connection timed out");
-            _pipe?.Dispose();
-            _pipe = null;
+            _logger.Debug($"Named pipe {PortName} connection timed out");
             return false;
         }
         catch (Exception ex)
         {
-            _logger.Debug($"Failed to connect to pipe {PipeName}: {ex.Message}");
-            _pipe?.Dispose();
-            _pipe = null;
+            _logger.Debug($"Named pipe {PortName} not available: {ex.Message}");
+            return false;
+        }
+    }
+
+    private bool TryOpenVirtioSerial()
+    {
+        // VirtIO serial ports on Windows appear as:
+        // \\.\Global\<portname> (when using virtioserial driver)
+        var devicePath = $@"\\.\Global\{PortName}";
+
+        try
+        {
+            // Open as a file stream with overlapped I/O for async support
+            var fileStream = new FileStream(
+                devicePath,
+                FileMode.Open,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 4096,
+                useAsync: true);
+
+            _stream = fileStream;
+            _logger.Info($"Connected to control channel via VirtIO serial: {devicePath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"VirtIO serial {devicePath} not available: {ex.Message}");
             return false;
         }
     }
@@ -82,9 +133,9 @@ public sealed class SpiceControlPort : IDisposable
     /// </summary>
     public void Start()
     {
-        if (_pipe == null || !_pipe.IsConnected)
+        if (_stream == null || !_stream.CanRead)
         {
-            _logger.Warn("Cannot start SpiceControlPort - pipe not connected");
+            _logger.Warn("Cannot start SpiceControlPort - not connected");
             return;
         }
 
@@ -132,16 +183,16 @@ public sealed class SpiceControlPort : IDisposable
     {
         var buffer = new byte[4096];
 
-        while (!token.IsCancellationRequested && _pipe?.IsConnected == true)
+        while (!token.IsCancellationRequested && _stream?.CanRead == true)
         {
             try
             {
-                var bytesRead = await _pipe.ReadAsync(buffer, token);
+                var bytesRead = await _stream.ReadAsync(buffer, token);
 
                 if (bytesRead == 0)
                 {
-                    // Pipe closed
-                    _logger.Warn("Control pipe closed by host");
+                    // Stream closed
+                    _logger.Warn("Control channel closed by host");
                     break;
                 }
 
@@ -183,20 +234,22 @@ public sealed class SpiceControlPort : IDisposable
             }
 
             // Read the payload
-            var payload = new byte[length];
-            _ = _readBuffer.Read(payload, 0, (int)length);
+            var payloadLength = (int)length;
+            var payload = new byte[payloadLength];
+            _ = _readBuffer.Read(payload, 0, payloadLength);
 
             // Remove processed data from buffer
-            var remaining = new byte[_readBuffer.Length - 5 - length];
-            if (remaining.Length > 0)
+            var remainingLength = (int)(_readBuffer.Length - 5 - payloadLength);
+            var remaining = new byte[remainingLength];
+            if (remainingLength > 0)
             {
-                _ = _readBuffer.Read(remaining, 0, remaining.Length);
+                _ = _readBuffer.Read(remaining, 0, remainingLength);
             }
 
             _readBuffer.SetLength(0);
-            if (remaining.Length > 0)
+            if (remainingLength > 0)
             {
-                _readBuffer.Write(remaining, 0, remaining.Length);
+                _readBuffer.Write(remaining, 0, remainingLength);
             }
 
             // Parse and queue the message
@@ -224,15 +277,15 @@ public sealed class SpiceControlPort : IDisposable
     {
         var reader = _outboundChannel.Reader;
 
-        while (!token.IsCancellationRequested && _pipe?.IsConnected == true)
+        while (!token.IsCancellationRequested && _stream?.CanWrite == true)
         {
             try
             {
                 var message = await reader.ReadAsync(token);
                 var bytes = SpiceMessageSerializer.Serialize(message);
 
-                await _pipe.WriteAsync(bytes, token);
-                await _pipe.FlushAsync(token);
+                await _stream.WriteAsync(bytes, token);
+                await _stream.FlushAsync(token);
                 _logger.Debug($"Sent message: {message.GetType().Name} ({bytes.Length} bytes)");
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -255,7 +308,7 @@ public sealed class SpiceControlPort : IDisposable
 
         _cts.Cancel();
         _cts.Dispose();
-        _pipe?.Dispose();
+        _stream?.Dispose();
         _readBuffer.Dispose();
         _disposed = true;
     }
