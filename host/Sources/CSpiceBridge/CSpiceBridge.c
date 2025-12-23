@@ -33,6 +33,7 @@
 typedef struct winrun_spice_stream {
     pthread_t worker_thread;
     _Atomic bool worker_running;
+    bool worker_started;  // Tracks whether worker_thread was actually created
     uint64_t window_id;
     void *user_data;
     winrun_spice_frame_cb frame_cb;
@@ -224,6 +225,7 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->clipboard_user_data = NULL;
     stream->button_state = 0;
     stream->clipboard_sequence = 0;
+    stream->worker_started = false;
     pthread_mutex_init(&stream->send_mutex, NULL);
     atomic_store(&stream->worker_running, true);
 #if __APPLE__
@@ -299,6 +301,7 @@ static bool winrun_spice_stream_start_worker(
         return false;
     }
 
+    stream->worker_started = true;
     return true;
 }
 
@@ -398,17 +401,20 @@ winrun_spice_stream_handle winrun_spice_stream_open_tcp(
         g_object_set(stream->session, "password", ticket, NULL);
     }
     spice_session_connect(stream->session);
+    // On macOS with libspice, real frame delivery comes from the session callbacks,
+    // not from the mock worker thread. Don't start the mock worker.
 #else
     (void)host;
     (void)port;
     (void)use_tls;
     (void)ticket;
-#endif
 
+    // Only start mock worker on non-macOS platforms (e.g., CI/test environments)
     if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
         winrun_spice_stream_free(stream);
         return NULL;
     }
+#endif
 
     return stream;
 }
@@ -469,15 +475,18 @@ winrun_spice_stream_handle winrun_spice_stream_open_shared(
         winrun_spice_stream_free(stream);
         return NULL;
     }
+    // On macOS with libspice, real frame delivery comes from the session callbacks,
+    // not from the mock worker thread. Don't start the mock worker.
 #else
     (void)shared_fd;
     (void)ticket;
-#endif
 
+    // Only start mock worker on non-macOS platforms (e.g., CI/test environments)
     if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
         winrun_spice_stream_free(stream);
         return NULL;
     }
+#endif
 
     return stream;
 }
@@ -489,7 +498,11 @@ void winrun_spice_stream_close(winrun_spice_stream_handle streamHandle) {
     }
 
     atomic_store(&stream->worker_running, false);
-    pthread_join(stream->worker_thread, NULL);
+
+    // Only join the worker thread if it was actually started
+    if (stream->worker_started) {
+        pthread_join(stream->worker_thread, NULL);
+    }
 
     winrun_spice_stream_free(stream);
 }
