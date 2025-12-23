@@ -143,13 +143,22 @@ export GH_TOKEN
 # NOTE: GitHub Actions does not provide a true push-based stdout stream.
 # This setting controls whether we "tail" logs by repeatedly fetching them.
 LIVE_LOG ?= 1
-LIVE_LOG_INTERVAL ?= 2
+# How often we refresh logs (seconds). Lower feels "more live" but hits API harder.
+LIVE_LOG_REFRESH_SECONDS ?= 2
 # Safety: avoid hanging forever if status/log fetching gets stuck.
 # Total seconds before aborting log streaming (0 = no timeout).
-LIVE_LOG_TIMEOUT ?= 7200
-# Backoff when log/status fetch fails repeatedly (e.g. transient GitHub/API issues).
-LIVE_LOG_MAX_ERRORS ?= 60
-LIVE_LOG_MAX_BACKOFF ?= 30
+# Default: 2 hours.
+LIVE_LOG_TIMEOUT_SECONDS ?= 7200
+# Abort after this many consecutive log fetch failures (rate limits, transient API errors).
+LIVE_LOG_MAX_CONSECUTIVE_ERRORS ?= 60
+# Exponential backoff cap (seconds) when log fetch fails repeatedly.
+LIVE_LOG_MAX_BACKOFF_SECONDS ?= 30
+
+# Backwards-compatible aliases (older names)
+LIVE_LOG_INTERVAL ?= $(LIVE_LOG_REFRESH_SECONDS)
+LIVE_LOG_TIMEOUT ?= $(LIVE_LOG_TIMEOUT_SECONDS)
+LIVE_LOG_MAX_ERRORS ?= $(LIVE_LOG_MAX_CONSECUTIVE_ERRORS)
+LIVE_LOG_MAX_BACKOFF ?= $(LIVE_LOG_MAX_BACKOFF_SECONDS)
 
 # Helper function for running remote workflows
 # Usage: $(call run-remote-workflow,workflow-file,description,extra-args)
@@ -219,30 +228,30 @@ define run-remote-workflow
 	echo "🔗 Run ID: $$RUN_ID"; \
 	echo "🌐 Live logs: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 	echo ""; \
-	if [ "$$LIVE_LOG" = "1" ]; then \
-		echo "📺 Streaming workflow logs (best-effort, refresh $$LIVE_LOG_INTERVALs)..."; \
-		echo "   Tip: disable with LIVE_LOG=0"; \
+	if [ "$(LIVE_LOG)" = "1" ]; then \
+		echo "📺 Streaming workflow logs (best-effort, refresh $(LIVE_LOG_REFRESH_SECONDS)s)..."; \
+		echo "   Tip: disable with LIVE_LOG=0 (or tune LIVE_LOG_REFRESH_SECONDS / LIVE_LOG_TIMEOUT_SECONDS)"; \
 		echo ""; \
 		LAST_LINES=0; \
 		TMP_LOG="/tmp/gh-run-$$RUN_ID.log"; \
 		TMP_LOG_NEW="/tmp/gh-run-$$RUN_ID.log.new"; \
 		START_TS=$$(date +%s); \
 		ERRORS=0; \
-		BACKOFF="$$LIVE_LOG_INTERVAL"; \
+		BACKOFF="$(LIVE_LOG_REFRESH_SECONDS)"; \
 		trap 'rm -f "$$TMP_LOG" "$$TMP_LOG_NEW" 2>/dev/null || true' EXIT INT TERM; \
 		: > "$$TMP_LOG"; \
 		while true; do \
 			NOW_TS=$$(date +%s); \
-			if [ "$$LIVE_LOG_TIMEOUT" != "0" ] && [ $$((NOW_TS-START_TS)) -gt "$$LIVE_LOG_TIMEOUT" ]; then \
+			if [ "$(LIVE_LOG_TIMEOUT_SECONDS)" != "0" ] && [ $$((NOW_TS-START_TS)) -gt "$(LIVE_LOG_TIMEOUT_SECONDS)" ]; then \
 				echo ""; \
-				echo "❌ Timed out after $$LIVE_LOG_TIMEOUTs while waiting for remote workflow logs."; \
+				echo "❌ Timed out after $(LIVE_LOG_TIMEOUT_SECONDS)s while waiting for remote workflow logs."; \
 				echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 				exit 124; \
 			fi; \
 			STATUS=$$(gh run view "$$RUN_ID" --json status --jq '.status' 2>/dev/null || echo ""); \
 			if gh run view "$$RUN_ID" --log > "$$TMP_LOG_NEW" 2>/dev/null; then \
 				ERRORS=0; \
-				BACKOFF="$$LIVE_LOG_INTERVAL"; \
+				BACKOFF="$(LIVE_LOG_REFRESH_SECONDS)"; \
 				NEW_LINES=$$(wc -l < "$$TMP_LOG_NEW" | tr -d ' '); \
 				if [ "$$NEW_LINES" -gt "$$LAST_LINES" ]; then \
 					tail -n +$$((LAST_LINES+1)) "$$TMP_LOG_NEW"; \
@@ -252,16 +261,16 @@ define run-remote-workflow
 			else \
 				rm -f "$$TMP_LOG_NEW" 2>/dev/null || true; \
 				ERRORS=$$((ERRORS+1)); \
-				if [ "$$ERRORS" -ge "$$LIVE_LOG_MAX_ERRORS" ]; then \
+				if [ "$$ERRORS" -ge "$(LIVE_LOG_MAX_CONSECUTIVE_ERRORS)" ]; then \
 					echo ""; \
 					echo "❌ Too many errors ($$ERRORS) fetching remote logs. Aborting."; \
 					echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 					exit 2; \
 				fi; \
 				# Exponential backoff (capped) to reduce flakiness / rate-limit pressure. \
-				if [ "$$BACKOFF" -lt "$$LIVE_LOG_MAX_BACKOFF" ]; then \
+				if [ "$$BACKOFF" -lt "$(LIVE_LOG_MAX_BACKOFF_SECONDS)" ]; then \
 					BACKOFF=$$((BACKOFF*2)); \
-					if [ "$$BACKOFF" -gt "$$LIVE_LOG_MAX_BACKOFF" ]; then BACKOFF="$$LIVE_LOG_MAX_BACKOFF"; fi; \
+					if [ "$$BACKOFF" -gt "$(LIVE_LOG_MAX_BACKOFF_SECONDS)" ]; then BACKOFF="$(LIVE_LOG_MAX_BACKOFF_SECONDS)"; fi; \
 				fi; \
 			fi; \
 			if [ "$$STATUS" = "completed" ]; then \
