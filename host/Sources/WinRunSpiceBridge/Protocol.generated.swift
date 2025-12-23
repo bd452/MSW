@@ -22,7 +22,6 @@ public enum SpiceProtocolVersion {
 /// Message type codes - generated from shared/protocol.def
 public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
     // Host → Guest (0x00-0x7F)
-
     case launchProgram = 0x01
     case requestIcon = 0x02
     case clipboardData = 0x03
@@ -81,7 +80,6 @@ public struct GuestCapabilities: OptionSet, Codable, Hashable, Sendable {
 
 /// Mouse button codes - generated from shared/protocol.def
 public enum MouseButton: UInt8, Codable, Sendable {
-
     case left = 1
     case right = 2
     case middle = 4
@@ -91,7 +89,6 @@ public enum MouseButton: UInt8, Codable, Sendable {
 
 /// Mouse event types - generated from shared/protocol.def
 public enum MouseEventType: UInt8, Codable, Sendable {
-
     case move = 0
     case press = 1
     case release = 2
@@ -102,7 +99,6 @@ public enum MouseEventType: UInt8, Codable, Sendable {
 
 /// Key event types - generated from shared/protocol.def
 public enum KeyEventType: UInt8, Codable, Sendable {
-
     case down = 0
     case up = 1
 }
@@ -124,7 +120,6 @@ public struct KeyModifiers: OptionSet, Codable, Hashable, Sendable {
 
 /// Drag/drop event types - generated from shared/protocol.def
 public enum DragDropEventType: UInt8, Codable, Sendable {
-
     case enter = 0
     case move = 1
     case leave = 2
@@ -133,7 +128,6 @@ public enum DragDropEventType: UInt8, Codable, Sendable {
 
 /// Drag operation types - generated from shared/protocol.def
 public enum DragOperation: UInt8, Codable, Sendable {
-
     case none = 0
     case copy = 1
     case move = 2
@@ -144,7 +138,6 @@ public enum DragOperation: UInt8, Codable, Sendable {
 
 /// Pixel format types - generated from shared/protocol.def
 public enum SpicePixelFormat: UInt8, Codable, Sendable {
-
     case bgra32 = 0
     case rgba32 = 1
 }
@@ -153,7 +146,6 @@ public enum SpicePixelFormat: UInt8, Codable, Sendable {
 
 /// Window event types - generated from shared/protocol.def
 public enum WindowEventType: Int32, Codable, Sendable {
-
     case created = 0
     case destroyed = 1
     case moved = 2
@@ -168,7 +160,6 @@ public enum WindowEventType: Int32, Codable, Sendable {
 
 /// Clipboard format identifiers - generated from shared/protocol.def
 public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
-
     case plainText
     case rtf
     case html
@@ -181,7 +172,6 @@ public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
 
 /// Provisioning phase identifiers - generated from shared/protocol.def
 public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
-
     case drivers
     case agent
     case optimize

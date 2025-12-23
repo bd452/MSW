@@ -163,7 +163,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     /// Message type codes - generated from shared/protocol.def
     public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
         // Host → Guest (0x00-0x7F)
-
     """
     
     for (name, value) in def.messageTypesHostToGuest {
@@ -210,7 +209,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Mouse button codes - generated from shared/protocol.def
     public enum MouseButton: UInt8, Codable, Sendable {
-
     """
     
     for (name, value) in def.mouseButtons {
@@ -223,7 +221,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Mouse event types - generated from shared/protocol.def
     public enum MouseEventType: UInt8, Codable, Sendable {
-
     """
     
     for (name, value) in def.mouseEventTypes {
@@ -238,7 +235,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Key event types - generated from shared/protocol.def
     public enum KeyEventType: UInt8, Codable, Sendable {
-
     """
     
     for (name, value) in def.keyEventTypes {
@@ -269,7 +265,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Drag/drop event types - generated from shared/protocol.def
     public enum DragDropEventType: UInt8, Codable, Sendable {
-
     """
     
     for (name, value) in def.dragDropEventTypes {
@@ -282,7 +277,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Drag operation types - generated from shared/protocol.def
     public enum DragOperation: UInt8, Codable, Sendable {
-
     """
     
     for (name, value) in def.dragOperations {
@@ -297,7 +291,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Pixel format types - generated from shared/protocol.def
     public enum SpicePixelFormat: UInt8, Codable, Sendable {
-
     """
     
     for (name, value) in def.pixelFormats {
@@ -312,7 +305,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Window event types - generated from shared/protocol.def
     public enum WindowEventType: Int32, Codable, Sendable {
-
     """
     
     for (name, value) in def.windowEventTypes {
@@ -327,7 +319,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Clipboard format identifiers - generated from shared/protocol.def
     public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
-
     """
     
     for (name, value) in def.clipboardFormats {
@@ -347,7 +338,6 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
 
     /// Provisioning phase identifiers - generated from shared/protocol.def
     public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
-
     """
     
     for (name, value) in def.provisioningPhases {
