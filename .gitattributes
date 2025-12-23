@@ -21,6 +21,9 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 
+# Protocol definition uses LF
+*.def text eol=lf
+
 # Markdown uses LF
 *.md text eol=lf
 

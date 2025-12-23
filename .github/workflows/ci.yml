@@ -28,10 +28,12 @@ jobs:
           filters: |
             host:
               - 'host/**'
+              - 'shared/**'
               - '.github/workflows/ci.yml'
               - '.github/Brewfile.host-*'
             guest:
               - 'guest/**'
+              - 'shared/**'
               - '.github/workflows/ci.yml'
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -54,6 +56,8 @@ jobs:
         run: |
           brew bundle install --file=.github/Brewfile.host-build --no-upgrade
           pkg-config --modversion spice-client-glib-2.0
+      - name: Validate protocol
+        run: make validate-protocol-host
       - name: Build
         working-directory: host
         run: swift build
@@ -100,6 +104,8 @@ jobs:
       - name: Restore dependencies
         working-directory: guest
         run: dotnet restore WinRunAgent.sln
+      - name: Validate protocol
+        run: make validate-protocol-guest
       - name: Build
         working-directory: guest
         run: dotnet build WinRunAgent.sln --no-restore --configuration Release

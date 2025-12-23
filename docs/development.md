@@ -79,6 +79,92 @@ dotnet --version
 
 If you see a "compatible SDK not found" error, install .NET 9 SDK.
 
+## Protocol Constants (Host↔Guest Communication)
+
+The protocol constants shared between the macOS host and Windows guest are defined in a single source of truth: `shared/protocol.def`. Platform-specific code is generated from this file.
+
+### File Structure
+
+```
+shared/
+  protocol.def                              # Source of truth (human-editable)
+
+host/
+  Scripts/generate-protocol.swift           # Swift generator
+  Sources/WinRunSpiceBridge/
+    Protocol.generated.swift                # Generated Swift code
+
+guest/
+  tools/GenerateProtocol/
+    Program.cs                              # C# generator
+  WinRunAgent/
+    Protocol.generated.cs                   # Generated C# code
+```
+
+### Workflow: Modifying Protocol Constants
+
+1. **Edit the source of truth:**
+   ```bash
+   # Edit shared/protocol.def
+   vim shared/protocol.def
+   ```
+
+2. **Regenerate code for both platforms:**
+   ```bash
+   make generate-protocol
+   ```
+
+3. **Commit all changed files together:**
+   ```bash
+   git add shared/protocol.def \
+           host/Sources/WinRunSpiceBridge/Protocol.generated.swift \
+           guest/WinRunAgent/Protocol.generated.cs
+   git commit -m "Update protocol: add new message type XYZ"
+   ```
+
+### Available Make Targets
+
+| Target | Description |
+|--------|-------------|
+| `make generate-protocol` | Regenerate both Swift and C# code |
+| `make generate-protocol-host` | Regenerate Swift code only (requires macOS) |
+| `make generate-protocol-guest` | Regenerate C# code only (requires .NET) |
+| `make validate-protocol` | Check generated files match source (used in CI) |
+
+### CI Validation
+
+CI automatically validates that generated files are up-to-date:
+- **Host build job**: Runs `make validate-protocol-host`
+- **Guest build job**: Runs `make validate-protocol-guest`
+
+If you edit `shared/protocol.def` but forget to regenerate, CI will fail with:
+```
+❌ Protocol.generated.swift is out of date!
+   Run 'make generate-protocol' and commit the changes.
+```
+
+### Protocol Definition Format
+
+The `protocol.def` file uses a simple KEY = VALUE format:
+
+```
+# Comments start with #
+
+[SECTION_NAME]
+KEY_NAME = 0x01        # Hex values
+KEY_NAME = 42          # Decimal values
+KEY_NAME = StringValue # String values (for enums with string raw values)
+```
+
+### Generated vs. Existing Types
+
+The generated types (e.g., `GeneratedMessageType`, `GeneratedCapabilities`) exist alongside the existing hand-written types (e.g., `SpiceMessageType`, `GuestCapabilities`). Validation tests ensure they stay in sync:
+
+- **Swift**: `ProtocolValidationTests.swift`
+- **C#**: `ProtocolValidationTests.cs`
+
+This allows gradual migration to the generated types while maintaining backwards compatibility.
+
 ## Common Tasks
 
 ### Bootstrap the Repo
@@ -424,9 +510,9 @@ CI jobs only run when relevant files change:
 
 | Job | Triggered by changes in |
 |-----|------------------------|
-| Host Build & Test | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
+| Host Build & Test | `host/**`, `shared/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
 | Host Lint | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
-| Guest Build & Test | `guest/**`, `.github/workflows/ci.yml` |
+| Guest Build & Test | `guest/**`, `shared/**`, `.github/workflows/ci.yml` |
 | Guest Lint | `guest/**`, `.github/workflows/ci.yml` |
 
 This saves CI minutes when changes are isolated to one platform. The final `CI` gate job treats skipped jobs as successful.

@@ -1,0 +1,163 @@
+# WinRun Spice Protocol Definition
+# ==================================
+# This file is the SINGLE SOURCE OF TRUTH for protocol constants shared
+# between the macOS host (Swift) and Windows guest (C#).
+#
+# Format: KEY = VALUE
+# - Lines starting with # are comments
+# - Empty lines are ignored
+# - Hex values: 0x01, 0xFF
+# - Decimal values: 1, 255
+# - Sections are denoted by [SECTION_NAME] (for organization only)
+#
+# After editing this file, run: make generate-protocol
+# Then commit all changed files together.
+
+# ===========================================================================
+# Protocol Version
+# ===========================================================================
+# Increment MINOR for backwards-compatible additions (new optional fields)
+# Increment MAJOR for breaking changes (removed/renamed fields, type changes)
+
+[VERSION]
+PROTOCOL_VERSION_MAJOR = 1
+PROTOCOL_VERSION_MINOR = 0
+
+# ===========================================================================
+# Message Types
+# ===========================================================================
+# Values 0x00-0x7F: Host → Guest messages
+# Values 0x80-0xFF: Guest → Host messages
+
+[MESSAGE_TYPES_HOST_TO_GUEST]
+MSG_LAUNCH_PROGRAM = 0x01
+MSG_REQUEST_ICON = 0x02
+MSG_CLIPBOARD_DATA = 0x03
+MSG_MOUSE_INPUT = 0x04
+MSG_KEYBOARD_INPUT = 0x05
+MSG_DRAG_DROP_EVENT = 0x06
+MSG_SHUTDOWN = 0x0F
+
+[MESSAGE_TYPES_GUEST_TO_HOST]
+MSG_WINDOW_METADATA = 0x80
+MSG_FRAME_DATA = 0x81
+MSG_CAPABILITY_FLAGS = 0x82
+MSG_DPI_INFO = 0x83
+MSG_ICON_DATA = 0x84
+MSG_SHORTCUT_DETECTED = 0x85
+MSG_CLIPBOARD_CHANGED = 0x86
+MSG_HEARTBEAT = 0x87
+MSG_TELEMETRY_REPORT = 0x88
+MSG_PROVISION_PROGRESS = 0x89
+MSG_PROVISION_ERROR = 0x8A
+MSG_PROVISION_COMPLETE = 0x8B
+MSG_ERROR = 0xFE
+MSG_ACK = 0xFF
+
+# ===========================================================================
+# Guest Capabilities
+# ===========================================================================
+# Bit flags reported by guest during handshake
+
+[CAPABILITIES]
+CAP_WINDOW_TRACKING = 0x01
+CAP_DESKTOP_DUPLICATION = 0x02
+CAP_CLIPBOARD_SYNC = 0x04
+CAP_DRAG_DROP = 0x08
+CAP_ICON_EXTRACTION = 0x10
+CAP_SHORTCUT_DETECTION = 0x20
+CAP_HIGH_DPI_SUPPORT = 0x40
+CAP_MULTI_MONITOR = 0x80
+
+# ===========================================================================
+# Input Types
+# ===========================================================================
+
+[MOUSE_BUTTONS]
+MOUSE_BUTTON_LEFT = 1
+MOUSE_BUTTON_RIGHT = 2
+MOUSE_BUTTON_MIDDLE = 4
+MOUSE_BUTTON_EXTRA1 = 5
+MOUSE_BUTTON_EXTRA2 = 6
+
+[MOUSE_EVENT_TYPES]
+MOUSE_EVENT_MOVE = 0
+MOUSE_EVENT_PRESS = 1
+MOUSE_EVENT_RELEASE = 2
+MOUSE_EVENT_SCROLL = 3
+
+[KEY_EVENT_TYPES]
+KEY_EVENT_DOWN = 0
+KEY_EVENT_UP = 1
+
+[KEY_MODIFIERS]
+KEY_MOD_NONE = 0x00
+KEY_MOD_SHIFT = 0x01
+KEY_MOD_CONTROL = 0x02
+KEY_MOD_ALT = 0x04
+KEY_MOD_COMMAND = 0x08
+KEY_MOD_CAPS_LOCK = 0x10
+KEY_MOD_NUM_LOCK = 0x20
+
+# ===========================================================================
+# Drag and Drop
+# ===========================================================================
+
+[DRAG_DROP_EVENT_TYPES]
+DRAG_EVENT_ENTER = 0
+DRAG_EVENT_MOVE = 1
+DRAG_EVENT_LEAVE = 2
+DRAG_EVENT_DROP = 3
+
+[DRAG_OPERATIONS]
+DRAG_OP_NONE = 0
+DRAG_OP_COPY = 1
+DRAG_OP_MOVE = 2
+DRAG_OP_LINK = 3
+
+# ===========================================================================
+# Pixel Formats
+# ===========================================================================
+
+[PIXEL_FORMATS]
+PIXEL_FORMAT_BGRA32 = 0
+PIXEL_FORMAT_RGBA32 = 1
+
+# ===========================================================================
+# Window Event Types
+# ===========================================================================
+
+[WINDOW_EVENT_TYPES]
+WINDOW_EVENT_CREATED = 0
+WINDOW_EVENT_DESTROYED = 1
+WINDOW_EVENT_MOVED = 2
+WINDOW_EVENT_TITLE_CHANGED = 3
+WINDOW_EVENT_FOCUS_CHANGED = 4
+WINDOW_EVENT_MINIMIZED = 5
+WINDOW_EVENT_RESTORED = 6
+WINDOW_EVENT_UPDATED = 7
+
+# ===========================================================================
+# Clipboard Formats
+# ===========================================================================
+# String values for JSON serialization
+
+[CLIPBOARD_FORMATS]
+CLIPBOARD_FORMAT_PLAIN_TEXT = PlainText
+CLIPBOARD_FORMAT_RTF = Rtf
+CLIPBOARD_FORMAT_HTML = Html
+CLIPBOARD_FORMAT_PNG = Png
+CLIPBOARD_FORMAT_TIFF = Tiff
+CLIPBOARD_FORMAT_FILE_URL = FileUrl
+
+# ===========================================================================
+# Provisioning Phases
+# ===========================================================================
+# String values for JSON serialization
+
+[PROVISIONING_PHASES]
+PROVISION_PHASE_DRIVERS = Drivers
+PROVISION_PHASE_AGENT = Agent
+PROVISION_PHASE_OPTIMIZE = Optimize
+PROVISION_PHASE_FINALIZE = Finalize
+PROVISION_PHASE_COMPLETE = Complete
