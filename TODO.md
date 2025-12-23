@@ -4,7 +4,7 @@
     - [X] Add C shim + pkg-config wiring for libspice-glib { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement reconnect/backoff + error metrics { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamModels.swift, host/Sources/WinRunShared/SpiceMetrics.swift } <docs/decisions/spice-bridge.md>
     - [X] Switch host transport to shared memory (vhost-user) { host/Sources/WinRunSpiceBridge/SpiceStreamConfiguration.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/spice-bridge.md>
-    - [ ] Implement Spice inputs channel integration (mouse + keyboard) in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/spice-bridge.md>
+    - [X] Implement Spice inputs channel integration (mouse + keyboard) in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/spice-bridge.md>
     - [ ] Implement Spice clipboard channel integration (send/request + callbacks) in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/protocols.md>
     - [ ] Implement Spice file transfer for drag/drop in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/spice-bridge.md>
 - [X] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions/virtualization.md>

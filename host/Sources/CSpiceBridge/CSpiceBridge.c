@@ -24,15 +24,65 @@ typedef struct winrun_spice_stream {
     winrun_clipboard_cb clipboard_cb;
     void *clipboard_user_data;
     pthread_mutex_t send_mutex;
+    // Tracks current button state for mouse motion events
+    int button_state;
 #if __APPLE__
     SpiceSession *session;
-    // TODO: Add inputs_channel and main_channel when full libspice-gtk is integrated
-    // SpiceInputsChannel *inputs_channel;
-    // SpiceMainChannel *main_channel;
+    SpiceInputsChannel *inputs_channel;
+    SpiceMainChannel *main_channel;
+    gulong channel_new_handler_id;
 #endif
 } winrun_spice_stream;
 
 static void *winrun_mock_worker(void *context);
+
+#if __APPLE__
+// Signal handler for new channels from Spice session
+static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointer user_data) {
+    (void)session;
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream) {
+        return;
+    }
+
+    if (SPICE_IS_INPUTS_CHANNEL(channel)) {
+        pthread_mutex_lock(&stream->send_mutex);
+        stream->inputs_channel = SPICE_INPUTS_CHANNEL(channel);
+        g_object_ref(stream->inputs_channel);
+        pthread_mutex_unlock(&stream->send_mutex);
+    } else if (SPICE_IS_MAIN_CHANNEL(channel)) {
+        pthread_mutex_lock(&stream->send_mutex);
+        stream->main_channel = SPICE_MAIN_CHANNEL(channel);
+        g_object_ref(stream->main_channel);
+        pthread_mutex_unlock(&stream->send_mutex);
+    }
+}
+
+// Convert our mouse button enum to Spice button number
+static int winrun_button_to_spice(winrun_mouse_button button) {
+    switch (button) {
+        case WINRUN_MOUSE_BUTTON_LEFT:   return SPICE_MOUSE_BUTTON_LEFT;
+        case WINRUN_MOUSE_BUTTON_RIGHT:  return SPICE_MOUSE_BUTTON_RIGHT;
+        case WINRUN_MOUSE_BUTTON_MIDDLE: return SPICE_MOUSE_BUTTON_MIDDLE;
+        // Map extra buttons to Spice up/down (used for extra mouse buttons)
+        case WINRUN_MOUSE_BUTTON_EXTRA1: return SPICE_MOUSE_BUTTON_UP;
+        case WINRUN_MOUSE_BUTTON_EXTRA2: return SPICE_MOUSE_BUTTON_DOWN;
+        default: return 0;
+    }
+}
+
+// Convert our button to mask bit for button state tracking
+static int winrun_button_to_mask(winrun_mouse_button button) {
+    switch (button) {
+        case WINRUN_MOUSE_BUTTON_LEFT:   return SPICE_MOUSE_BUTTON_MASK_LEFT;
+        case WINRUN_MOUSE_BUTTON_RIGHT:  return SPICE_MOUSE_BUTTON_MASK_RIGHT;
+        case WINRUN_MOUSE_BUTTON_MIDDLE: return SPICE_MOUSE_BUTTON_MASK_MIDDLE;
+        case WINRUN_MOUSE_BUTTON_EXTRA1: return SPICE_MOUSE_BUTTON_MASK_UP;
+        case WINRUN_MOUSE_BUTTON_EXTRA2: return SPICE_MOUSE_BUTTON_MASK_DOWN;
+        default: return 0;
+    }
+}
+#endif
 
 static void winrun_write_error(char *buffer, size_t length, const char *message) {
     if (!buffer || length == 0 || !message) {
@@ -65,8 +115,15 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->closed_cb = closed_cb;
     stream->clipboard_cb = NULL;
     stream->clipboard_user_data = NULL;
+    stream->button_state = 0;
     pthread_mutex_init(&stream->send_mutex, NULL);
     atomic_store(&stream->worker_running, true);
+#if __APPLE__
+    stream->session = NULL;
+    stream->inputs_channel = NULL;
+    stream->main_channel = NULL;
+    stream->channel_new_handler_id = 0;
+#endif
     return stream;
 }
 
@@ -78,6 +135,19 @@ static void winrun_spice_stream_free(winrun_spice_stream *stream) {
     pthread_mutex_destroy(&stream->send_mutex);
 
 #if __APPLE__
+    // Disconnect signal handler before releasing session
+    if (stream->session && stream->channel_new_handler_id != 0) {
+        g_signal_handler_disconnect(stream->session, stream->channel_new_handler_id);
+    }
+
+    if (stream->inputs_channel) {
+        g_object_unref(stream->inputs_channel);
+    }
+
+    if (stream->main_channel) {
+        g_object_unref(stream->main_channel);
+    }
+
     if (stream->session) {
         g_object_unref(stream->session);
     }
@@ -184,6 +254,14 @@ winrun_spice_stream_handle winrun_spice_stream_open_tcp(
         return NULL;
     }
 
+    // Connect channel-new handler to capture inputs channel
+    stream->channel_new_handler_id = g_signal_connect(
+        stream->session,
+        "channel-new",
+        G_CALLBACK(on_channel_new),
+        stream
+    );
+
     g_object_set(stream->session,
                  "host", host,
                  use_tls ? "tls-port" : "port", port_string,
@@ -196,6 +274,7 @@ winrun_spice_stream_handle winrun_spice_stream_open_tcp(
     (void)host;
     (void)port;
     (void)use_tls;
+    (void)ticket;
 #endif
 
     if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
@@ -243,6 +322,14 @@ winrun_spice_stream_handle winrun_spice_stream_open_shared(
         return NULL;
     }
 
+    // Connect channel-new handler to capture inputs channel
+    stream->channel_new_handler_id = g_signal_connect(
+        stream->session,
+        "channel-new",
+        G_CALLBACK(on_channel_new),
+        stream
+    );
+
     if (ticket) {
         g_object_set(stream->session, "password", ticket, NULL);
     }
@@ -286,9 +373,79 @@ bool winrun_spice_send_mouse_event(
 
     pthread_mutex_lock(&stream->send_mutex);
 
-    // TODO: Implement actual Spice input send when libspice-gtk is fully integrated
-    // Will use spice_inputs_channel_motion, spice_inputs_channel_button_press, etc.
+#if __APPLE__
+    SpiceInputsChannel *inputs = stream->inputs_channel;
+    if (!inputs) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return false;
+    }
+
+    int x = (int)event->x;
+    int y = (int)event->y;
+
+    switch (event->event_type) {
+        case WINRUN_MOUSE_EVENT_MOVE:
+            // Use absolute positioning with display 0 (primary display)
+            // button_state tracks which buttons are currently held
+            spice_inputs_channel_position(inputs, x, y, 0, stream->button_state);
+            break;
+
+        case WINRUN_MOUSE_EVENT_PRESS: {
+            int button = winrun_button_to_spice(event->button);
+            int mask = winrun_button_to_mask(event->button);
+            // Update button state before sending press
+            stream->button_state |= mask;
+            // Send position first to ensure cursor is at correct location
+            spice_inputs_channel_position(inputs, x, y, 0, stream->button_state);
+            spice_inputs_channel_button_press(inputs, button, stream->button_state);
+            break;
+        }
+
+        case WINRUN_MOUSE_EVENT_RELEASE: {
+            int button = winrun_button_to_spice(event->button);
+            int mask = winrun_button_to_mask(event->button);
+            // Send position first to ensure cursor is at correct location
+            spice_inputs_channel_position(inputs, x, y, 0, stream->button_state);
+            spice_inputs_channel_button_release(inputs, button, stream->button_state);
+            // Update button state after sending release
+            stream->button_state &= ~mask;
+            break;
+        }
+
+        case WINRUN_MOUSE_EVENT_SCROLL: {
+            // Spice scroll is handled via button press/release of scroll buttons
+            // Positive delta = scroll up/right, negative = scroll down/left
+            int scroll_y = (int)event->scroll_delta_y;
+            int scroll_x = (int)event->scroll_delta_x;
+
+            // Vertical scroll
+            if (scroll_y > 0) {
+                // Scroll up - repeated presses for momentum
+                for (int i = 0; i < scroll_y; i++) {
+                    spice_inputs_channel_button_press(inputs, SPICE_MOUSE_BUTTON_UP, stream->button_state);
+                    spice_inputs_channel_button_release(inputs, SPICE_MOUSE_BUTTON_UP, stream->button_state);
+                }
+            } else if (scroll_y < 0) {
+                // Scroll down
+                for (int i = 0; i < -scroll_y; i++) {
+                    spice_inputs_channel_button_press(inputs, SPICE_MOUSE_BUTTON_DOWN, stream->button_state);
+                    spice_inputs_channel_button_release(inputs, SPICE_MOUSE_BUTTON_DOWN, stream->button_state);
+                }
+            }
+
+            // Horizontal scroll (if supported) - some Spice implementations may not support this
+            // We map to side buttons which some guests interpret as horizontal scroll
+            (void)scroll_x;
+            break;
+        }
+
+        default:
+            pthread_mutex_unlock(&stream->send_mutex);
+            return false;
+    }
+#else
     (void)event;
+#endif
 
     pthread_mutex_unlock(&stream->send_mutex);
     return true;
@@ -305,9 +462,41 @@ bool winrun_spice_send_keyboard_event(
 
     pthread_mutex_lock(&stream->send_mutex);
 
-    // TODO: Implement actual Spice keyboard send when libspice-gtk is fully integrated
-    // Will use spice_inputs_channel_key_press and spice_inputs_channel_key_release
+#if __APPLE__
+    SpiceInputsChannel *inputs = stream->inputs_channel;
+    if (!inputs) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return false;
+    }
+
+    // Spice uses hardware scan codes, not virtual key codes
+    // The scan_code field should contain the hardware scan code
+    // If scan_code is 0, we use key_code as a fallback (though this may not work correctly)
+    guint scancode = event->scan_code != 0 ? event->scan_code : event->key_code;
+
+    // Extended keys (right Ctrl, arrow keys, Insert, Delete, Home, End, Page Up/Down,
+    // Numpad Enter, Numpad /, etc.) have a 0xE0 prefix in their scan code
+    // Spice expects the extended flag to be encoded in the high byte
+    if (event->is_extended_key) {
+        scancode |= 0x100;  // Set bit 8 to indicate extended key
+    }
+
+    switch (event->event_type) {
+        case WINRUN_KEY_EVENT_DOWN:
+            spice_inputs_channel_key_press(inputs, scancode);
+            break;
+
+        case WINRUN_KEY_EVENT_UP:
+            spice_inputs_channel_key_release(inputs, scancode);
+            break;
+
+        default:
+            pthread_mutex_unlock(&stream->send_mutex);
+            return false;
+    }
+#else
     (void)event;
+#endif
 
     pthread_mutex_unlock(&stream->send_mutex);
     return true;
