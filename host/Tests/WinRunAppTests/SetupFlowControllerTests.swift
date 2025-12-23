@@ -132,7 +132,10 @@ final class SetupFlowControllerTests: XCTestCase {
         }
 
         XCTAssertNotNil(presentedController)
-        let unwrapped = try XCTUnwrap(presentedController)
+        guard let unwrapped = presentedController else {
+            XCTFail("Expected a view controller to be presented")
+            return
+        }
         let controllerTypeName = String(describing: type(of: unwrapped))
         XCTAssertTrue(controllerTypeName.contains("SetupPlaceholderViewController"))
     }
