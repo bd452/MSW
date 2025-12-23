@@ -55,45 +55,45 @@ public sealed class ProtocolValidationTests
     {
         Skip.If(TestData.MessageTypesHostToGuest.Count == 0, "Test data not loaded");
 
-        // Host → Guest
+        // Host → Guest (expected from test data, actual from enum)
         Assert.Equal(
-            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgLaunchProgram"),
-            (int)SpiceMessageType.LaunchProgram);
+            (int)SpiceMessageType.LaunchProgram,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgLaunchProgram"));
         Assert.Equal(
-            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgRequestIcon"),
-            (int)SpiceMessageType.RequestIcon);
+            (int)SpiceMessageType.RequestIcon,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgRequestIcon"));
         Assert.Equal(
-            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgClipboardData"),
-            (int)SpiceMessageType.ClipboardData);
+            (int)SpiceMessageType.ClipboardData,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgClipboardData"));
         Assert.Equal(
-            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgMouseInput"),
-            (int)SpiceMessageType.MouseInput);
+            (int)SpiceMessageType.MouseInput,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgMouseInput"));
         Assert.Equal(
-            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgKeyboardInput"),
-            (int)SpiceMessageType.KeyboardInput);
+            (int)SpiceMessageType.KeyboardInput,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgKeyboardInput"));
         Assert.Equal(
-            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgListSessions"),
-            (int)SpiceMessageType.ListSessions);
+            (int)SpiceMessageType.ListSessions,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgListSessions"));
         Assert.Equal(
-            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgShutdown"),
-            (int)SpiceMessageType.Shutdown);
+            (int)SpiceMessageType.Shutdown,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgShutdown"));
 
         // Guest → Host
         Assert.Equal(
-            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgWindowMetadata"),
-            (int)SpiceMessageType.WindowMetadata);
+            (int)SpiceMessageType.WindowMetadata,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgWindowMetadata"));
         Assert.Equal(
-            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgFrameData"),
-            (int)SpiceMessageType.FrameData);
+            (int)SpiceMessageType.FrameData,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgFrameData"));
         Assert.Equal(
-            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgCapabilityFlags"),
-            (int)SpiceMessageType.CapabilityFlags);
+            (int)SpiceMessageType.CapabilityFlags,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgCapabilityFlags"));
         Assert.Equal(
-            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgError"),
-            (int)SpiceMessageType.Error);
+            (int)SpiceMessageType.Error,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgError"));
         Assert.Equal(
-            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgAck"),
-            (int)SpiceMessageType.Ack);
+            (int)SpiceMessageType.Ack,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgAck"));
     }
 
     [Fact]
@@ -102,17 +102,17 @@ public sealed class ProtocolValidationTests
         Skip.If(TestData.Capabilities.Count == 0, "Test data not loaded");
 
         Assert.Equal(
-            TestData.Capabilities.GetValueOrDefault("capWindowTracking"),
-            (int)GuestCapabilities.WindowTracking);
+            (int)GuestCapabilities.WindowTracking,
+            TestData.Capabilities.GetValueOrDefault("capWindowTracking"));
         Assert.Equal(
-            TestData.Capabilities.GetValueOrDefault("capDesktopDuplication"),
-            (int)GuestCapabilities.DesktopDuplication);
+            (int)GuestCapabilities.DesktopDuplication,
+            TestData.Capabilities.GetValueOrDefault("capDesktopDuplication"));
         Assert.Equal(
-            TestData.Capabilities.GetValueOrDefault("capClipboardSync"),
-            (int)GuestCapabilities.ClipboardSync);
+            (int)GuestCapabilities.ClipboardSync,
+            TestData.Capabilities.GetValueOrDefault("capClipboardSync"));
         Assert.Equal(
-            TestData.Capabilities.GetValueOrDefault("capIconExtraction"),
-            (int)GuestCapabilities.IconExtraction);
+            (int)GuestCapabilities.IconExtraction,
+            TestData.Capabilities.GetValueOrDefault("capIconExtraction"));
     }
 
     // ========================================================================
@@ -214,11 +214,11 @@ public sealed class ProtocolValidationTests
         Skip.If(TestData.Version.Count == 0, "Test data not loaded");
 
         Assert.Equal(
-            TestData.Version.GetValueOrDefault("protocolVersionMajor"),
-            SpiceProtocolVersion.Major);
+            SpiceProtocolVersion.Major,
+            TestData.Version.GetValueOrDefault("protocolVersionMajor"));
         Assert.Equal(
-            TestData.Version.GetValueOrDefault("protocolVersionMinor"),
-            SpiceProtocolVersion.Minor);
+            SpiceProtocolVersion.Minor,
+            TestData.Version.GetValueOrDefault("protocolVersionMinor"));
     }
 
     // ========================================================================
@@ -309,26 +309,26 @@ public sealed class ProtocolValidationTests
         Assert.Contains(DragOperation.Move, allOps);
         Assert.Contains(DragOperation.Link, allOps);
     }
-}
 
-// ========================================================================
-// Test Data Model
-// ========================================================================
+    // ========================================================================
+    // Test Data Model (nested to avoid file-local type issues)
+    // ========================================================================
 
-file sealed class ProtocolTestData
-{
-    public Dictionary<string, int> Version { get; set; } = [];
-    public Dictionary<string, int> MessageTypesHostToGuest { get; set; } = [];
-    public Dictionary<string, int> MessageTypesGuestToHost { get; set; } = [];
-    public Dictionary<string, int> Capabilities { get; set; } = [];
-    public Dictionary<string, int> MouseButtons { get; set; } = [];
-    public Dictionary<string, int> MouseEventTypes { get; set; } = [];
-    public Dictionary<string, int> KeyEventTypes { get; set; } = [];
-    public Dictionary<string, int> KeyModifiers { get; set; } = [];
-    public Dictionary<string, int> DragDropEventTypes { get; set; } = [];
-    public Dictionary<string, int> DragOperations { get; set; } = [];
-    public Dictionary<string, int> PixelFormats { get; set; } = [];
-    public Dictionary<string, int> WindowEventTypes { get; set; } = [];
-    public Dictionary<string, string> ClipboardFormats { get; set; } = [];
-    public Dictionary<string, string> ProvisioningPhases { get; set; } = [];
+    private sealed class ProtocolTestData
+    {
+        public Dictionary<string, int> Version { get; set; } = [];
+        public Dictionary<string, int> MessageTypesHostToGuest { get; set; } = [];
+        public Dictionary<string, int> MessageTypesGuestToHost { get; set; } = [];
+        public Dictionary<string, int> Capabilities { get; set; } = [];
+        public Dictionary<string, int> MouseButtons { get; set; } = [];
+        public Dictionary<string, int> MouseEventTypes { get; set; } = [];
+        public Dictionary<string, int> KeyEventTypes { get; set; } = [];
+        public Dictionary<string, int> KeyModifiers { get; set; } = [];
+        public Dictionary<string, int> DragDropEventTypes { get; set; } = [];
+        public Dictionary<string, int> DragOperations { get; set; } = [];
+        public Dictionary<string, int> PixelFormats { get; set; } = [];
+        public Dictionary<string, int> WindowEventTypes { get; set; } = [];
+        public Dictionary<string, string> ClipboardFormats { get; set; } = [];
+        public Dictionary<string, string> ProvisioningPhases { get; set; } = [];
+    }
 }
