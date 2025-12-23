@@ -111,6 +111,11 @@ var targets: [Target] = [
         name: "WinRunSetupTests",
         dependencies: ["WinRunSetup", "WinRunShared"],
         path: "Tests/WinRunSetupTests"
+    ),
+    .testTarget(
+        name: "WinRunAppTests",
+        dependencies: ["WinRunApp", "WinRunShared"],
+        path: "Tests/WinRunAppTests"
     )
 ]
 
