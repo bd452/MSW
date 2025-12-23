@@ -1,0 +1,47 @@
+name: Test Host (Remote)
+
+# This workflow is manually triggered to run host build and tests on macOS.
+# Use `make test-host-remote` to trigger and wait for results.
+# This is separate from the main CI workflow and does not run automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to test (branch, tag, or SHA)'
+        required: false
+        default: ''
+      build_only:
+        description: 'Only build, skip tests'
+        required: false
+        default: 'false'
+
+jobs:
+  test:
+    name: Host Build & Test (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build') }}
+          restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install dependencies
+        run: |
+          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          pkg-config --modversion spice-client-glib-2.0
+
+      - name: Build
+        working-directory: host
+        run: swift build
+
+      - name: Test
+        if: ${{ github.event.inputs.build_only != 'true' }}
+        working-directory: host
+        run: swift test
