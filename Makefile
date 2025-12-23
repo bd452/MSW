@@ -151,14 +151,12 @@ LIVE_LOG_REFRESH_SECONDS ?= 2
 LIVE_LOG_TIMEOUT_SECONDS ?= 1800
 # Abort after this many consecutive log fetch failures (rate limits, transient API errors).
 LIVE_LOG_MAX_CONSECUTIVE_ERRORS ?= 60
-# Exponential backoff cap (seconds) when log fetch fails repeatedly.
-LIVE_LOG_MAX_BACKOFF_SECONDS ?= 30
 
 # Backwards-compatible aliases (older names)
 LIVE_LOG_INTERVAL ?= $(LIVE_LOG_REFRESH_SECONDS)
 LIVE_LOG_TIMEOUT ?= $(LIVE_LOG_TIMEOUT_SECONDS)
 LIVE_LOG_MAX_ERRORS ?= $(LIVE_LOG_MAX_CONSECUTIVE_ERRORS)
-LIVE_LOG_MAX_BACKOFF ?= $(LIVE_LOG_MAX_BACKOFF_SECONDS)
+LIVE_LOG_MAX_BACKOFF ?=
 
 # Helper function for running remote workflows
 # Usage: $(call run-remote-workflow,workflow-file,description,extra-args)
@@ -237,7 +235,6 @@ define run-remote-workflow
 		TMP_LOG_NEW="/tmp/gh-run-$$RUN_ID.log.new"; \
 		START_TS=$$(date +%s); \
 		ERRORS=0; \
-		BACKOFF="$(LIVE_LOG_REFRESH_SECONDS)"; \
 		trap 'rm -f "$$TMP_LOG" "$$TMP_LOG_NEW" 2>/dev/null || true' EXIT INT TERM; \
 		: > "$$TMP_LOG"; \
 		while true; do \
@@ -251,7 +248,6 @@ define run-remote-workflow
 			STATUS=$$(gh run view "$$RUN_ID" --json status --jq '.status' 2>/dev/null || echo ""); \
 			if gh run view "$$RUN_ID" --log > "$$TMP_LOG_NEW" 2>/dev/null; then \
 				ERRORS=0; \
-				BACKOFF="$(LIVE_LOG_REFRESH_SECONDS)"; \
 				NEW_LINES=$$(wc -l < "$$TMP_LOG_NEW" | tr -d ' '); \
 				if [ "$$NEW_LINES" -gt "$$LAST_LINES" ]; then \
 					tail -n +$$((LAST_LINES+1)) "$$TMP_LOG_NEW"; \
@@ -267,16 +263,11 @@ define run-remote-workflow
 					echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 					exit 2; \
 				fi; \
-				# Exponential backoff (capped) to reduce flakiness / rate-limit pressure. \
-				if [ "$$BACKOFF" -lt "$(LIVE_LOG_MAX_BACKOFF_SECONDS)" ]; then \
-					BACKOFF=$$((BACKOFF*2)); \
-					if [ "$$BACKOFF" -gt "$(LIVE_LOG_MAX_BACKOFF_SECONDS)" ]; then BACKOFF="$(LIVE_LOG_MAX_BACKOFF_SECONDS)"; fi; \
-				fi; \
 			fi; \
 			if [ "$$STATUS" = "completed" ]; then \
 				break; \
 			fi; \
-			sleep "$$BACKOFF"; \
+			sleep "$(LIVE_LOG_REFRESH_SECONDS)"; \
 		done; \
 		CONCLUSION=$$(gh run view "$$RUN_ID" --json conclusion --jq '.conclusion' 2>/dev/null || echo ""); \
 		echo ""; \
