@@ -344,6 +344,81 @@ public struct AckMessage: GuestMessage {
     }
 }
 
+// MARK: - Session Messages
+
+/// Session state in the guest agent.
+public enum SpiceSessionState: String, Codable {
+    case starting
+    case active
+    case idle
+    case exited
+}
+
+/// Individual session information from the guest.
+public struct SpiceSessionInfo: Codable, Hashable {
+    public let sessionId: String
+    public let processId: Int32
+    public let executablePath: String
+    public let windowTitle: String?
+    public let startTimeMs: Int64
+    public let lastActivityMs: Int64
+    public let state: SpiceSessionState
+    public let windowCount: Int32
+
+    public init(
+        sessionId: String,
+        processId: Int32,
+        executablePath: String,
+        windowTitle: String?,
+        startTimeMs: Int64,
+        lastActivityMs: Int64,
+        state: SpiceSessionState,
+        windowCount: Int32
+    ) {
+        self.sessionId = sessionId
+        self.processId = processId
+        self.executablePath = executablePath
+        self.windowTitle = windowTitle
+        self.startTimeMs = startTimeMs
+        self.lastActivityMs = lastActivityMs
+        self.state = state
+        self.windowCount = windowCount
+    }
+
+    /// Converts this Spice session info to the shared GuestSession type.
+    public func toGuestSession() -> WinRunShared.GuestSession {
+        WinRunShared.GuestSession(
+            id: sessionId,
+            windowsPath: executablePath,
+            windowTitle: windowTitle,
+            processId: Int(processId),
+            startedAt: Date(timeIntervalSince1970: Double(startTimeMs) / 1000.0)
+        )
+    }
+}
+
+/// Response message containing the list of active sessions.
+public struct SessionListMessage: GuestMessage {
+    public let timestamp: Int64
+    public let messageId: UInt32
+    public let sessions: [SpiceSessionInfo]
+
+    public init(
+        timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
+        messageId: UInt32,
+        sessions: [SpiceSessionInfo]
+    ) {
+        self.timestamp = timestamp
+        self.messageId = messageId
+        self.sessions = sessions
+    }
+
+    /// Converts to GuestSessionList for XPC responses.
+    public func toGuestSessionList() -> WinRunShared.GuestSessionList {
+        WinRunShared.GuestSessionList(sessions: sessions.map { $0.toGuestSession() })
+    }
+}
+
 // MARK: - Provisioning Messages
 
 /// Phase of post-install provisioning running in the guest.

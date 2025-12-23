@@ -2,6 +2,7 @@ import Foundation
 import WinRunShared
 import WinRunVirtualMachine
 import WinRunXPC
+import WinRunSpiceBridge
 import Security
 
 @objc final class WinRunDaemonService: NSObject, WinRunDaemonXPC {
@@ -10,6 +11,7 @@ import Security
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let rateLimiter: RateLimiter
+    private let controlChannel: SpiceControlChannel
 
     /// Client identifier for the current request (set by connection handler)
     var currentClientId: String?
@@ -17,11 +19,13 @@ import Security
     init(
         configuration: VMConfiguration = VMConfiguration(),
         logger: Logger = StandardLogger(subsystem: "winrund"),
-        throttlingConfig: ThrottlingConfig = .production
+        throttlingConfig: ThrottlingConfig = .production,
+        controlChannel: SpiceControlChannel? = nil
     ) {
         self.vmController = VirtualMachineController(configuration: configuration, logger: logger)
         self.logger = logger
         self.rateLimiter = RateLimiter(config: throttlingConfig, logger: logger)
+        self.controlChannel = controlChannel ?? SpiceControlChannel(logger: logger)
     }
 
     /// Check rate limit before processing request
@@ -109,8 +113,28 @@ import Security
         Task { [self] in
             do {
                 try await checkThrottle()
-                // TODO: Query guest agent for actual sessions
-                // For now, return empty list - will be populated when guest agent is connected
+
+                // Query guest agent for actual sessions
+                let vmState = await vmController.currentState()
+                guard vmState.isRunning else {
+                    // VM not running, return empty list
+                    let sessions = GuestSessionList(sessions: [])
+                    reply(try encode(sessions), nil)
+                    return
+                }
+
+                // Ensure control channel is connected
+                if await !controlChannel.connected {
+                    try await controlChannel.connect()
+                }
+
+                // Request sessions from guest
+                let sessions = try await controlChannel.listSessions()
+                logger.info("Retrieved \(sessions.sessions.count) sessions from guest")
+                reply(try encode(sessions), nil)
+            } catch let error as SpiceControlError {
+                // For control errors, return empty list with warning
+                logger.warn("Failed to list sessions: \(error.description)")
                 let sessions = GuestSessionList(sessions: [])
                 reply(try encode(sessions), nil)
             } catch {
@@ -124,10 +148,27 @@ import Security
         Task { [self] in
             do {
                 try await checkThrottle()
-                logger.info("Would close session \(id)")
-                // TODO: Send close command to guest agent
-                // For now, just acknowledge the request
+
+                // Check VM state
+                let vmState = await vmController.currentState()
+                guard vmState.isRunning else {
+                    logger.warn("Cannot close session - VM not running")
+                    reply(nil)
+                    return
+                }
+
+                // Ensure control channel is connected
+                if await !controlChannel.connected {
+                    try await controlChannel.connect()
+                }
+
+                // Send close session command to guest
+                try await controlChannel.closeSession(id)
+                logger.info("Closed session \(id)")
                 reply(nil)
+            } catch let error as SpiceControlError {
+                logger.error("Failed to close session \(id): \(error.description)")
+                reply(nsError(error))
             } catch {
                 reply(nsError(error))
             }

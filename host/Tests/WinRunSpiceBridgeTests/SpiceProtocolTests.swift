@@ -81,7 +81,7 @@ final class SpiceMessageTypeTests: XCTestCase {
             .iconData, .shortcutDetected, .clipboardChanged,
             .heartbeat, .telemetryReport,
             .provisionProgress, .provisionError, .provisionComplete,
-            .error, .ack,
+            .sessionList, .error, .ack,
         ]
 
         for type in guestTypes {
@@ -99,6 +99,8 @@ final class SpiceMessageTypeTests: XCTestCase {
         XCTAssertEqual(SpiceMessageType.mouseInput.rawValue, 0x04)
         XCTAssertEqual(SpiceMessageType.keyboardInput.rawValue, 0x05)
         XCTAssertEqual(SpiceMessageType.dragDropEvent.rawValue, 0x06)
+        XCTAssertEqual(SpiceMessageType.listSessions.rawValue, 0x08)
+        XCTAssertEqual(SpiceMessageType.closeSession.rawValue, 0x09)
         XCTAssertEqual(SpiceMessageType.shutdown.rawValue, 0x0F)
 
         XCTAssertEqual(SpiceMessageType.windowMetadata.rawValue, 0x80)
@@ -113,8 +115,18 @@ final class SpiceMessageTypeTests: XCTestCase {
         XCTAssertEqual(SpiceMessageType.provisionProgress.rawValue, 0x89)
         XCTAssertEqual(SpiceMessageType.provisionError.rawValue, 0x8A)
         XCTAssertEqual(SpiceMessageType.provisionComplete.rawValue, 0x8B)
+        XCTAssertEqual(SpiceMessageType.sessionList.rawValue, 0x8C)
         XCTAssertEqual(SpiceMessageType.error.rawValue, 0xFE)
         XCTAssertEqual(SpiceMessageType.ack.rawValue, 0xFF)
+    }
+
+    func testSessionMessageTypesHaveCorrectDirection() {
+        // ListSessions and CloseSession are host-to-guest
+        XCTAssertTrue(SpiceMessageType.listSessions.isHostToGuest)
+        XCTAssertTrue(SpiceMessageType.closeSession.isHostToGuest)
+
+        // SessionList is guest-to-host
+        XCTAssertTrue(SpiceMessageType.sessionList.isGuestToHost)
     }
 }
 
@@ -224,6 +236,106 @@ final class SpiceMessageSerializerTests: XCTestCase {
         let data = try SpiceMessageSerializer.serialize(message)
 
         XCTAssertEqual(data[0], SpiceMessageType.shutdown.rawValue)
+    }
+
+    func testSerializeListSessionsMessage() throws {
+        let message = ListSessionsSpiceMessage(messageId: 100)
+
+        let data = try SpiceMessageSerializer.serialize(message)
+
+        XCTAssertEqual(data[0], SpiceMessageType.listSessions.rawValue)
+    }
+
+    func testSerializeCloseSessionMessage() throws {
+        let message = CloseSessionSpiceMessage(messageId: 101, sessionId: "1234")
+
+        let data = try SpiceMessageSerializer.serialize(message)
+
+        XCTAssertEqual(data[0], SpiceMessageType.closeSession.rawValue)
+    }
+
+    func testDeserializeSessionListMessage() throws {
+        let sessionInfo = SpiceSessionInfo(
+            sessionId: "1234",
+            processId: 1234,
+            executablePath: "C:\\Windows\\notepad.exe",
+            windowTitle: "Untitled - Notepad",
+            startTimeMs: 1700000000000,
+            lastActivityMs: 1700000001000,
+            state: .active,
+            windowCount: 1
+        )
+
+        let original = SessionListMessage(
+            messageId: 100,
+            sessions: [sessionInfo]
+        )
+
+        let encoder = JSONEncoder()
+        let payload = try encoder.encode(original)
+
+        var envelope = Data()
+        envelope.append(SpiceMessageType.sessionList.rawValue)
+        var length = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+        envelope.append(payload)
+
+        let result = try SpiceMessageSerializer.deserialize(envelope)
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.0, .sessionList)
+
+        if let message = result?.1 as? SessionListMessage {
+            XCTAssertEqual(message.messageId, 100)
+            XCTAssertEqual(message.sessions.count, 1)
+            XCTAssertEqual(message.sessions[0].sessionId, "1234")
+            XCTAssertEqual(message.sessions[0].processId, 1234)
+            XCTAssertEqual(message.sessions[0].state, .active)
+        } else {
+            XCTFail("Expected SessionListMessage")
+        }
+    }
+
+    func testSessionListMessageToGuestSessionList() throws {
+        let sessionInfo = SpiceSessionInfo(
+            sessionId: "5678",
+            processId: 5678,
+            executablePath: "C:\\Program Files\\App\\app.exe",
+            windowTitle: "My App",
+            startTimeMs: 1700000000000,
+            lastActivityMs: 1700000001000,
+            state: .active,
+            windowCount: 2
+        )
+
+        let message = SessionListMessage(messageId: 1, sessions: [sessionInfo])
+        let guestSessionList = message.toGuestSessionList()
+
+        XCTAssertEqual(guestSessionList.sessions.count, 1)
+        XCTAssertEqual(guestSessionList.sessions[0].id, "5678")
+        XCTAssertEqual(guestSessionList.sessions[0].windowsPath, "C:\\Program Files\\App\\app.exe")
+        XCTAssertEqual(guestSessionList.sessions[0].windowTitle, "My App")
+        XCTAssertEqual(guestSessionList.sessions[0].processId, 5678)
+    }
+
+    func testSpiceSessionInfoToGuestSession() {
+        let sessionInfo = SpiceSessionInfo(
+            sessionId: "9999",
+            processId: 9999,
+            executablePath: "C:\\test.exe",
+            windowTitle: "Test Window",
+            startTimeMs: 1700000000000,
+            lastActivityMs: 1700000001000,
+            state: .idle,
+            windowCount: 0
+        )
+
+        let guestSession = sessionInfo.toGuestSession()
+
+        XCTAssertEqual(guestSession.id, "9999")
+        XCTAssertEqual(guestSession.windowsPath, "C:\\test.exe")
+        XCTAssertEqual(guestSession.windowTitle, "Test Window")
+        XCTAssertEqual(guestSession.processId, 9999)
     }
 
     func testDeserializeCapabilityFlagsMessage() throws {

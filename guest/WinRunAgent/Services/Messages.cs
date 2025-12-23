@@ -30,6 +30,8 @@ public enum SpiceMessageType : byte
     MouseInput = 0x04,
     KeyboardInput = 0x05,
     DragDropEvent = 0x06,
+    ListSessions = 0x08,
+    CloseSession = 0x09,
     Shutdown = 0x0F,
 
     // Guest → Host (0x80-0xFF)
@@ -45,6 +47,7 @@ public enum SpiceMessageType : byte
     ProvisionProgress = 0x89,
     ProvisionError = 0x8A,
     ProvisionComplete = 0x8B,
+    SessionList = 0x8C,
     Error = 0xFE,
     Ack = 0xFF
 }
@@ -160,6 +163,19 @@ public sealed record DragDropMessage : HostMessage
 public sealed record ShutdownMessage : HostMessage
 {
     public int TimeoutMs { get; init; } = 5000;
+}
+
+/// <summary>
+/// Request to list active sessions.
+/// </summary>
+public sealed record ListSessionsMessage : HostMessage;
+
+/// <summary>
+/// Request to close a specific session.
+/// </summary>
+public sealed record CloseSessionMessage : HostMessage
+{
+    public required string SessionId { get; init; }
 }
 
 // ============================================================================
@@ -326,6 +342,49 @@ public sealed record AckMessage : GuestMessage
     public required uint MessageId { get; init; }
     public bool Success { get; init; } = true;
     public string? ErrorMessage { get; init; }
+}
+
+/// <summary>
+/// Session state for reporting to host.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SessionStateType
+{
+    Starting,
+    Active,
+    Idle,
+    Exited
+}
+
+/// <summary>
+/// Session information for a single active session.
+/// </summary>
+public sealed record SessionInfo
+{
+    public required string SessionId { get; init; }
+    public required int ProcessId { get; init; }
+    public required string ExecutablePath { get; init; }
+    public string? WindowTitle { get; init; }
+    public required long StartTimeMs { get; init; }
+    public required long LastActivityMs { get; init; }
+    public required SessionStateType State { get; init; }
+    public required int WindowCount { get; init; }
+}
+
+/// <summary>
+/// Response message containing the list of active sessions.
+/// </summary>
+public sealed record SessionListMessage : GuestMessage
+{
+    /// <summary>
+    /// The message ID this is responding to.
+    /// </summary>
+    public required uint MessageId { get; init; }
+
+    /// <summary>
+    /// List of active sessions.
+    /// </summary>
+    public required SessionInfo[] Sessions { get; init; }
 }
 
 // ============================================================================
@@ -576,6 +635,7 @@ public static class SpiceMessageSerializer
             ProvisionProgressMessage => SpiceMessageType.ProvisionProgress,
             ProvisionErrorMessage => SpiceMessageType.ProvisionError,
             ProvisionCompleteMessage => SpiceMessageType.ProvisionComplete,
+            SessionListMessage => SpiceMessageType.SessionList,
             ErrorMessage => SpiceMessageType.Error,
             AckMessage => SpiceMessageType.Ack,
             _ => throw new ArgumentException($"Unknown message type: {message.GetType()}")
@@ -624,6 +684,8 @@ public static class SpiceMessageSerializer
             SpiceMessageType.MouseInput => JsonSerializer.Deserialize<MouseInputMessage>(payload, JsonOptions),
             SpiceMessageType.KeyboardInput => JsonSerializer.Deserialize<KeyboardInputMessage>(payload, JsonOptions),
             SpiceMessageType.DragDropEvent => JsonSerializer.Deserialize<DragDropMessage>(payload, JsonOptions),
+            SpiceMessageType.ListSessions => JsonSerializer.Deserialize<ListSessionsMessage>(payload, JsonOptions),
+            SpiceMessageType.CloseSession => JsonSerializer.Deserialize<CloseSessionMessage>(payload, JsonOptions),
             SpiceMessageType.Shutdown => JsonSerializer.Deserialize<ShutdownMessage>(payload, JsonOptions),
 
             // Guest → Host (not deserialized on guest side)
@@ -639,6 +701,7 @@ public static class SpiceMessageSerializer
             SpiceMessageType.ProvisionProgress => null,
             SpiceMessageType.ProvisionError => null,
             SpiceMessageType.ProvisionComplete => null,
+            SpiceMessageType.SessionList => null,
             SpiceMessageType.Error => null,
             SpiceMessageType.Ack => null,
 
@@ -866,5 +929,33 @@ public static class SpiceMessageSerializer
             WindowsVersion = windowsVersion,
             AgentVersion = "Unknown",
             ErrorMessage = errorMessage
+        };
+
+    /// <summary>
+    /// Creates a session list message from active sessions.
+    /// </summary>
+    public static SessionListMessage CreateSessionList(
+        uint messageId,
+        IEnumerable<ProgramSession> sessions) => new()
+        {
+            MessageId = messageId,
+            Sessions = sessions.Select(s => new SessionInfo
+            {
+                SessionId = s.ProcessId.ToString(),
+                ProcessId = s.ProcessId,
+                ExecutablePath = s.ExecutablePath,
+                WindowTitle = null, // Window title is tracked per-window, not per-session
+                StartTimeMs = new DateTimeOffset(s.StartTime).ToUnixTimeMilliseconds(),
+                LastActivityMs = new DateTimeOffset(s.LastActivityTime).ToUnixTimeMilliseconds(),
+                State = s.State switch
+                {
+                    SessionState.Starting => SessionStateType.Starting,
+                    SessionState.Active => SessionStateType.Active,
+                    SessionState.Idle => SessionStateType.Idle,
+                    SessionState.Exited => SessionStateType.Exited,
+                    _ => SessionStateType.Active
+                },
+                WindowCount = s.WindowCount
+            }).ToArray()
         };
 }
