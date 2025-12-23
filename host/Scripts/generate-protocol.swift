@@ -128,6 +128,15 @@ func toSwiftEnumCase(_ name: String, prefix: String) -> String {
     return parts[0] + parts.dropFirst().map { $0.capitalized }.joined()
 }
 
+func toHex(_ value: Int, minWidth: Int = 2) -> String {
+    // Format as uppercase hex with minimum width (zero-padded)
+    let hex = String(value, radix: 16, uppercase: true)
+    if hex.count < minWidth {
+        return String(repeating: "0", count: minWidth - hex.count) + hex
+    }
+    return hex
+}
+
 func generateSwift(_ def: ProtocolDefinition) -> String {
     var out = """
     // Protocol.generated.swift
@@ -159,14 +168,14 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     
     for (name, value) in def.messageTypesHostToGuest {
         let caseName = toSwiftEnumCase(name, prefix: "MSG_")
-        out += "    case \(caseName) = 0x\(String(value, radix: 16, uppercase: true))\n"
+        out += "    case \(caseName) = 0x\(toHex(value))\n"
     }
     
     out += "\n    // Guest → Host (0x80-0xFF)\n"
     
     for (name, value) in def.messageTypesGuestToHost {
         let caseName = toSwiftEnumCase(name, prefix: "MSG_")
-        out += "    case \(caseName) = 0x\(String(value, radix: 16, uppercase: true))\n"
+        out += "    case \(caseName) = 0x\(toHex(value))\n"
     }
     
     out += """
@@ -187,7 +196,7 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     
     for (name, value) in def.capabilities {
         let caseName = toSwiftEnumCase(name, prefix: "CAP_")
-        out += "    public static let \(caseName) = GeneratedCapabilities(rawValue: 0x\(String(value, radix: 16, uppercase: true)))\n"
+        out += "    public static let \(caseName) = GeneratedCapabilities(rawValue: 0x\(toHex(value)))\n"
     }
     
     out += """
@@ -250,7 +259,7 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     
     for (name, value) in def.keyModifiers where name != "KEY_MOD_NONE" {
         let caseName = toSwiftEnumCase(name, prefix: "KEY_MOD_")
-        out += "    public static let \(caseName) = GeneratedKeyModifiers(rawValue: 0x\(String(value, radix: 16, uppercase: true)))\n"
+        out += "    public static let \(caseName) = GeneratedKeyModifiers(rawValue: 0x\(toHex(value)))\n"
     }
     
     out += """
