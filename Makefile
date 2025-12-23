@@ -144,6 +144,12 @@ export GH_TOKEN
 # This setting controls whether we "tail" logs by repeatedly fetching them.
 LIVE_LOG ?= 1
 LIVE_LOG_INTERVAL ?= 2
+# Safety: avoid hanging forever if status/log fetching gets stuck.
+# Total seconds before aborting log streaming (0 = no timeout).
+LIVE_LOG_TIMEOUT ?= 7200
+# Backoff when log/status fetch fails repeatedly (e.g. transient GitHub/API issues).
+LIVE_LOG_MAX_ERRORS ?= 60
+LIVE_LOG_MAX_BACKOFF ?= 30
 
 # Helper function for running remote workflows
 # Usage: $(call run-remote-workflow,workflow-file,description,extra-args)
@@ -219,23 +225,49 @@ define run-remote-workflow
 		echo ""; \
 		LAST_LINES=0; \
 		TMP_LOG="/tmp/gh-run-$$RUN_ID.log"; \
+		TMP_LOG_NEW="/tmp/gh-run-$$RUN_ID.log.new"; \
+		START_TS=$$(date +%s); \
+		ERRORS=0; \
+		BACKOFF="$$LIVE_LOG_INTERVAL"; \
+		trap 'rm -f "$$TMP_LOG" "$$TMP_LOG_NEW" 2>/dev/null || true' EXIT INT TERM; \
 		: > "$$TMP_LOG"; \
 		while true; do \
+			NOW_TS=$$(date +%s); \
+			if [ "$$LIVE_LOG_TIMEOUT" != "0" ] && [ $$((NOW_TS-START_TS)) -gt "$$LIVE_LOG_TIMEOUT" ]; then \
+				echo ""; \
+				echo "❌ Timed out after $$LIVE_LOG_TIMEOUTs while waiting for remote workflow logs."; \
+				echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
+				exit 124; \
+			fi; \
 			STATUS=$$(gh run view "$$RUN_ID" --json status --jq '.status' 2>/dev/null || echo ""); \
-			if gh run view "$$RUN_ID" --log > "$$TMP_LOG.new" 2>/dev/null; then \
-				NEW_LINES=$$(wc -l < "$$TMP_LOG.new" | tr -d ' '); \
+			if gh run view "$$RUN_ID" --log > "$$TMP_LOG_NEW" 2>/dev/null; then \
+				ERRORS=0; \
+				BACKOFF="$$LIVE_LOG_INTERVAL"; \
+				NEW_LINES=$$(wc -l < "$$TMP_LOG_NEW" | tr -d ' '); \
 				if [ "$$NEW_LINES" -gt "$$LAST_LINES" ]; then \
-					tail -n +$$((LAST_LINES+1)) "$$TMP_LOG.new"; \
+					tail -n +$$((LAST_LINES+1)) "$$TMP_LOG_NEW"; \
 					LAST_LINES="$$NEW_LINES"; \
 				fi; \
-				mv "$$TMP_LOG.new" "$$TMP_LOG"; \
+				mv "$$TMP_LOG_NEW" "$$TMP_LOG"; \
 			else \
-				rm -f "$$TMP_LOG.new" 2>/dev/null || true; \
+				rm -f "$$TMP_LOG_NEW" 2>/dev/null || true; \
+				ERRORS=$$((ERRORS+1)); \
+				if [ "$$ERRORS" -ge "$$LIVE_LOG_MAX_ERRORS" ]; then \
+					echo ""; \
+					echo "❌ Too many errors ($$ERRORS) fetching remote logs. Aborting."; \
+					echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
+					exit 2; \
+				fi; \
+				# Exponential backoff (capped) to reduce flakiness / rate-limit pressure. \
+				if [ "$$BACKOFF" -lt "$$LIVE_LOG_MAX_BACKOFF" ]; then \
+					BACKOFF=$$((BACKOFF*2)); \
+					if [ "$$BACKOFF" -gt "$$LIVE_LOG_MAX_BACKOFF" ]; then BACKOFF="$$LIVE_LOG_MAX_BACKOFF"; fi; \
+				fi; \
 			fi; \
 			if [ "$$STATUS" = "completed" ]; then \
 				break; \
 			fi; \
-			sleep "$$LIVE_LOG_INTERVAL"; \
+			sleep "$$BACKOFF"; \
 		done; \
 		CONCLUSION=$$(gh run view "$$RUN_ID" --json conclusion --jq '.conclusion' 2>/dev/null || echo ""); \
 		echo ""; \
