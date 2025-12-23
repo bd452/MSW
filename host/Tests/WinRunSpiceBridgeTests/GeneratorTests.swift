@@ -123,8 +123,9 @@ final class GeneratorTests: XCTestCase {
             }
 
             // Check message values are in correct ranges
-            if let match = line.firstMatch(of: hexPattern) {
-                let hexValue = String(match.output.1 ?? "")
+            if let match = line.firstMatch(of: hexPattern),
+               let capturedSubstring = match.output[1].substring {
+                let hexValue = String(capturedSubstring)
                 if let value = Int(hexValue, radix: 16) {
                     if inHostToGuest {
                         XCTAssertLessThan(value, 0x80, "Host→Guest message \(line) should be < 0x80")
