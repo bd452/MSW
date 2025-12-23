@@ -44,6 +44,17 @@ typedef struct winrun_spice_stream {
 static void *winrun_mock_worker(void *context);
 
 #if __APPLE__
+// Forward declarations for clipboard signal handlers (needed before on_channel_new)
+static void on_clipboard_grab(SpiceMainChannel *channel, guint selection,
+                              guint32 *types, guint ntypes, gpointer user_data);
+static void on_clipboard_data(SpiceMainChannel *channel, guint selection,
+                              guint type, const guchar *data, guint size,
+                              gpointer user_data);
+static void on_clipboard_request(SpiceMainChannel *channel, guint selection,
+                                 guint type, gpointer user_data);
+static void on_clipboard_release(SpiceMainChannel *channel, guint selection,
+                                 gpointer user_data);
+
 // Signal handler for new channels from Spice session
 static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointer user_data) {
     (void)session;
@@ -161,17 +172,6 @@ static winrun_clipboard_format spice_to_winrun_format(guint spice_type) {
         default: return WINRUN_CLIPBOARD_FORMAT_TEXT;
     }
 }
-
-// Forward declaration for clipboard signal handlers
-static void on_clipboard_grab(SpiceMainChannel *channel, guint selection,
-                              guint32 *types, guint ntypes, gpointer user_data);
-static void on_clipboard_data(SpiceMainChannel *channel, guint selection,
-                              guint type, const guchar *data, guint size,
-                              gpointer user_data);
-static void on_clipboard_request(SpiceMainChannel *channel, guint selection,
-                                 guint type, gpointer user_data);
-static void on_clipboard_release(SpiceMainChannel *channel, guint selection,
-                                 gpointer user_data);
 #endif
 
 static void winrun_write_error(char *buffer, size_t length, const char *message) {
