@@ -83,7 +83,8 @@ public actor SpiceControlChannel {
     }
 
     /// Initialize with an existing transport (for testing or shared connections)
-    public init(
+    /// Note: This is internal because SpiceStreamTransport is an internal protocol
+    init(
         transport: SpiceStreamTransport,
         logger: Logger = StandardLogger(subsystem: "SpiceControlChannel")
     ) {

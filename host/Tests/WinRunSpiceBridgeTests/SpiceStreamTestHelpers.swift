@@ -85,6 +85,23 @@ final class TestSpiceStreamTransport: SpiceStreamTransport {
         dragDropEvents.append(event)
     }
 
+    // Control channel
+    var controlCallback: ((Data) -> Void)?
+    var controlMessagesSent: [Data] = []
+
+    func setControlCallback(_ callback: @escaping (Data) -> Void) {
+        controlCallback = callback
+    }
+
+    func sendControlMessage(_ data: Data) -> Bool {
+        controlMessagesSent.append(data)
+        return true
+    }
+
+    func simulateControlMessage(_ data: Data) {
+        controlCallback?(data)
+    }
+
     // Test helpers to simulate events from guest
 
     func simulateFrame(_ data: Data) {
@@ -115,6 +132,8 @@ final class TestSpiceStreamTransport: SpiceStreamTransport {
         clipboardSent.removeAll()
         clipboardRequests.removeAll()
         dragDropEvents.removeAll()
+        controlMessagesSent.removeAll()
+        controlCallback = nil
         callbacks = nil
     }
 }

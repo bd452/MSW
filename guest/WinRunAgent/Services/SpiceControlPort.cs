@@ -1,12 +1,12 @@
-using System.IO.Ports;
+using System.IO.Pipes;
 using System.Threading.Channels;
 
 namespace WinRun.Agent.Services;
 
 /// <summary>
 /// Handles communication with the host via Spice port channel.
-/// Reads messages from the VirtIO serial port and writes to an inbound channel.
-/// Reads from an outbound channel and writes to the serial port.
+/// Reads messages from the named pipe and writes to an inbound channel.
+/// Reads from an outbound channel and writes to the pipe.
 /// </summary>
 public sealed class SpiceControlPort : IDisposable
 {
@@ -16,14 +16,14 @@ public sealed class SpiceControlPort : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _readTask;
     private Task? _writeTask;
-    private SerialPort? _port;
+    private NamedPipeClientStream? _pipe;
     private bool _disposed;
 
     /// <summary>
-    /// The port name pattern for the Spice control channel.
-    /// On Windows, VirtIO serial ports appear as COM ports.
+    /// The named pipe path for the Spice control channel.
+    /// This matches the port name configured in the host.
     /// </summary>
-    private const string ControlPortName = "com.winrun.control";
+    private const string PipeName = "com.winrun.control";
 
     /// <summary>
     /// Buffer for accumulating partial messages.
@@ -41,83 +41,38 @@ public sealed class SpiceControlPort : IDisposable
     }
 
     /// <summary>
-    /// Attempts to find and open the Spice control port.
+    /// Attempts to connect to the Spice control pipe.
     /// Returns true if successful, false otherwise.
     /// </summary>
     public bool TryOpen()
     {
-        // On Windows, VirtIO serial ports appear as COM ports
-        // We need to enumerate available ports and find the one that matches
-        // For now, try common patterns
-
-        // Method 1: Check for WinRun-specific port symlink
-        // The VirtIO driver can create named symlinks for ports
-        var symLinkPath = @"\\.\Global\com.winrun.control";
-        if (TryOpenPort(symLinkPath))
-        {
-            return true;
-        }
-
-        // Method 2: Try standard COM ports
-        // This is a fallback - in production, we'd use device enumeration
-        foreach (var portName in SerialPort.GetPortNames())
-        {
-            _logger.Debug($"Checking port: {portName}");
-            // Skip common real COM ports
-            if (portName is "COM1" or "COM2")
-            {
-                continue;
-            }
-
-            if (TryOpenPort(portName))
-            {
-                _logger.Info($"Opened control port on {portName}");
-                return true;
-            }
-        }
-
-        // Method 3: Try virtio-serial pipe path
-        // Some VirtIO configurations expose ports as named pipes
-        var pipePath = @"\\.\pipe\com.winrun.control";
-        if (TryOpenPort(pipePath))
-        {
-            _logger.Info($"Opened control port via pipe: {pipePath}");
-            return true;
-        }
-
-        _logger.Warn("Could not find Spice control port");
-        return false;
-    }
-
-    private bool TryOpenPort(string portName)
-    {
+        // Try connecting to the named pipe
+        // The pipe is created by the VirtIO driver or QEMU
         try
         {
-            // For pipe paths, we can't use SerialPort
-            if (portName.StartsWith(@"\\.\pipe\"))
-            {
-                // Named pipe handling would go here
-                // For now, skip - we'll handle this case later
-                return false;
-            }
+            _pipe = new NamedPipeClientStream(
+                ".",
+                PipeName,
+                PipeDirection.InOut,
+                PipeOptions.Asynchronous);
 
-            var port = new SerialPort(portName)
-            {
-                BaudRate = 115200,
-                DataBits = 8,
-                Parity = Parity.None,
-                StopBits = StopBits.One,
-                ReadTimeout = 100,
-                WriteTimeout = 1000
-            };
-
-            port.Open();
-            _port = port;
+            // Try to connect with a short timeout
+            _pipe.Connect(1000);
+            _logger.Info($"Connected to control pipe: {PipeName}");
             return true;
+        }
+        catch (TimeoutException)
+        {
+            _logger.Debug($"Pipe {PipeName} connection timed out");
+            _pipe?.Dispose();
+            _pipe = null;
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.Debug($"Failed to open {portName}: {ex.Message}");
+            _logger.Debug($"Failed to connect to pipe {PipeName}: {ex.Message}");
+            _pipe?.Dispose();
+            _pipe = null;
             return false;
         }
     }
@@ -127,9 +82,9 @@ public sealed class SpiceControlPort : IDisposable
     /// </summary>
     public void Start()
     {
-        if (_port == null || !_port.IsOpen)
+        if (_pipe == null || !_pipe.IsConnected)
         {
-            _logger.Warn("Cannot start SpiceControlPort - port not open");
+            _logger.Warn("Cannot start SpiceControlPort - pipe not connected");
             return;
         }
 
@@ -148,12 +103,26 @@ public sealed class SpiceControlPort : IDisposable
 
         if (_readTask != null)
         {
-            try { await _readTask; } catch (OperationCanceledException) { }
+            try
+            {
+                await _readTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected
+            }
         }
 
         if (_writeTask != null)
         {
-            try { await _writeTask; } catch (OperationCanceledException) { }
+            try
+            {
+                await _writeTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected
+            }
         }
 
         _logger.Info("SpiceControlPort stopped");
@@ -163,31 +132,24 @@ public sealed class SpiceControlPort : IDisposable
     {
         var buffer = new byte[4096];
 
-        while (!token.IsCancellationRequested && _port?.IsOpen == true)
+        while (!token.IsCancellationRequested && _pipe?.IsConnected == true)
         {
             try
             {
-                // Read available data
-                int bytesRead;
-                try
+                var bytesRead = await _pipe.ReadAsync(buffer, token);
+
+                if (bytesRead == 0)
                 {
-                    bytesRead = _port.Read(buffer, 0, buffer.Length);
-                }
-                catch (TimeoutException)
-                {
-                    // No data available, continue
-                    await Task.Delay(10, token);
-                    continue;
+                    // Pipe closed
+                    _logger.Warn("Control pipe closed by host");
+                    break;
                 }
 
-                if (bytesRead > 0)
-                {
-                    // Append to read buffer
-                    _readBuffer.Write(buffer, 0, bytesRead);
+                // Append to read buffer
+                _readBuffer.Write(buffer, 0, bytesRead);
 
-                    // Try to parse complete messages
-                    await ProcessReadBufferAsync(token);
-                }
+                // Try to parse complete messages
+                await ProcessReadBufferAsync(token);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -210,7 +172,6 @@ public sealed class SpiceControlPort : IDisposable
             var headerBytes = new byte[5];
             _ = _readBuffer.Read(headerBytes, 0, 5);
 
-            var messageType = headerBytes[0];
             var length = BitConverter.ToUInt32(headerBytes, 1);
 
             // Check if we have the complete message
@@ -231,6 +192,7 @@ public sealed class SpiceControlPort : IDisposable
             {
                 _ = _readBuffer.Read(remaining, 0, remaining.Length);
             }
+
             _readBuffer.SetLength(0);
             if (remaining.Length > 0)
             {
@@ -262,14 +224,15 @@ public sealed class SpiceControlPort : IDisposable
     {
         var reader = _outboundChannel.Reader;
 
-        while (!token.IsCancellationRequested && _port?.IsOpen == true)
+        while (!token.IsCancellationRequested && _pipe?.IsConnected == true)
         {
             try
             {
                 var message = await reader.ReadAsync(token);
                 var bytes = SpiceMessageSerializer.Serialize(message);
 
-                _port.Write(bytes, 0, bytes.Length);
+                await _pipe.WriteAsync(bytes, token);
+                await _pipe.FlushAsync(token);
                 _logger.Debug($"Sent message: {message.GetType().Name} ({bytes.Length} bytes)");
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -292,7 +255,7 @@ public sealed class SpiceControlPort : IDisposable
 
         _cts.Cancel();
         _cts.Dispose();
-        _port?.Dispose();
+        _pipe?.Dispose();
         _readBuffer.Dispose();
         _disposed = true;
     }
