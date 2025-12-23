@@ -31,7 +31,7 @@ public sealed class SpiceControlPort : IDisposable
     /// The port name for the Spice control channel.
     /// Must match WINRUN_CONTROL_PORT_NAME in the host C bridge.
     /// </summary>
-    private const string PortName = "com.winrun.control";
+    private const string CONTROL_PORT_NAME = "com.winrun.control";
 
     /// <summary>
     /// Buffer for accumulating partial messages.
@@ -78,24 +78,24 @@ public sealed class SpiceControlPort : IDisposable
         {
             var pipe = new NamedPipeClientStream(
                 ".",
-                PortName,
+                CONTROL_PORT_NAME,
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous);
 
             // Try to connect with a short timeout
             pipe.Connect(500);
             _stream = pipe;
-            _logger.Info($"Connected to control channel via named pipe: {PortName}");
+            _logger.Info($"Connected to control channel via named pipe: {CONTROL_PORT_NAME}");
             return true;
         }
         catch (TimeoutException)
         {
-            _logger.Debug($"Named pipe {PortName} connection timed out");
+            _logger.Debug($"Named pipe {CONTROL_PORT_NAME} connection timed out");
             return false;
         }
         catch (Exception ex)
         {
-            _logger.Debug($"Named pipe {PortName} not available: {ex.Message}");
+            _logger.Debug($"Named pipe {CONTROL_PORT_NAME} not available: {ex.Message}");
             return false;
         }
     }
@@ -104,7 +104,7 @@ public sealed class SpiceControlPort : IDisposable
     {
         // VirtIO serial ports on Windows appear as:
         // \\.\Global\<portname> (when using virtioserial driver)
-        var devicePath = $@"\\.\Global\{PortName}";
+        var devicePath = $@"\\.\Global\{CONTROL_PORT_NAME}";
 
         try
         {

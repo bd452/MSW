@@ -7,7 +7,6 @@ import XCTest
 // MARK: - SpiceControlChannel Tests
 
 final class SpiceControlChannelTests: XCTestCase {
-
     // MARK: - Close Session Tests
 
     func testCloseSessionSerializesCorrectMessage() async throws {

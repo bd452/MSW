@@ -390,4 +390,3 @@ private final class MockTestTransport: SpiceStreamTransport {
     }
 }
 #endif
-}
