@@ -243,7 +243,10 @@ make check-remote       # run full CI remotely (host on macOS, guest on Windows)
 > 
 > **Line Endings**: The `.gitattributes` file automatically handles line endings, but you must commit it for it to take effect. New files created on macOS will be normalized to CRLF for C# files when committed.
 
-> **Note (Cursor Cloud Agents)**: Remote test commands (`make test-guest-remote`, `make test-host-remote`, etc.) require the `gh` CLI to have `workflow` scope permissions. Cloud agent environments typically don't have this permission, resulting in HTTP 403 errors. In this case, push the branch and create a PR instead — CI runs automatically on PRs via `.github/workflows/ci.yml`.
+> **Note (Cursor Cloud Agents)**: Remote test commands (`make test-guest-remote`, `make test-host-remote`, etc.) require the `gh` CLI to have `workflow` scope permissions. Cloud agent environments typically don't have this permission by default, resulting in HTTP 403 errors. Options:
+> - Pass a token with workflow scope: `make test-guest-remote GH_TOKEN=ghp_xxx`
+> - Push the branch and create a PR instead — CI runs automatically on PRs via `.github/workflows/ci.yml`
+> - Create a token at https://github.com/settings/tokens/new with `workflow` scope (and `repo` for private repos)
 
 > **Note (Cursor)**: Host tests (`swift test`) require write access to cache directories outside the workspace (e.g., `~/.cache/clang/ModuleCache`). When running tests via Cursor's shell tool, use `required_permissions: ["all"]` to disable sandboxing.
 #### CI Requirements
