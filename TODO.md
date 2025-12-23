@@ -77,7 +77,7 @@
     - [X] Implement provisioning status reporter in guest agent { new:guest/WinRunAgent/Services/ProvisioningReporter.cs } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for provisioning message serialization { guest/WinRunAgent.Tests/MessagesTests.cs, host/Tests/WinRunSpiceBridgeTests/SpiceProtocolTests.swift } <docs/development.md>
 
-- [ ] Setup UI (First-Run Experience) { host/Sources/WinRunApp/Setup/, host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
+- [X] Setup UI (First-Run Experience) { host/Sources/WinRunApp/Setup/, host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
   - [X] First-run detection + setup flow routing { host/Sources/WinRunApp/AppMain.swift, new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Detect missing VM disk image on app launch { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
     - [X] Route to setup wizard vs normal operation { new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
@@ -93,15 +93,15 @@
     - [X] Show phase-based progress with descriptive status { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Display estimated time remaining when possible { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Provide cancel option with confirmation dialog { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] Setup complete + getting started view { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Show success message with disk usage summary { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Display quick-start tips for running Windows apps { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] Error handling + recovery UI { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Display actionable error messages with recovery options { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Offer retry, choose different ISO, or contact support { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] Setup UI tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
-    - [ ] Add unit tests for first-run detection logic { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
-    - [ ] Add view controller state transition tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
+  - [X] Setup complete + getting started view { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Show success message with disk usage summary { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Display quick-start tips for running Windows apps { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Error handling + recovery UI { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Display actionable error messages with recovery options { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Offer retry, choose different ISO, or contact support { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Setup UI tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
+    - [X] Add unit tests for first-run detection logic { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
+    - [X] Add view controller state transition tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
 
 - [ ] Guest Agent Installer { new:guest/WinRunAgent.Installer/, guest/WinRunAgent/WinRunAgent.csproj } <docs/decisions/windows-provisioning.md>
   - [ ] MSI installer project { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
