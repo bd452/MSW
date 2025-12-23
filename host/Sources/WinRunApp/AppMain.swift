@@ -13,6 +13,13 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
     func start(arguments: [String]) {
         setupMenuBar()
 
+        let preflight = ProvisioningPreflight.evaluate()
+        if case .needsSetup(let diskImagePath, let reason) = preflight {
+            logger.info("Windows VM is not provisioned. diskImagePath=\(diskImagePath.path) reason=\(reason.rawValue)")
+            showSetupRequiredAlert(diskImagePath: diskImagePath, reason: reason)
+            return
+        }
+
         Task {
             do {
                 _ = try await daemonClient.ensureVMRunning()
@@ -42,6 +49,34 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.mainMenu = mainMenu
         NSApplication.shared.windowsMenu = windowMenu
         NSApplication.shared.helpMenu = helpMenu
+    }
+
+    private func showSetupRequiredAlert(diskImagePath: URL, reason: ProvisioningPreflightResult.Reason) {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Windows setup required"
+
+        let reasonText: String = switch reason {
+        case .diskImageMissing:
+            "No Windows VM disk image was found."
+        case .diskImageIsDirectory:
+            "The configured VM disk image path points to a directory."
+        }
+
+        alert.informativeText = """
+        \(reasonText)
+
+        Expected disk image at:
+        \(diskImagePath.path)
+
+        For now, you can provision Windows via the CLI:
+          winrun init
+        """
+
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func createAppMenuItem() -> NSMenuItem {
