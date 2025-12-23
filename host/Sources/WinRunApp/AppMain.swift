@@ -9,26 +9,25 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
     private let daemonClient = WinRunDaemonClient()
     private let logger = StandardLogger(subsystem: "WinRunApp")
     private let windowController = WinRunWindowController()
+    private var setupFlowController: SetupFlowController?
 
     func start(arguments: [String]) {
         setupMenuBar()
 
         let preflight = ProvisioningPreflight.evaluate()
-        if case .needsSetup(let diskImagePath, let reason) = preflight {
-            logger.info("Windows VM is not provisioned. diskImagePath=\(diskImagePath.path) reason=\(reason.rawValue)")
-            showSetupRequiredAlert(diskImagePath: diskImagePath, reason: reason)
-            return
-        }
-
-        Task {
-            do {
-                _ = try await daemonClient.ensureVMRunning()
-                let executable = arguments.dropFirst().first ?? "C:/Windows/System32/notepad.exe"
-                let request = ProgramLaunchRequest(windowsPath: executable)
-                try await daemonClient.executeProgram(request)
-                windowController.presentWindow(title: executable)
-            } catch {
-                logger.error("Failed to start Windows program: \(error)")
+        let setupFlowController = SetupFlowController(preflight: preflight)
+        self.setupFlowController = setupFlowController
+        setupFlowController.routeToSetupOrNormalOperation {
+            Task {
+                do {
+                    _ = try await daemonClient.ensureVMRunning()
+                    let executable = arguments.dropFirst().first ?? "C:/Windows/System32/notepad.exe"
+                    let request = ProgramLaunchRequest(windowsPath: executable)
+                    try await daemonClient.executeProgram(request)
+                    windowController.presentWindow(title: executable)
+                } catch {
+                    logger.error("Failed to start Windows program: \(error)")
+                }
             }
         }
     }
@@ -49,34 +48,6 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.mainMenu = mainMenu
         NSApplication.shared.windowsMenu = windowMenu
         NSApplication.shared.helpMenu = helpMenu
-    }
-
-    private func showSetupRequiredAlert(diskImagePath: URL, reason: ProvisioningPreflightResult.Reason) {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "Windows setup required"
-
-        let reasonText: String = switch reason {
-        case .diskImageMissing:
-            "No Windows VM disk image was found."
-        case .diskImageIsDirectory:
-            "The configured VM disk image path points to a directory."
-        }
-
-        alert.informativeText = """
-        \(reasonText)
-
-        Expected disk image at:
-        \(diskImagePath.path)
-
-        For now, you can provision Windows via the CLI:
-          winrun init
-        """
-
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
     }
 
     private func createAppMenuItem() -> NSMenuItem {

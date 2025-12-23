@@ -78,15 +78,15 @@
     - [X] Add unit tests for provisioning message serialization { guest/WinRunAgent.Tests/MessagesTests.cs, host/Tests/WinRunSpiceBridgeTests/SpiceProtocolTests.swift } <docs/development.md>
 
 - [ ] Setup UI (First-Run Experience) { host/Sources/WinRunApp/Setup/, host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] First-run detection + setup flow routing { host/Sources/WinRunApp/AppMain.swift, new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
+  - [X] First-run detection + setup flow routing { host/Sources/WinRunApp/AppMain.swift, new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Detect missing VM disk image on app launch { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Route to setup wizard vs normal operation { new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] Welcome + ISO acquisition view { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Display welcome message and Windows requirements { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Link to Microsoft Windows ARM download page { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Recommend Windows 11 IoT Enterprise LTSC 2024 ARM64 { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Route to setup wizard vs normal operation { new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Welcome + ISO acquisition view { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Display welcome message and Windows requirements { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Link to Microsoft Windows ARM download page { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Recommend Windows 11 IoT Enterprise LTSC 2024 ARM64 { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] ISO import view with drag-drop { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Implement drag-drop zone for ISO files { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Implement drag-drop zone for ISO files { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Add file picker fallback for accessibility { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Display validation results and warnings inline { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] Installation progress view { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
