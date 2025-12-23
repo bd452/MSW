@@ -217,6 +217,24 @@ public actor SpiceControlChannel {
         }
     }
 
+    /// Request a list of detected shortcuts from the guest.
+    /// - Parameter timeout: Maximum time to wait for response
+    /// - Returns: List of Windows shortcuts
+    public func listShortcuts(timeout: Duration = .seconds(5)) async throws -> WindowsShortcutList {
+        let messageId = nextMessageId()
+        let request = ListShortcutsSpiceMessage(messageId: messageId)
+
+        logger.debug("Sending ListShortcuts request (messageId: \(messageId))")
+
+        let response = try await sendAndWait(request, messageId: messageId, timeout: timeout)
+
+        guard let shortcutList = response as? ShortcutListMessage else {
+            throw SpiceControlError.unexpectedResponse("Expected ShortcutListMessage, got \(type(of: response))")
+        }
+
+        return shortcutList.toWindowsShortcutList()
+    }
+
     // MARK: - Internal Message Handling
 
     /// Called when data is received from the Spice channel.
@@ -230,6 +248,7 @@ public actor SpiceControlChannel {
         // Check if this is a response to a pending request
         let messageId: UInt32? = switch message {
         case let msg as SessionListMessage: msg.messageId
+        case let msg as ShortcutListMessage: msg.messageId
         case let msg as AckMessage: msg.messageId
         case let msg as GuestErrorMessage: msg.relatedMessageId
         default: nil

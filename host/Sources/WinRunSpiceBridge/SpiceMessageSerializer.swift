@@ -62,6 +62,8 @@ public enum SpiceMessageSerializer {
             type = .listSessions
         case is CloseSessionSpiceMessage:
             type = .closeSession
+        case is ListShortcutsSpiceMessage:
+            type = .listShortcuts
         case is ShutdownSpiceMessage:
             type = .shutdown
         default:
@@ -182,6 +184,8 @@ public enum SpiceMessageSerializer {
             return try decoder.decode(ProvisionCompleteMessage.self, from: payload)
         case .sessionList:
             return try decoder.decode(SessionListMessage.self, from: payload)
+        case .shortcutList:
+            return try decoder.decode(ShortcutListMessage.self, from: payload)
         case .error:
             return try decoder.decode(GuestErrorMessage.self, from: payload)
         case .ack:

@@ -32,6 +32,7 @@ public enum SpiceMessageType : byte
     DragDropEvent = 0x06,
     ListSessions = 0x08,
     CloseSession = 0x09,
+    ListShortcuts = 0x0A,
     Shutdown = 0x0F,
 
     // Guest → Host (0x80-0xFF)
@@ -48,6 +49,7 @@ public enum SpiceMessageType : byte
     ProvisionError = 0x8A,
     ProvisionComplete = 0x8B,
     SessionList = 0x8C,
+    ShortcutList = 0x8D,
     Error = 0xFE,
     Ack = 0xFF
 }
@@ -177,6 +179,11 @@ public sealed record CloseSessionMessage : HostMessage
 {
     public required string SessionId { get; init; }
 }
+
+/// <summary>
+/// Request to list all detected shortcuts.
+/// </summary>
+public sealed record ListShortcutsMessage : HostMessage;
 
 // ============================================================================
 // Guest → Host Messages
@@ -385,6 +392,36 @@ public sealed record SessionListMessage : GuestMessage
     /// List of active sessions.
     /// </summary>
     public required SessionInfo[] Sessions { get; init; }
+}
+
+/// <summary>
+/// Individual shortcut information for the shortcut list response.
+/// </summary>
+public sealed record ShortcutListItem
+{
+    public required string ShortcutPath { get; init; }
+    public required string TargetPath { get; init; }
+    public required string DisplayName { get; init; }
+    public string? IconPath { get; init; }
+    public int IconIndex { get; init; }
+    public string? Arguments { get; init; }
+    public string? WorkingDirectory { get; init; }
+}
+
+/// <summary>
+/// Response message containing the list of detected shortcuts.
+/// </summary>
+public sealed record ShortcutListMessage : GuestMessage
+{
+    /// <summary>
+    /// The message ID this is responding to.
+    /// </summary>
+    public required uint MessageId { get; init; }
+
+    /// <summary>
+    /// List of detected shortcuts.
+    /// </summary>
+    public required ShortcutListItem[] Shortcuts { get; init; }
 }
 
 // ============================================================================
@@ -636,6 +673,7 @@ public static class SpiceMessageSerializer
             ProvisionErrorMessage => SpiceMessageType.ProvisionError,
             ProvisionCompleteMessage => SpiceMessageType.ProvisionComplete,
             SessionListMessage => SpiceMessageType.SessionList,
+            ShortcutListMessage => SpiceMessageType.ShortcutList,
             ErrorMessage => SpiceMessageType.Error,
             AckMessage => SpiceMessageType.Ack,
             _ => throw new ArgumentException($"Unknown message type: {message.GetType()}")
@@ -686,6 +724,7 @@ public static class SpiceMessageSerializer
             SpiceMessageType.DragDropEvent => JsonSerializer.Deserialize<DragDropMessage>(payload, JsonOptions),
             SpiceMessageType.ListSessions => JsonSerializer.Deserialize<ListSessionsMessage>(payload, JsonOptions),
             SpiceMessageType.CloseSession => JsonSerializer.Deserialize<CloseSessionMessage>(payload, JsonOptions),
+            SpiceMessageType.ListShortcuts => JsonSerializer.Deserialize<ListShortcutsMessage>(payload, JsonOptions),
             SpiceMessageType.Shutdown => JsonSerializer.Deserialize<ShutdownMessage>(payload, JsonOptions),
 
             // Guest → Host (not deserialized on guest side)
@@ -702,6 +741,7 @@ public static class SpiceMessageSerializer
             SpiceMessageType.ProvisionError => null,
             SpiceMessageType.ProvisionComplete => null,
             SpiceMessageType.SessionList => null,
+            SpiceMessageType.ShortcutList => null,
             SpiceMessageType.Error => null,
             SpiceMessageType.Ack => null,
 
@@ -956,6 +996,26 @@ public static class SpiceMessageSerializer
                     _ => SessionStateType.Active
                 },
                 WindowCount = s.WindowCount
+            })]
+        };
+
+    /// <summary>
+    /// Creates a shortcut list message from the shortcut service.
+    /// </summary>
+    public static ShortcutListMessage CreateShortcutList(
+        uint messageId,
+        IEnumerable<ShortcutInfo> shortcuts) => new()
+        {
+            MessageId = messageId,
+            Shortcuts = [.. shortcuts.Select(s => new ShortcutListItem
+            {
+                ShortcutPath = s.ShortcutPath,
+                TargetPath = s.TargetPath,
+                DisplayName = s.DisplayName,
+                IconPath = s.IconPath,
+                IconIndex = s.IconIndex,
+                Arguments = s.Arguments,
+                WorkingDirectory = s.WorkingDirectory
             })]
         };
 }

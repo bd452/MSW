@@ -181,8 +181,28 @@ import Security
         Task { [self] in
             do {
                 try await checkThrottle()
-                // TODO: Query guest agent for detected shortcuts
-                // For now, return empty list - will be populated when guest agent is connected
+
+                // Query guest agent for detected shortcuts
+                let vmState = await vmController.currentState()
+                guard vmState.status == .running else {
+                    // VM not running, return empty list
+                    let shortcuts = WindowsShortcutList(shortcuts: [])
+                    reply(try encode(shortcuts), nil)
+                    return
+                }
+
+                // Ensure control channel is connected
+                if await !controlChannel.connected {
+                    try await controlChannel.connect()
+                }
+
+                // Request shortcuts from guest
+                let shortcuts = try await controlChannel.listShortcuts()
+                logger.info("Retrieved \(shortcuts.shortcuts.count) shortcuts from guest")
+                reply(try encode(shortcuts), nil)
+            } catch let error as SpiceControlError {
+                // For control errors, return empty list with warning
+                logger.warn("Failed to list shortcuts: \(error.description)")
                 let shortcuts = WindowsShortcutList(shortcuts: [])
                 reply(try encode(shortcuts), nil)
             } catch {
@@ -192,19 +212,164 @@ import Security
     }
 
     func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void) {
-        let path = destinationPath as String
+        let destinationRoot = URL(fileURLWithPath: destinationPath as String, isDirectory: true)
         Task { [self] in
             do {
                 try await checkThrottle()
-                logger.info("Would sync shortcuts to \(path)")
-                // TODO: Fetch shortcuts from guest, create launchers
-                // For now, return empty result
+
+                // Get shortcuts from guest
+                let vmState = await vmController.currentState()
+                guard vmState.status == .running else {
+                    logger.warn("Cannot sync shortcuts - VM not running")
+                    let result = ShortcutSyncResult(created: 0, skipped: 0, failed: 0, launcherPaths: [])
+                    reply(try encode(result), nil)
+                    return
+                }
+
+                // Ensure control channel is connected
+                if await !controlChannel.connected {
+                    try await controlChannel.connect()
+                }
+
+                // Request shortcuts from guest
+                let shortcuts = try await controlChannel.listShortcuts()
+                logger.info("Syncing \(shortcuts.shortcuts.count) shortcuts to \(destinationRoot.path)")
+
+                // Create destination directory if needed
+                let fm = FileManager.default
+                try fm.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
+
+                var created = 0
+                var skipped = 0
+                var failed = 0
+                var launcherPaths: [String] = []
+
+                for shortcut in shortcuts.shortcuts {
+                    let bundlePath = destinationRoot.appendingPathComponent("\(shortcut.displayName).app", isDirectory: true)
+
+                    // Skip if already exists
+                    if fm.fileExists(atPath: bundlePath.path) {
+                        logger.debug("Skipping existing launcher: \(shortcut.displayName)")
+                        skipped += 1
+                        continue
+                    }
+
+                    do {
+                        try createLauncherBundle(
+                            at: bundlePath,
+                            windowsPath: shortcut.targetPath,
+                            displayName: shortcut.displayName,
+                            arguments: shortcut.arguments
+                        )
+                        launcherPaths.append(bundlePath.path)
+                        created += 1
+                        logger.info("Created launcher: \(shortcut.displayName)")
+                    } catch {
+                        logger.error("Failed to create launcher for \(shortcut.displayName): \(error)")
+                        failed += 1
+                    }
+                }
+
+                let result = ShortcutSyncResult(
+                    created: created,
+                    skipped: skipped,
+                    failed: failed,
+                    launcherPaths: launcherPaths
+                )
+                reply(try encode(result), nil)
+            } catch let error as SpiceControlError {
+                logger.error("Failed to sync shortcuts: \(error.description)")
                 let result = ShortcutSyncResult(created: 0, skipped: 0, failed: 0, launcherPaths: [])
                 reply(try encode(result), nil)
             } catch {
                 reply(nil, nsError(error))
             }
         }
+    }
+
+    /// Creates a minimal macOS .app launcher bundle for a Windows executable.
+    private func createLauncherBundle(
+        at bundleURL: URL,
+        windowsPath: String,
+        displayName: String,
+        arguments: String?
+    ) throws {
+        let fm = FileManager.default
+        let contents = bundleURL.appendingPathComponent("Contents", isDirectory: true)
+        let macOS = contents.appendingPathComponent("MacOS", isDirectory: true)
+        let resources = contents.appendingPathComponent("Resources", isDirectory: true)
+
+        try fm.createDirectory(at: macOS, withIntermediateDirectories: true)
+        try fm.createDirectory(at: resources, withIntermediateDirectories: true)
+
+        // Create launcher script
+        let launcherPath = macOS.appendingPathComponent("launcher")
+        let escapedPath = windowsPath.replacingOccurrences(of: "\"", with: "\\\"")
+        var script = """
+            #!/bin/bash
+            # WinRun launcher - Generated by winrund shortcut sync
+            exec open -n /Applications/WinRun.app --args "\(escapedPath)"
+            """
+        if let args = arguments, !args.isEmpty {
+            script += " \(args)"
+        }
+        script += " \"$@\"\n"
+
+        try script.write(to: launcherPath, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcherPath.path)
+
+        // Create Info.plist
+        let sanitizedName = displayName
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "." }
+        let bundleId = "com.winrun.launcher.\(sanitizedName)"
+
+        let infoPlist = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>CFBundleName</key>
+                <string>\(escapeXml(displayName))</string>
+                <key>CFBundleDisplayName</key>
+                <string>\(escapeXml(displayName))</string>
+                <key>CFBundleIdentifier</key>
+                <string>\(escapeXml(bundleId))</string>
+                <key>CFBundleVersion</key>
+                <string>1.0</string>
+                <key>CFBundleShortVersionString</key>
+                <string>1.0</string>
+                <key>CFBundleExecutable</key>
+                <string>launcher</string>
+                <key>CFBundlePackageType</key>
+                <string>APPL</string>
+                <key>CFBundleInfoDictionaryVersion</key>
+                <string>6.0</string>
+                <key>LSMinimumSystemVersion</key>
+                <string>13.0</string>
+                <key>NSHighResolutionCapable</key>
+                <true/>
+            </dict>
+            </plist>
+
+            """
+
+        try infoPlist.write(
+            to: contents.appendingPathComponent("Info.plist"),
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    private func escapeXml(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
 
     private func encode<T: Encodable>(_ value: T) throws -> NSData {
@@ -222,220 +387,6 @@ import Security
         return NSError(domain: "com.winrun.daemon", code: 1, userInfo: [
             NSLocalizedDescriptionKey: error.localizedDescription
         ])
-    }
-}
-
-final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
-    private let logger: Logger
-    private let service: WinRunDaemonService
-    private let authConfig: XPCAuthenticationConfig
-
-    init(service: WinRunDaemonService, logger: Logger, authConfig: XPCAuthenticationConfig = .development) {
-        self.service = service
-        self.logger = logger
-        self.authConfig = authConfig
-    }
-
-    func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
-        let clientPid = connection.processIdentifier
-        let clientUid = connection.effectiveUserIdentifier
-
-        // Authenticate the connection
-        do {
-            try authenticateConnection(connection)
-        } catch {
-            logger.error("Rejected XPC connection from PID \(clientPid): \(error)")
-            return false
-        }
-
-        // Create a per-connection service wrapper that tracks the client ID
-        let connectionService = ConnectionServiceWrapper(
-            service: service,
-            clientId: "pid-\(clientPid)-uid-\(clientUid)"
-        )
-
-        connection.exportedInterface = NSXPCInterface(with: WinRunDaemonXPC.self)
-        connection.exportedObject = connectionService
-
-        connection.invalidationHandler = { [weak self] in
-            self?.logger.debug("XPC connection from PID \(clientPid) invalidated")
-        }
-
-        connection.interruptionHandler = { [weak self] in
-            self?.logger.warn("XPC connection from PID \(clientPid) interrupted")
-        }
-
-        connection.resume()
-        logger.info("Accepted XPC connection from PID \(clientPid) UID \(clientUid)")
-        return true
-    }
-
-    /// Authenticate an XPC connection based on configured policies
-    private func authenticateConnection(_ connection: NSXPCConnection) throws {
-        let clientPid = connection.processIdentifier
-        let clientUid = connection.effectiveUserIdentifier
-
-        // 1. Check group membership if configured
-        if let groupName = authConfig.allowedGroupName {
-            try verifyGroupMembership(uid: clientUid, groupName: groupName)
-        }
-
-        // 2. Verify code signature if not allowing unsigned clients
-        if !authConfig.allowUnsignedClients {
-            try verifyCodeSignature(pid: clientPid)
-        }
-
-        logger.debug("Authentication passed for PID \(clientPid)")
-    }
-
-    /// Verify that the user belongs to the required group
-    private func verifyGroupMembership(uid: uid_t, groupName: String) throws {
-        // Get the group entry
-        guard let group = getgrnam(groupName) else {
-            logger.warn("Group '\(groupName)' not found, skipping group check")
-            return
-        }
-
-        let gid = group.pointee.gr_gid
-
-        // Check if user's primary group matches
-        guard let pwd = getpwuid(uid) else {
-            throw XPCAuthenticationError.userNotInAllowedGroup(user: uid, group: groupName)
-        }
-
-        if pwd.pointee.pw_gid == gid {
-            return // Primary group matches
-        }
-
-        // Check supplementary groups
-        var groups = [Int32](repeating: 0, count: 64)
-        var ngroups: Int32 = 64
-
-        guard let username = pwd.pointee.pw_name else {
-            throw XPCAuthenticationError.userNotInAllowedGroup(user: uid, group: groupName)
-        }
-
-        let baseGid = Int32(bitPattern: UInt32(pwd.pointee.pw_gid))
-        if getgrouplist(username, baseGid, &groups, &ngroups) == -1 {
-            logger.warn("Failed to get group list for UID \(uid)")
-            throw XPCAuthenticationError.userNotInAllowedGroup(user: uid, group: groupName)
-        }
-
-        let targetGid = Int32(bitPattern: UInt32(gid))
-        let userGroups = Array(groups.prefix(Int(ngroups)))
-        guard userGroups.contains(targetGid) else {
-            throw XPCAuthenticationError.userNotInAllowedGroup(user: uid, group: groupName)
-        }
-    }
-
-    /// Verify the code signature of the connecting process
-    private func verifyCodeSignature(pid: pid_t) throws {
-        var code: SecCode?
-        var status = SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid: pid] as CFDictionary, [], &code)
-
-        guard status == errSecSuccess, let secCode = code else {
-            throw XPCAuthenticationError.invalidCodeSignature(details: "Failed to get SecCode for PID \(pid): \(status)")
-        }
-
-        // Validate the code signature
-        status = SecCodeCheckValidity(secCode, [], nil)
-        guard status == errSecSuccess else {
-            throw XPCAuthenticationError.invalidCodeSignature(details: "Code signature invalid for PID \(pid): \(status)")
-        }
-
-        // Convert to static code to get signing information
-        var staticCode: SecStaticCode?
-        status = SecCodeCopyStaticCode(secCode, [], &staticCode)
-
-        guard status == errSecSuccess, let secStaticCode = staticCode else {
-            logger.debug("Could not get static code for PID \(pid), but dynamic signature is valid")
-            return
-        }
-
-        // Get signing information
-        var info: CFDictionary?
-        status = SecCodeCopySigningInformation(secStaticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info)
-
-        guard status == errSecSuccess, let signingInfo = info as? [String: Any] else {
-            logger.debug("Could not retrieve signing info for PID \(pid), but signature is valid")
-            return
-        }
-
-        // Check team identifier if configured
-        if let expectedTeamId = authConfig.teamIdentifier {
-            let actualTeamId = signingInfo[kSecCodeInfoTeamIdentifier as String] as? String
-            guard actualTeamId == expectedTeamId else {
-                throw XPCAuthenticationError.unauthorizedTeamIdentifier(expected: expectedTeamId, actual: actualTeamId)
-            }
-        }
-
-        // Check bundle identifier prefix
-        if let bundleId = signingInfo[kSecCodeInfoIdentifier as String] as? String {
-            let prefixMatch = authConfig.allowedBundleIdentifierPrefixes.contains { prefix in
-                bundleId.hasPrefix(prefix)
-            }
-
-            // Allow if no prefixes configured or prefix matches
-            if !authConfig.allowedBundleIdentifierPrefixes.isEmpty && !prefixMatch {
-                throw XPCAuthenticationError.unauthorizedBundleIdentifier(identifier: bundleId)
-            }
-        }
-    }
-}
-
-/// Wrapper that sets client ID on the service for each request
-@objc final class ConnectionServiceWrapper: NSObject, WinRunDaemonXPC {
-    private let service: WinRunDaemonService
-    private let clientId: String
-
-    init(service: WinRunDaemonService, clientId: String) {
-        self.service = service
-        self.clientId = clientId
-    }
-
-    func ensureVMRunning(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.ensureVMRunning(reply)
-    }
-
-    func executeProgram(_ requestData: NSData, reply: @escaping (NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.executeProgram(requestData, reply: reply)
-    }
-
-    func getStatus(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.getStatus(reply)
-    }
-
-    func suspendIfIdle(_ reply: @escaping (NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.suspendIfIdle(reply)
-    }
-
-    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.stopVM(reply)
-    }
-
-    func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.listSessions(reply)
-    }
-
-    func closeSession(_ sessionId: NSString, reply: @escaping (NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.closeSession(sessionId, reply: reply)
-    }
-
-    func listShortcuts(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.listShortcuts(reply)
-    }
-
-    func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.syncShortcuts(destinationPath, reply: reply)
     }
 }
 

@@ -191,3 +191,12 @@ public struct CloseSessionSpiceMessage: HostMessage {
         self.sessionId = sessionId
     }
 }
+
+/// Request to list all detected shortcuts from the guest.
+public struct ListShortcutsSpiceMessage: HostMessage {
+    public let messageId: UInt32
+
+    public init(messageId: UInt32) {
+        self.messageId = messageId
+    }
+}
