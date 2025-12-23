@@ -239,64 +239,13 @@ import Security
                 let fm = FileManager.default
                 try fm.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
 
-                var created = 0
-                var skipped = 0
-                var failed = 0
-                var launcherPaths: [String] = []
-
-                for shortcut in shortcuts.shortcuts {
-                    // Sanitize displayName to prevent path traversal attacks
-                    // Remove any path separators and ".." components from guest-provided data
-                    let sanitizedDisplayName = sanitizeDisplayName(shortcut.displayName)
-
-                    guard !sanitizedDisplayName.isEmpty else {
-                        logger.warn("Skipping shortcut with empty/invalid display name")
-                        failed += 1
-                        continue
-                    }
-
-                    let bundlePath = destinationRoot.appendingPathComponent(
-                        "\(sanitizedDisplayName).app", isDirectory: true)
-
-                    // Verify the resolved path is still within destination (defense in depth)
-                    let resolvedPath = bundlePath.standardizedFileURL.path
-                    let destPath = destinationRoot.standardizedFileURL.path
-                    guard resolvedPath.hasPrefix(destPath) else {
-                        logger.error("Path traversal attempt blocked for: \(shortcut.displayName)")
-                        failed += 1
-                        continue
-                    }
-
-                    // Skip if already exists
-                    if fm.fileExists(atPath: bundlePath.path) {
-                        logger.debug("Skipping existing launcher: \(sanitizedDisplayName)")
-                        skipped += 1
-                        continue
-                    }
-
-                    do {
-                        try createLauncherBundle(
-                            at: bundlePath,
-                            windowsPath: shortcut.targetPath,
-                            displayName: sanitizedDisplayName,
-                            arguments: shortcut.arguments
-                        )
-                        launcherPaths.append(bundlePath.path)
-                        created += 1
-                        logger.info("Created launcher: \(sanitizedDisplayName)")
-                    } catch {
-                        logger.error("Failed to create launcher for \(sanitizedDisplayName): \(error)")
-                        failed += 1
-                    }
-                }
-
-                let result = ShortcutSyncResult(
-                    created: created,
-                    skipped: skipped,
-                    failed: failed,
-                    launcherPaths: launcherPaths
+                // Process each shortcut
+                let syncResult = processShortcuts(
+                    shortcuts.shortcuts,
+                    destinationRoot: destinationRoot,
+                    fileManager: fm
                 )
-                reply(try encode(result), nil)
+                reply(try encode(syncResult), nil)
             } catch let error as SpiceControlError {
                 logger.error("Failed to sync shortcuts: \(error.description)")
                 let result = ShortcutSyncResult(created: 0, skipped: 0, failed: 0, launcherPaths: [])
@@ -305,6 +254,70 @@ import Security
                 reply(nil, nsError(error))
             }
         }
+    }
+
+    /// Processes shortcuts and creates launcher bundles, returning sync results.
+    private func processShortcuts(
+        _ shortcuts: [WindowsShortcut],
+        destinationRoot: URL,
+        fileManager fm: FileManager
+    ) -> ShortcutSyncResult {
+        var created = 0
+        var skipped = 0
+        var failed = 0
+        var launcherPaths: [String] = []
+
+        let destPath = destinationRoot.standardizedFileURL.path
+
+        for shortcut in shortcuts {
+            // Sanitize displayName to prevent path traversal attacks
+            let sanitizedDisplayName = sanitizeDisplayName(shortcut.displayName)
+
+            guard !sanitizedDisplayName.isEmpty else {
+                logger.warn("Skipping shortcut with empty/invalid display name")
+                failed += 1
+                continue
+            }
+
+            let bundlePath = destinationRoot.appendingPathComponent(
+                "\(sanitizedDisplayName).app", isDirectory: true)
+
+            // Verify the resolved path is still within destination (defense in depth)
+            guard bundlePath.standardizedFileURL.path.hasPrefix(destPath) else {
+                logger.error("Path traversal attempt blocked for: \(shortcut.displayName)")
+                failed += 1
+                continue
+            }
+
+            // Skip if already exists
+            if fm.fileExists(atPath: bundlePath.path) {
+                logger.debug("Skipping existing launcher: \(sanitizedDisplayName)")
+                skipped += 1
+                continue
+            }
+
+            do {
+                try createLauncherBundle(
+                    at: bundlePath,
+                    windowsPath: shortcut.targetPath,
+                    displayName: sanitizedDisplayName,
+                    arguments: shortcut.arguments
+                )
+                launcherPaths.append(bundlePath.path)
+                created += 1
+                logger.info("Created launcher: \(sanitizedDisplayName)")
+            } catch {
+                logger.error("Failed to create launcher for \(sanitizedDisplayName): \(error)")
+                failed += 1
+            }
+        }
+
+        return ShortcutSyncResult(
+            created: created,
+            skipped: skipped,
+            failed: failed,
+            launcherPaths: launcherPaths
+        )
     }
 
     /// Creates a minimal macOS .app launcher bundle for a Windows executable.
