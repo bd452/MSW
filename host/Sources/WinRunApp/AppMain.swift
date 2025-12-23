@@ -13,6 +13,13 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
     func start(arguments: [String]) {
         setupMenuBar()
 
+        let config = ConfigStore().loadOrDefault()
+        if Self.requiresSetup(configuration: config) {
+            logger.info("Missing Windows VM disk image; routing to setup")
+            presentSetupRequiredAlert(diskImageURL: config.diskImagePath)
+            return
+        }
+
         Task {
             do {
                 _ = try await daemonClient.ensureVMRunning()
@@ -24,6 +31,15 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
                 logger.error("Failed to start Windows program: \(error)")
             }
         }
+    }
+
+    static func requiresSetup(
+        configuration: VMConfiguration,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        var isDirectory: ObjCBool = false
+        let exists = fileManager.fileExists(atPath: configuration.diskImagePath.path, isDirectory: &isDirectory)
+        return !exists || isDirectory.boolValue
     }
 
     // MARK: - Menu Bar Setup
@@ -165,6 +181,29 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         if let url = URL(string: "https://github.com/winrun/winrun") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    private func presentSetupRequiredAlert(diskImageURL: URL) {
+        let alert = NSAlert()
+        alert.messageText = "WinRun Setup Required"
+        alert.informativeText = """
+        WinRun couldn’t find the Windows VM disk image at:
+        \(diskImageURL.path)
+
+        To install Windows, run:
+          winrun init
+        """
+        alert.alertStyle = .warning
+
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Setup Instructions")
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            showHelp()
+        }
+
+        NSApplication.shared.terminate(nil)
     }
 }
 
