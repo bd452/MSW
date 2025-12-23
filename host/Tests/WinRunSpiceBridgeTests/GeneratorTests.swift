@@ -122,7 +122,7 @@ final class GeneratorTests: XCTestCase {
             }
 
             // Check message values are in correct ranges
-            if let match = line.firstMatch(of: /=\s*0x([0-9a-fA-F]+)/) {
+            if let match = line.firstMatch(of: try! Regex(#"=\s*0x([0-9a-fA-F]+)"#)) {
                 let hexValue = String(match.1)
                 if let value = Int(hexValue, radix: 16) {
                     if inHostToGuest {
