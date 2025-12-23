@@ -132,7 +132,10 @@ let package = Package(
         .executable(name: "winrun", targets: ["WinRunCLI"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
+        // swift-argument-parser 1.7.0 requires the experimental `AccessLevelOnImport` feature
+        // (`internal import ...`) with older Swift toolchains used in CI. Cap to the last
+        // compatible minor series.
+        .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.6.0"))
     ],
     targets: targets
 )
