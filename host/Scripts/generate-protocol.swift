@@ -139,26 +139,26 @@ func toHex(_ value: Int, minWidth: Int = 2) -> String {
 
 func generateSwift(_ def: ProtocolDefinition) -> String {
     var out = """
-    // Protocol.generated.swift
-    // AUTO-GENERATED FROM shared/protocol.def - DO NOT EDIT DIRECTLY
-    //
-    // To regenerate: make generate-protocol
-    // Source of truth: shared/protocol.def
+// Protocol.generated.swift
+// AUTO-GENERATED FROM shared/protocol.def - DO NOT EDIT DIRECTLY
+//
+// To regenerate: make generate-protocol
+// Source of truth: shared/protocol.def
 
-    import Foundation
+import Foundation
 
-    // MARK: - Protocol Version
+// MARK: - Protocol Version
 
-    /// Protocol version constants - generated from shared/protocol.def
-    public enum SpiceProtocolVersion {
-        public static let major: UInt16 = \(def.version.major)
-        public static let minor: UInt16 = \(def.version.minor)
-        public static var combined: UInt32 {
-            (UInt32(major) << 16) | UInt32(minor)
-        }
+/// Protocol version constants - generated from shared/protocol.def
+public enum SpiceProtocolVersion {
+    public static let major: UInt16 = \(def.version.major)
+    public static let minor: UInt16 = \(def.version.minor)
+    public static var combined: UInt32 {
+        (UInt32(major) << 16) | UInt32(minor)
     }
+}
 
-    // MARK: - Message Types
+// MARK: - Message Types
 
 /// Message type codes - generated from shared/protocol.def
 public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
@@ -180,19 +180,19 @@ public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
     
     out += """
 
-        public var isHostToGuest: Bool { rawValue < 0x80 }
-        public var isGuestToHost: Bool { rawValue >= 0x80 }
-    }
+    public var isHostToGuest: Bool { rawValue < 0x80 }
+    public var isGuestToHost: Bool { rawValue >= 0x80 }
+}
 
-    // MARK: - Guest Capabilities
+// MARK: - Guest Capabilities
 
-    /// Guest capability flags - generated from shared/protocol.def
-    public struct GuestCapabilities: OptionSet, Codable, Hashable, Sendable {
-        public let rawValue: UInt32
-        public init(rawValue: UInt32) { self.rawValue = rawValue }
+/// Guest capability flags - generated from shared/protocol.def
+public struct GuestCapabilities: OptionSet, Codable, Hashable, Sendable {
+    public let rawValue: UInt32
+    public init(rawValue: UInt32) { self.rawValue = rawValue }
 
 
-    """
+"""
     
     for (name, value) in def.capabilities {
         let caseName = toSwiftEnumCase(name, prefix: "CAP_")
@@ -201,12 +201,12 @@ public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
     
     out += """
 
-        public static let allCore: GuestCapabilities = [
-            .windowTracking, .desktopDuplication, .clipboardSync, .iconExtraction
-        ]
-    }
+    public static let allCore: GuestCapabilities = [
+        .windowTracking, .desktopDuplication, .clipboardSync, .iconExtraction
+    ]
+}
 
-    // MARK: - Mouse Input
+// MARK: - Mouse Input
 
 /// Mouse button codes - generated from shared/protocol.def
 public enum MouseButton: UInt8, Codable, Sendable {
@@ -219,7 +219,7 @@ public enum MouseButton: UInt8, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
 /// Mouse event types - generated from shared/protocol.def
 public enum MouseEventType: UInt8, Codable, Sendable {
@@ -232,9 +232,9 @@ public enum MouseEventType: UInt8, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
-    // MARK: - Keyboard Input
+// MARK: - Keyboard Input
 
 /// Key event types - generated from shared/protocol.def
 public enum KeyEventType: UInt8, Codable, Sendable {
@@ -247,15 +247,15 @@ public enum KeyEventType: UInt8, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
-    /// Key modifier flags - generated from shared/protocol.def
-    public struct KeyModifiers: OptionSet, Codable, Hashable, Sendable {
-        public let rawValue: UInt8
-        public init(rawValue: UInt8) { self.rawValue = rawValue }
+/// Key modifier flags - generated from shared/protocol.def
+public struct KeyModifiers: OptionSet, Codable, Hashable, Sendable {
+    public let rawValue: UInt8
+    public init(rawValue: UInt8) { self.rawValue = rawValue }
 
 
-    """
+"""
     
     for (name, value) in def.keyModifiers where name != "KEY_MOD_NONE" {
         let caseName = toSwiftEnumCase(name, prefix: "KEY_MOD_")
@@ -263,9 +263,9 @@ public enum KeyEventType: UInt8, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
-    // MARK: - Drag and Drop
+// MARK: - Drag and Drop
 
 /// Drag/drop event types - generated from shared/protocol.def
 public enum DragDropEventType: UInt8, Codable, Sendable {
@@ -278,7 +278,7 @@ public enum DragDropEventType: UInt8, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
 /// Drag operation types - generated from shared/protocol.def
 public enum DragOperation: UInt8, Codable, Sendable {
@@ -291,9 +291,9 @@ public enum DragOperation: UInt8, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
-    // MARK: - Pixel Formats
+// MARK: - Pixel Formats
 
 /// Pixel format types - generated from shared/protocol.def
 public enum SpicePixelFormat: UInt8, Codable, Sendable {
@@ -306,9 +306,9 @@ public enum SpicePixelFormat: UInt8, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
-    // MARK: - Window Events
+// MARK: - Window Events
 
 /// Window event types - generated from shared/protocol.def
 public enum WindowEventType: Int32, Codable, Sendable {
@@ -321,9 +321,9 @@ public enum WindowEventType: Int32, Codable, Sendable {
     }
     
     out += """
-    }
+}
 
-    // MARK: - Clipboard Formats
+// MARK: - Clipboard Formats
 
 /// Clipboard format identifiers - generated from shared/protocol.def
 public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
@@ -341,9 +341,9 @@ public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
     }
     
     out += """
-    }
+}
 
-    // MARK: - Provisioning Phases
+// MARK: - Provisioning Phases
 
 /// Provisioning phase identifiers - generated from shared/protocol.def
 public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
@@ -361,40 +361,40 @@ public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
     }
     
     out += """
-    }
+}
 
-    // MARK: - Backwards Compatibility Typealiases
-    // These allow existing code referencing Generated* types to continue working
-    // TODO: Remove these after migrating all code to use the canonical type names
+// MARK: - Backwards Compatibility Typealiases
+// These allow existing code referencing Generated* types to continue working
+// TODO: Remove these after migrating all code to use the canonical type names
 
-    @available(*, deprecated, renamed: "SpiceProtocolVersion")
-    public typealias GeneratedProtocolVersion = SpiceProtocolVersion
-    @available(*, deprecated, renamed: "SpiceMessageType")
-    public typealias GeneratedMessageType = SpiceMessageType
-    @available(*, deprecated, renamed: "GuestCapabilities")
-    public typealias GeneratedCapabilities = GuestCapabilities
-    @available(*, deprecated, renamed: "MouseButton")
-    public typealias GeneratedMouseButton = MouseButton
-    @available(*, deprecated, renamed: "MouseEventType")
-    public typealias GeneratedMouseEventType = MouseEventType
-    @available(*, deprecated, renamed: "KeyEventType")
-    public typealias GeneratedKeyEventType = KeyEventType
-    @available(*, deprecated, renamed: "KeyModifiers")
-    public typealias GeneratedKeyModifiers = KeyModifiers
-    @available(*, deprecated, renamed: "DragDropEventType")
-    public typealias GeneratedDragDropEventType = DragDropEventType
-    @available(*, deprecated, renamed: "DragOperation")
-    public typealias GeneratedDragOperation = DragOperation
-    @available(*, deprecated, renamed: "SpicePixelFormat")
-    public typealias GeneratedPixelFormat = SpicePixelFormat
-    @available(*, deprecated, renamed: "WindowEventType")
-    public typealias GeneratedWindowEventType = WindowEventType
-    @available(*, deprecated, renamed: "ClipboardFormat")
-    public typealias GeneratedClipboardFormat = ClipboardFormat
-    @available(*, deprecated, renamed: "GuestProvisioningPhase")
-    public typealias GeneratedProvisioningPhase = GuestProvisioningPhase
+@available(*, deprecated, renamed: "SpiceProtocolVersion")
+public typealias GeneratedProtocolVersion = SpiceProtocolVersion
+@available(*, deprecated, renamed: "SpiceMessageType")
+public typealias GeneratedMessageType = SpiceMessageType
+@available(*, deprecated, renamed: "GuestCapabilities")
+public typealias GeneratedCapabilities = GuestCapabilities
+@available(*, deprecated, renamed: "MouseButton")
+public typealias GeneratedMouseButton = MouseButton
+@available(*, deprecated, renamed: "MouseEventType")
+public typealias GeneratedMouseEventType = MouseEventType
+@available(*, deprecated, renamed: "KeyEventType")
+public typealias GeneratedKeyEventType = KeyEventType
+@available(*, deprecated, renamed: "KeyModifiers")
+public typealias GeneratedKeyModifiers = KeyModifiers
+@available(*, deprecated, renamed: "DragDropEventType")
+public typealias GeneratedDragDropEventType = DragDropEventType
+@available(*, deprecated, renamed: "DragOperation")
+public typealias GeneratedDragOperation = DragOperation
+@available(*, deprecated, renamed: "SpicePixelFormat")
+public typealias GeneratedPixelFormat = SpicePixelFormat
+@available(*, deprecated, renamed: "WindowEventType")
+public typealias GeneratedWindowEventType = WindowEventType
+@available(*, deprecated, renamed: "ClipboardFormat")
+public typealias GeneratedClipboardFormat = ClipboardFormat
+@available(*, deprecated, renamed: "GuestProvisioningPhase")
+public typealias GeneratedProvisioningPhase = GuestProvisioningPhase
 
-    """
+"""
     
     return out
 }
