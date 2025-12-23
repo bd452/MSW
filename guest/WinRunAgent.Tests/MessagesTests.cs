@@ -299,8 +299,16 @@ public sealed class MessagesTests
         Assert.True((byte)SpiceMessageType.ProvisionProgress >= 0x80);
         Assert.True((byte)SpiceMessageType.ProvisionError >= 0x80);
         Assert.True((byte)SpiceMessageType.ProvisionComplete >= 0x80);
+        Assert.True((byte)SpiceMessageType.SessionList >= 0x80);
         Assert.True((byte)SpiceMessageType.Error >= 0x80);
         Assert.True((byte)SpiceMessageType.Ack >= 0x80);
+    }
+
+    [Fact]
+    public void HostToGuestMessageTypesIncludeSessionMessages()
+    {
+        Assert.True((byte)SpiceMessageType.ListSessions <= 0x7F);
+        Assert.True((byte)SpiceMessageType.CloseSession <= 0x7F);
     }
 
     [Fact]
@@ -1120,6 +1128,136 @@ public sealed class MessagesTests
         Assert.Equal(0x89, (byte)SpiceMessageType.ProvisionProgress);
         Assert.Equal(0x8A, (byte)SpiceMessageType.ProvisionError);
         Assert.Equal(0x8B, (byte)SpiceMessageType.ProvisionComplete);
+    }
+
+    // ========================================================================
+    // Session Message Tests
+    // ========================================================================
+
+    [Fact]
+    public void SessionMessageTypesHaveCorrectRawValues()
+    {
+        // Verify specific values match the host's Swift enum
+        Assert.Equal(0x08, (byte)SpiceMessageType.ListSessions);
+        Assert.Equal(0x09, (byte)SpiceMessageType.CloseSession);
+        Assert.Equal(0x8C, (byte)SpiceMessageType.SessionList);
+    }
+
+    [Fact]
+    public void DeserializeListSessionsMessage()
+    {
+        var listSessions = new ListSessionsMessage
+        {
+            MessageId = 1000
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.ListSessions, listSessions);
+        var result = SpiceMessageSerializer.Deserialize(bytes);
+
+        Assert.NotNull(result);
+        var msg = Assert.IsType<ListSessionsMessage>(result);
+        Assert.Equal(1000u, msg.MessageId);
+    }
+
+    [Fact]
+    public void DeserializeCloseSessionMessage()
+    {
+        var closeSession = new CloseSessionMessage
+        {
+            MessageId = 1001,
+            SessionId = "12345"
+        };
+
+        var bytes = SerializeHostMessage(SpiceMessageType.CloseSession, closeSession);
+        var result = SpiceMessageSerializer.Deserialize(bytes);
+
+        Assert.NotNull(result);
+        var msg = Assert.IsType<CloseSessionMessage>(result);
+        Assert.Equal(1001u, msg.MessageId);
+        Assert.Equal("12345", msg.SessionId);
+    }
+
+    [Fact]
+    public void SerializeSessionListMessage()
+    {
+        var message = new SessionListMessage
+        {
+            MessageId = 1000,
+            Sessions =
+            [
+                new SessionInfo
+                {
+                    SessionId = "1234",
+                    ProcessId = 1234,
+                    ExecutablePath = @"C:\Windows\notepad.exe",
+                    WindowTitle = "Untitled - Notepad",
+                    StartTimeMs = 1700000000000,
+                    LastActivityMs = 1700000001000,
+                    State = SessionStateType.Active,
+                    WindowCount = 1
+                }
+            ]
+        };
+
+        var bytes = SpiceMessageSerializer.Serialize(message);
+
+        Assert.Equal((byte)SpiceMessageType.SessionList, bytes[0]);
+        Assert.True(bytes.Length > 5);
+    }
+
+    [Fact]
+    public void CreateSessionListFromProgramSessions()
+    {
+        // Create mock ProgramSessions
+        var session1 = new ProgramSession(1234, @"C:\Windows\notepad.exe");
+        var session2 = new ProgramSession(5678, @"C:\Program Files\App\app.exe");
+
+        var sessionList = SpiceMessageSerializer.CreateSessionList(100, [session1, session2]);
+
+        Assert.Equal(100u, sessionList.MessageId);
+        Assert.Equal(2, sessionList.Sessions.Length);
+
+        Assert.Equal("1234", sessionList.Sessions[0].SessionId);
+        Assert.Equal(1234, sessionList.Sessions[0].ProcessId);
+        Assert.Equal(@"C:\Windows\notepad.exe", sessionList.Sessions[0].ExecutablePath);
+
+        Assert.Equal("5678", sessionList.Sessions[1].SessionId);
+        Assert.Equal(5678, sessionList.Sessions[1].ProcessId);
+    }
+
+    [Fact]
+    public void SessionStateTypeSerializesToJson()
+    {
+        var session = new SessionInfo
+        {
+            SessionId = "1",
+            ProcessId = 1,
+            ExecutablePath = "test.exe",
+            StartTimeMs = 0,
+            LastActivityMs = 0,
+            State = SessionStateType.Active,
+            WindowCount = 0
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(session, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) }
+        });
+
+        // State should serialize to camelCase string "active"
+        Assert.Contains("\"state\":\"active\"", json);
+    }
+
+    [Fact]
+    public void AllSessionStateTypesAreDefined()
+    {
+        var states = Enum.GetValues<SessionStateType>();
+
+        Assert.Contains(SessionStateType.Starting, states);
+        Assert.Contains(SessionStateType.Active, states);
+        Assert.Contains(SessionStateType.Idle, states);
+        Assert.Contains(SessionStateType.Exited, states);
     }
 
     private static byte[] SerializeHostMessage<T>(SpiceMessageType type, T message) where T : HostMessage
