@@ -628,7 +628,7 @@ static void on_clipboard_grab(SpiceMainChannel *channel, guint selection,
     (void)channel;
     (void)selection;
     winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
-    if (!stream || ntypes == 0) {
+    if (!stream || !types || ntypes == 0) {
         return;
     }
 
