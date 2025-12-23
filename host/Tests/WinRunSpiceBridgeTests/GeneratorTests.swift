@@ -122,9 +122,10 @@ final class GeneratorTests: XCTestCase {
             }
 
             // Check message values are in correct ranges
-            if let match = line.firstMatch(of: try! Regex(#"=\s*0x([0-9a-fA-F]+)"#)) {
-                let hexValue = String(match.1)
-                if let value = Int(hexValue, radix: 16) {
+            // Extract hex value after "= 0x" pattern
+            if let eqRange = line.range(of: "= 0x") {
+                let hexPart = line[eqRange.upperBound...].prefix(while: { $0.isHexDigit })
+                if let value = Int(hexPart, radix: 16) {
                     if inHostToGuest {
                         XCTAssertLessThan(value, 0x80, "Host→Guest message \(line) should be < 0x80")
                     }
