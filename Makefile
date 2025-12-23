@@ -146,9 +146,11 @@ LIVE_LOG ?= 1
 # How often we refresh logs (seconds). Lower feels "more live" but hits API harder.
 LIVE_LOG_REFRESH_SECONDS ?= 2
 # Safety: avoid hanging forever if status/log fetching gets stuck.
-# Total seconds before aborting log streaming (0 = no timeout).
-# Default: 30 minutes (reasonable for local dev).
-LIVE_LOG_TIMEOUT_SECONDS ?= 1800
+# Abort if we haven't seen any *new log lines* for this many seconds (0 = no timeout).
+LIVE_LOG_IDLE_TIMEOUT_SECONDS ?= 300
+# Optional hard cap on total wall-clock waiting time (0 = no timeout).
+# Generally you want the idle timeout, not a hard cap.
+LIVE_LOG_TIMEOUT_SECONDS ?= 0
 # Abort after this many consecutive log fetch failures (rate limits, transient API errors).
 LIVE_LOG_MAX_CONSECUTIVE_ERRORS ?= 60
 
@@ -228,12 +230,14 @@ define run-remote-workflow
 	echo ""; \
 	if [ "$(LIVE_LOG)" = "1" ]; then \
 		echo "📺 Streaming workflow logs (best-effort, refresh $(LIVE_LOG_REFRESH_SECONDS)s)..."; \
-		echo "   Tip: disable with LIVE_LOG=0 (or tune LIVE_LOG_REFRESH_SECONDS / LIVE_LOG_TIMEOUT_SECONDS)"; \
+		echo "   Tip: disable with LIVE_LOG=0"; \
+		echo "   Knobs: LIVE_LOG_REFRESH_SECONDS, LIVE_LOG_IDLE_TIMEOUT_SECONDS, LIVE_LOG_TIMEOUT_SECONDS"; \
 		echo ""; \
 		LAST_LINES=0; \
 		TMP_LOG="/tmp/gh-run-$$RUN_ID.log"; \
 		TMP_LOG_NEW="/tmp/gh-run-$$RUN_ID.log.new"; \
 		START_TS=$$(date +%s); \
+		LAST_NEWLINE_TS="$$START_TS"; \
 		ERRORS=0; \
 		trap 'rm -f "$$TMP_LOG" "$$TMP_LOG_NEW" 2>/dev/null || true' EXIT INT TERM; \
 		: > "$$TMP_LOG"; \
@@ -245,6 +249,12 @@ define run-remote-workflow
 				echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 				exit 124; \
 			fi; \
+			if [ "$(LIVE_LOG_IDLE_TIMEOUT_SECONDS)" != "0" ] && [ $$((NOW_TS-LAST_NEWLINE_TS)) -gt "$(LIVE_LOG_IDLE_TIMEOUT_SECONDS)" ]; then \
+				echo ""; \
+				echo "❌ No new log output for $(LIVE_LOG_IDLE_TIMEOUT_SECONDS)s; aborting log stream."; \
+				echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
+				exit 124; \
+			fi; \
 			STATUS=$$(gh run view "$$RUN_ID" --json status --jq '.status' 2>/dev/null || echo ""); \
 			if gh run view "$$RUN_ID" --log > "$$TMP_LOG_NEW" 2>/dev/null; then \
 				ERRORS=0; \
@@ -252,6 +262,7 @@ define run-remote-workflow
 				if [ "$$NEW_LINES" -gt "$$LAST_LINES" ]; then \
 					tail -n +$$((LAST_LINES+1)) "$$TMP_LOG_NEW"; \
 					LAST_LINES="$$NEW_LINES"; \
+					LAST_NEWLINE_TS="$$(date +%s)"; \
 				fi; \
 				mv "$$TMP_LOG_NEW" "$$TMP_LOG"; \
 			else \
