@@ -413,16 +413,20 @@ To enforce CI checks before merge, configure branch protection in GitHub:
    - ☑️ Require status checks to pass before merging
    - ☑️ Require branches to be up to date before merging
 4. Select required status checks:
-   - `Host (macOS) / Build & Test`
-   - `Host (macOS) / Lint`
-   - `Guest (Windows) / Build & Test`
-   - `Guest (Windows) / Lint`
+   - `CI` (the final gate job that aggregates all results)
 5. Save changes
+
+> **Note:** Only require the `CI` job, not individual jobs. Individual jobs may be skipped when their files haven't changed, but the `CI` gate handles this correctly.
 
 ### Path-Based Triggers
 
-CI workflows only run when relevant files change:
-- **Host workflow**: Triggered by changes in `host/**`
-- **Guest workflow**: Triggered by changes in `guest/**`
+CI jobs only run when relevant files change:
 
-This saves CI minutes when changes are isolated to one platform.
+| Job | Triggered by changes in |
+|-----|------------------------|
+| Host Build & Test | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
+| Host Lint | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
+| Guest Build & Test | `guest/**`, `.github/workflows/ci.yml` |
+| Guest Lint | `guest/**`, `.github/workflows/ci.yml` |
+
+This saves CI minutes when changes are isolated to one platform. The final `CI` gate job treats skipped jobs as successful.
