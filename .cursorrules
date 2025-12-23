@@ -211,20 +211,28 @@ Tests are not optional for qualifying code — CI will enforce this by requiring
 
 #### Running Tests & Checks
 ```bash
-# Full CI check (lint + build + test) — run before pushing
+# Full CI check (lint + build + test) — run before pushing (requires macOS for host)
 make check
+
+# Linux-friendly check (lint both + guest build/test only)
+make check-linux
 
 # All tests only
 make test
 
-# Host only
+# Host only (requires macOS)
 make check-host   # lint + build + test
 make test-host    # test only
 
-# Guest only (requires .NET 8 SDK or use remote)
+# Guest only (requires .NET SDK)
 make check-guest        # lint + build + test (local) - NOTE: doesn't catch CRLF issues on macOS
 make test-guest         # test only (local)
 make test-guest-remote  # test on Windows via GitHub Actions (REQUIRED for guest code changes)
+
+# Remote execution (opt-in, via GitHub Actions)
+make test-host-remote   # run host tests on macOS remotely
+make check-host-remote  # run full host CI on macOS remotely
+make check-remote       # run full CI remotely (host on macOS, guest on Windows)
 ```
 
 > **Critical for Guest Code**: Always run `make test-guest-remote` after modifying guest code. This is required because:

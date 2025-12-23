@@ -115,14 +115,19 @@ cd guest && dotnet build WinRunAgent.sln
 ### Testing
 
 ```bash
-# Run all tests
+# Run all tests (requires macOS for host)
 make test
 
-# Host tests only
-make test-host
+# Linux-friendly checks (lint + guest build/test)
+make check-linux
 
-# Guest tests (requires Windows or use remote)
-make test-guest-remote  # Runs on Windows via GitHub Actions
+# Host tests
+make test-host          # Local (requires macOS)
+make test-host-remote   # Remote via GitHub Actions
+
+# Guest tests
+make test-guest         # Local (requires .NET SDK)
+make test-guest-remote  # Remote via GitHub Actions (recommended for CI parity)
 ```
 
 ### Documentation
