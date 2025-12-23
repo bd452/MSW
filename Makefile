@@ -139,6 +139,12 @@ check-host-remote: test-host-remote
 GH_TOKEN ?=
 export GH_TOKEN
 
+# Remote log streaming (best-effort)
+# NOTE: GitHub Actions does not provide a true push-based stdout stream.
+# This setting controls whether we "tail" logs by repeatedly fetching them.
+LIVE_LOG ?= 1
+LIVE_LOG_INTERVAL ?= 2
+
 # Helper function for running remote workflows
 # Usage: $(call run-remote-workflow,workflow-file,description,extra-args)
 define run-remote-workflow
@@ -207,20 +213,57 @@ define run-remote-workflow
 	echo "🔗 Run ID: $$RUN_ID"; \
 	echo "🌐 Live logs: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 	echo ""; \
-	echo "📺 Watching workflow progress..."; \
-	if gh run watch "$$RUN_ID" --exit-status; then \
+	if [ "$$LIVE_LOG" = "1" ]; then \
+		echo "📺 Streaming workflow logs (best-effort, refresh $$LIVE_LOG_INTERVALs)..."; \
+		echo "   Tip: disable with LIVE_LOG=0"; \
 		echo ""; \
-		echo "✅ $(2) passed!"; \
+		LAST_LINES=0; \
+		TMP_LOG="/tmp/gh-run-$$RUN_ID.log"; \
+		: > "$$TMP_LOG"; \
+		while true; do \
+			STATUS=$$(gh run view "$$RUN_ID" --json status --jq '.status' 2>/dev/null || echo ""); \
+			if gh run view "$$RUN_ID" --log > "$$TMP_LOG.new" 2>/dev/null; then \
+				NEW_LINES=$$(wc -l < "$$TMP_LOG.new" | tr -d ' '); \
+				if [ "$$NEW_LINES" -gt "$$LAST_LINES" ]; then \
+					tail -n +$$((LAST_LINES+1)) "$$TMP_LOG.new"; \
+					LAST_LINES="$$NEW_LINES"; \
+				fi; \
+				mv "$$TMP_LOG.new" "$$TMP_LOG"; \
+			else \
+				rm -f "$$TMP_LOG.new" 2>/dev/null || true; \
+			fi; \
+			if [ "$$STATUS" = "completed" ]; then \
+				break; \
+			fi; \
+			sleep "$$LIVE_LOG_INTERVAL"; \
+		done; \
+		CONCLUSION=$$(gh run view "$$RUN_ID" --json conclusion --jq '.conclusion' 2>/dev/null || echo ""); \
 		echo ""; \
-		echo "📋 Summary:"; \
-		gh run view "$$RUN_ID" --log 2>/dev/null | grep -E '(Passed|Failed|Total tests|Test Run|Build succeeded|error\(s\)|warning\(s\))' | tail -20; \
+		if [ "$$CONCLUSION" = "success" ]; then \
+			echo "✅ $(2) passed!"; \
+			echo ""; \
+		else \
+			echo "❌ $(2) failed! (conclusion: $$CONCLUSION)"; \
+			echo ""; \
+			echo "📌 Failed step logs:"; \
+			echo ""; \
+			gh run view "$$RUN_ID" --log-failed; \
+			exit 1; \
+		fi; \
 	else \
-		EXIT_CODE=$$?; \
-		echo ""; \
-		echo "❌ $(2) failed! Showing failed step logs:"; \
-		echo ""; \
-		gh run view "$$RUN_ID" --log-failed; \
-		exit $$EXIT_CODE; \
+		echo "📺 Watching workflow progress..."; \
+		if gh run watch "$$RUN_ID" --exit-status; then \
+			echo ""; \
+			echo "✅ $(2) passed!"; \
+			echo ""; \
+		else \
+			EXIT_CODE=$$?; \
+			echo ""; \
+			echo "❌ $(2) failed! Showing failed step logs:"; \
+			echo ""; \
+			gh run view "$$RUN_ID" --log-failed; \
+			exit $$EXIT_CODE; \
+		fi; \
 	fi
 endef
 
