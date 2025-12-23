@@ -62,68 +62,70 @@ final class ProtocolValidationTests: XCTestCase {
     }
 
     // MARK: - Input Types
+    // Note: Existing types use Int32, generated types use UInt8. Since the wire format is JSON
+    // (type-agnostic), we compare numeric values by casting to Int.
 
     func testMouseButtonsMatchGenerated() {
-        XCTAssertEqual(MouseButton.left.rawValue, GeneratedMouseButton.left.rawValue)
-        XCTAssertEqual(MouseButton.right.rawValue, GeneratedMouseButton.right.rawValue)
-        XCTAssertEqual(MouseButton.middle.rawValue, GeneratedMouseButton.middle.rawValue)
-        XCTAssertEqual(MouseButton.extra1.rawValue, GeneratedMouseButton.extra1.rawValue)
-        XCTAssertEqual(MouseButton.extra2.rawValue, GeneratedMouseButton.extra2.rawValue)
+        XCTAssertEqual(Int(MouseButton.left.rawValue), Int(GeneratedMouseButton.left.rawValue))
+        XCTAssertEqual(Int(MouseButton.right.rawValue), Int(GeneratedMouseButton.right.rawValue))
+        XCTAssertEqual(Int(MouseButton.middle.rawValue), Int(GeneratedMouseButton.middle.rawValue))
+        XCTAssertEqual(Int(MouseButton.extra1.rawValue), Int(GeneratedMouseButton.extra1.rawValue))
+        XCTAssertEqual(Int(MouseButton.extra2.rawValue), Int(GeneratedMouseButton.extra2.rawValue))
     }
 
     func testMouseEventTypesMatchGenerated() {
-        XCTAssertEqual(MouseEventType.move.rawValue, GeneratedMouseEventType.move.rawValue)
-        XCTAssertEqual(MouseEventType.press.rawValue, GeneratedMouseEventType.press.rawValue)
-        XCTAssertEqual(MouseEventType.release.rawValue, GeneratedMouseEventType.release.rawValue)
-        XCTAssertEqual(MouseEventType.scroll.rawValue, GeneratedMouseEventType.scroll.rawValue)
+        XCTAssertEqual(Int(MouseEventType.move.rawValue), Int(GeneratedMouseEventType.move.rawValue))
+        XCTAssertEqual(Int(MouseEventType.press.rawValue), Int(GeneratedMouseEventType.press.rawValue))
+        XCTAssertEqual(Int(MouseEventType.release.rawValue), Int(GeneratedMouseEventType.release.rawValue))
+        XCTAssertEqual(Int(MouseEventType.scroll.rawValue), Int(GeneratedMouseEventType.scroll.rawValue))
     }
 
     func testKeyEventTypesMatchGenerated() {
-        XCTAssertEqual(KeyEventType.keyDown.rawValue, GeneratedKeyEventType.down.rawValue)
-        XCTAssertEqual(KeyEventType.keyUp.rawValue, GeneratedKeyEventType.up.rawValue)
+        XCTAssertEqual(Int(KeyEventType.keyDown.rawValue), Int(GeneratedKeyEventType.down.rawValue))
+        XCTAssertEqual(Int(KeyEventType.keyUp.rawValue), Int(GeneratedKeyEventType.up.rawValue))
     }
 
     func testKeyModifiersMatchGenerated() {
-        XCTAssertEqual(KeyModifiers.shift.rawValue, GeneratedKeyModifiers.shift.rawValue)
-        XCTAssertEqual(KeyModifiers.control.rawValue, GeneratedKeyModifiers.control.rawValue)
-        XCTAssertEqual(KeyModifiers.alt.rawValue, GeneratedKeyModifiers.alt.rawValue)
-        XCTAssertEqual(KeyModifiers.command.rawValue, GeneratedKeyModifiers.command.rawValue)
-        XCTAssertEqual(KeyModifiers.capsLock.rawValue, GeneratedKeyModifiers.capsLock.rawValue)
-        XCTAssertEqual(KeyModifiers.numLock.rawValue, GeneratedKeyModifiers.numLock.rawValue)
+        XCTAssertEqual(Int(KeyModifiers.shift.rawValue), Int(GeneratedKeyModifiers.shift.rawValue))
+        XCTAssertEqual(Int(KeyModifiers.control.rawValue), Int(GeneratedKeyModifiers.control.rawValue))
+        XCTAssertEqual(Int(KeyModifiers.alt.rawValue), Int(GeneratedKeyModifiers.alt.rawValue))
+        XCTAssertEqual(Int(KeyModifiers.command.rawValue), Int(GeneratedKeyModifiers.command.rawValue))
+        XCTAssertEqual(Int(KeyModifiers.capsLock.rawValue), Int(GeneratedKeyModifiers.capsLock.rawValue))
+        XCTAssertEqual(Int(KeyModifiers.numLock.rawValue), Int(GeneratedKeyModifiers.numLock.rawValue))
     }
 
     // MARK: - Drag and Drop
 
     func testDragDropEventTypesMatchGenerated() {
-        XCTAssertEqual(DragDropEventType.enter.rawValue, GeneratedDragDropEventType.enter.rawValue)
-        XCTAssertEqual(DragDropEventType.move.rawValue, GeneratedDragDropEventType.move.rawValue)
-        XCTAssertEqual(DragDropEventType.leave.rawValue, GeneratedDragDropEventType.leave.rawValue)
-        XCTAssertEqual(DragDropEventType.drop.rawValue, GeneratedDragDropEventType.drop.rawValue)
+        XCTAssertEqual(Int(DragDropEventType.enter.rawValue), Int(GeneratedDragDropEventType.enter.rawValue))
+        XCTAssertEqual(Int(DragDropEventType.move.rawValue), Int(GeneratedDragDropEventType.move.rawValue))
+        XCTAssertEqual(Int(DragDropEventType.leave.rawValue), Int(GeneratedDragDropEventType.leave.rawValue))
+        XCTAssertEqual(Int(DragDropEventType.drop.rawValue), Int(GeneratedDragDropEventType.drop.rawValue))
     }
 
     func testDragOperationsMatchGenerated() {
-        XCTAssertEqual(DragOperation.none.rawValue, GeneratedDragOperation.none.rawValue)
-        XCTAssertEqual(DragOperation.copy.rawValue, GeneratedDragOperation.copy.rawValue)
-        XCTAssertEqual(DragOperation.move.rawValue, GeneratedDragOperation.move.rawValue)
-        XCTAssertEqual(DragOperation.link.rawValue, GeneratedDragOperation.link.rawValue)
+        XCTAssertEqual(Int(DragOperation.none.rawValue), Int(GeneratedDragOperation.none.rawValue))
+        XCTAssertEqual(Int(DragOperation.copy.rawValue), Int(GeneratedDragOperation.copy.rawValue))
+        XCTAssertEqual(Int(DragOperation.move.rawValue), Int(GeneratedDragOperation.move.rawValue))
+        XCTAssertEqual(Int(DragOperation.link.rawValue), Int(GeneratedDragOperation.link.rawValue))
     }
 
     // MARK: - Other Types
 
     func testPixelFormatsMatchGenerated() {
-        XCTAssertEqual(SpicePixelFormat.bgra32.rawValue, GeneratedPixelFormat.bgra32.rawValue)
-        XCTAssertEqual(SpicePixelFormat.rgba32.rawValue, GeneratedPixelFormat.rgba32.rawValue)
+        XCTAssertEqual(Int(SpicePixelFormat.bgra32.rawValue), Int(GeneratedPixelFormat.bgra32.rawValue))
+        XCTAssertEqual(Int(SpicePixelFormat.rgba32.rawValue), Int(GeneratedPixelFormat.rgba32.rawValue))
     }
 
     func testWindowEventTypesMatchGenerated() {
-        XCTAssertEqual(WindowEventType.created.rawValue, GeneratedWindowEventType.created.rawValue)
-        XCTAssertEqual(WindowEventType.destroyed.rawValue, GeneratedWindowEventType.destroyed.rawValue)
-        XCTAssertEqual(WindowEventType.moved.rawValue, GeneratedWindowEventType.moved.rawValue)
-        XCTAssertEqual(WindowEventType.titleChanged.rawValue, GeneratedWindowEventType.titleChanged.rawValue)
-        XCTAssertEqual(WindowEventType.focusChanged.rawValue, GeneratedWindowEventType.focusChanged.rawValue)
-        XCTAssertEqual(WindowEventType.minimized.rawValue, GeneratedWindowEventType.minimized.rawValue)
-        XCTAssertEqual(WindowEventType.restored.rawValue, GeneratedWindowEventType.restored.rawValue)
-        XCTAssertEqual(WindowEventType.updated.rawValue, GeneratedWindowEventType.updated.rawValue)
+        XCTAssertEqual(Int(WindowEventType.created.rawValue), Int(GeneratedWindowEventType.created.rawValue))
+        XCTAssertEqual(Int(WindowEventType.destroyed.rawValue), Int(GeneratedWindowEventType.destroyed.rawValue))
+        XCTAssertEqual(Int(WindowEventType.moved.rawValue), Int(GeneratedWindowEventType.moved.rawValue))
+        XCTAssertEqual(Int(WindowEventType.titleChanged.rawValue), Int(GeneratedWindowEventType.titleChanged.rawValue))
+        XCTAssertEqual(Int(WindowEventType.focusChanged.rawValue), Int(GeneratedWindowEventType.focusChanged.rawValue))
+        XCTAssertEqual(Int(WindowEventType.minimized.rawValue), Int(GeneratedWindowEventType.minimized.rawValue))
+        XCTAssertEqual(Int(WindowEventType.restored.rawValue), Int(GeneratedWindowEventType.restored.rawValue))
+        XCTAssertEqual(Int(WindowEventType.updated.rawValue), Int(GeneratedWindowEventType.updated.rawValue))
     }
 
     func testClipboardFormatsMatchGenerated() {
