@@ -3,23 +3,10 @@ import WinRunShared
 
 // MARK: - Provisioning Messages
 
-/// Phase of post-install provisioning running in the guest.
-public enum GuestProvisioningPhase: String, Codable, Sendable {
-    /// Installing VirtIO drivers.
-    case drivers
+// Note: GuestProvisioningPhase enum is defined in Protocol.generated.swift
 
-    /// Installing WinRun Agent.
-    case agent
-
-    /// Optimizing Windows (removing bloat, disabling services).
-    case optimize
-
-    /// Finalizing configuration before shutdown.
-    case finalize
-
-    /// Provisioning complete.
-    case complete
-
+/// Extension to add display names for provisioning phases.
+extension GuestProvisioningPhase {
     /// User-friendly display name.
     public var displayName: String {
         switch self {

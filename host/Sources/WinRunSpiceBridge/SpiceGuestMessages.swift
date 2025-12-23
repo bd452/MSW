@@ -11,18 +11,7 @@ public protocol GuestMessage: Codable {
 
 // MARK: - Supporting Types
 
-/// Window event type from guest.
-/// Values must match guest's WindowEventType enum exactly for protocol compatibility.
-public enum WindowEventType: Int32, Codable {
-    case created = 0
-    case destroyed = 1
-    case moved = 2
-    case titleChanged = 3
-    case focusChanged = 4
-    case minimized = 5
-    case restored = 6
-    case updated = 7
-}
+// Note: WindowEventType enum is defined in Protocol.generated.swift
 
 /// Rectangle bounds information (matching guest's RectInfo).
 public struct RectInfo: Codable, Hashable {
@@ -39,11 +28,7 @@ public struct RectInfo: Codable, Hashable {
     }
 }
 
-/// Pixel format for frame data.
-public enum SpicePixelFormat: UInt8, Codable {
-    case bgra32 = 0
-    case rgba32 = 1
-}
+// Note: SpicePixelFormat enum is defined in Protocol.generated.swift
 
 /// Monitor/display information.
 public struct MonitorInfo: Codable, Hashable {
