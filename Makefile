@@ -139,6 +139,27 @@ check-host-remote: test-host-remote
 GH_TOKEN ?=
 export GH_TOKEN
 
+# Remote log streaming (best-effort)
+# NOTE: GitHub Actions does not provide a true push-based stdout stream.
+# This setting controls whether we "tail" logs by repeatedly fetching them.
+LIVE_LOG ?= 1
+# How often we refresh logs (seconds). Lower feels "more live" but hits API harder.
+LIVE_LOG_REFRESH_SECONDS ?= 2
+# Safety: avoid hanging forever if status/log fetching gets stuck.
+# Abort if we haven't seen any *new log lines* for this many seconds (0 = no timeout).
+LIVE_LOG_IDLE_TIMEOUT_SECONDS ?= 300
+# Optional hard cap on total wall-clock waiting time (0 = no timeout).
+# Generally you want the idle timeout, not a hard cap.
+LIVE_LOG_TIMEOUT_SECONDS ?= 0
+# Abort after this many consecutive log fetch failures (rate limits, transient API errors).
+LIVE_LOG_MAX_CONSECUTIVE_ERRORS ?= 60
+
+# Backwards-compatible aliases (older names)
+LIVE_LOG_INTERVAL ?= $(LIVE_LOG_REFRESH_SECONDS)
+LIVE_LOG_TIMEOUT ?= $(LIVE_LOG_TIMEOUT_SECONDS)
+LIVE_LOG_MAX_ERRORS ?= $(LIVE_LOG_MAX_CONSECUTIVE_ERRORS)
+LIVE_LOG_MAX_BACKOFF ?=
+
 # Helper function for running remote workflows
 # Usage: $(call run-remote-workflow,workflow-file,description,extra-args)
 define run-remote-workflow
@@ -207,20 +228,85 @@ define run-remote-workflow
 	echo "🔗 Run ID: $$RUN_ID"; \
 	echo "🌐 Live logs: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
 	echo ""; \
-	echo "📺 Watching workflow progress..."; \
-	if gh run watch "$$RUN_ID" --exit-status; then \
+	if [ "$(LIVE_LOG)" = "1" ]; then \
+		echo "📺 Streaming workflow logs (best-effort, refresh $(LIVE_LOG_REFRESH_SECONDS)s)..."; \
+		echo "   Tip: disable with LIVE_LOG=0"; \
+		echo "   Knobs: LIVE_LOG_REFRESH_SECONDS, LIVE_LOG_IDLE_TIMEOUT_SECONDS, LIVE_LOG_TIMEOUT_SECONDS"; \
 		echo ""; \
-		echo "✅ $(2) passed!"; \
+		LAST_LINES=0; \
+		TMP_LOG="/tmp/gh-run-$$RUN_ID.log"; \
+		TMP_LOG_NEW="/tmp/gh-run-$$RUN_ID.log.new"; \
+		START_TS=$$(date +%s); \
+		LAST_NEWLINE_TS="$$START_TS"; \
+		ERRORS=0; \
+		trap 'rm -f "$$TMP_LOG" "$$TMP_LOG_NEW" 2>/dev/null || true' EXIT INT TERM; \
+		: > "$$TMP_LOG"; \
+		while true; do \
+			NOW_TS=$$(date +%s); \
+			if [ "$(LIVE_LOG_TIMEOUT_SECONDS)" != "0" ] && [ $$((NOW_TS-START_TS)) -gt "$(LIVE_LOG_TIMEOUT_SECONDS)" ]; then \
+				echo ""; \
+				echo "❌ Timed out after $(LIVE_LOG_TIMEOUT_SECONDS)s while waiting for remote workflow logs."; \
+				echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
+				exit 124; \
+			fi; \
+			if [ "$(LIVE_LOG_IDLE_TIMEOUT_SECONDS)" != "0" ] && [ $$((NOW_TS-LAST_NEWLINE_TS)) -gt "$(LIVE_LOG_IDLE_TIMEOUT_SECONDS)" ]; then \
+				echo ""; \
+				echo "❌ No new log output for $(LIVE_LOG_IDLE_TIMEOUT_SECONDS)s; aborting log stream."; \
+				echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
+				exit 124; \
+			fi; \
+			STATUS=$$(gh run view "$$RUN_ID" --json status --jq '.status' 2>/dev/null || echo ""); \
+			if gh run view "$$RUN_ID" --log > "$$TMP_LOG_NEW" 2>/dev/null; then \
+				ERRORS=0; \
+				NEW_LINES=$$(wc -l < "$$TMP_LOG_NEW" | tr -d ' '); \
+				if [ "$$NEW_LINES" -gt "$$LAST_LINES" ]; then \
+					tail -n +$$((LAST_LINES+1)) "$$TMP_LOG_NEW"; \
+					LAST_LINES="$$NEW_LINES"; \
+					LAST_NEWLINE_TS="$$(date +%s)"; \
+				fi; \
+				mv "$$TMP_LOG_NEW" "$$TMP_LOG"; \
+			else \
+				rm -f "$$TMP_LOG_NEW" 2>/dev/null || true; \
+				ERRORS=$$((ERRORS+1)); \
+				if [ "$$ERRORS" -ge "$(LIVE_LOG_MAX_CONSECUTIVE_ERRORS)" ]; then \
+					echo ""; \
+					echo "❌ Too many errors ($$ERRORS) fetching remote logs. Aborting."; \
+					echo "   See: https://github.com/$$REPO/actions/runs/$$RUN_ID"; \
+					exit 2; \
+				fi; \
+			fi; \
+			if [ "$$STATUS" = "completed" ]; then \
+				break; \
+			fi; \
+			sleep "$(LIVE_LOG_REFRESH_SECONDS)"; \
+		done; \
+		CONCLUSION=$$(gh run view "$$RUN_ID" --json conclusion --jq '.conclusion' 2>/dev/null || echo ""); \
 		echo ""; \
-		echo "📋 Summary:"; \
-		gh run view "$$RUN_ID" --log 2>/dev/null | grep -E '(Passed|Failed|Total tests|Test Run|Build succeeded|error\(s\)|warning\(s\))' | tail -20; \
+		if [ "$$CONCLUSION" = "success" ]; then \
+			echo "✅ $(2) passed!"; \
+			echo ""; \
+		else \
+			echo "❌ $(2) failed! (conclusion: $$CONCLUSION)"; \
+			echo ""; \
+			echo "📌 Failed step logs:"; \
+			echo ""; \
+			gh run view "$$RUN_ID" --log-failed; \
+			exit 1; \
+		fi; \
 	else \
-		EXIT_CODE=$$?; \
-		echo ""; \
-		echo "❌ $(2) failed! Showing failed step logs:"; \
-		echo ""; \
-		gh run view "$$RUN_ID" --log-failed; \
-		exit $$EXIT_CODE; \
+		echo "📺 Watching workflow progress..."; \
+		if gh run watch "$$RUN_ID" --exit-status; then \
+			echo ""; \
+			echo "✅ $(2) passed!"; \
+			echo ""; \
+		else \
+			EXIT_CODE=$$?; \
+			echo ""; \
+			echo "❌ $(2) failed! Showing failed step logs:"; \
+			echo ""; \
+			gh run view "$$RUN_ID" --log-failed; \
+			exit $$EXIT_CODE; \
+		fi; \
 	fi
 endef
 
