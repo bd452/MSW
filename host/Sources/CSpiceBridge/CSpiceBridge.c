@@ -799,6 +799,12 @@ void winrun_spice_request_clipboard(
 // MARK: - Drag and Drop
 
 #if __APPLE__
+// Context for async file transfer - must be kept alive until completion
+typedef struct {
+    GFile **sources;
+    size_t file_count;
+} file_transfer_context;
+
 // Progress callback for file transfer
 static void file_copy_progress_cb(goffset current, goffset total, gpointer user_data) {
     (void)user_data;
@@ -810,7 +816,7 @@ static void file_copy_progress_cb(goffset current, goffset total, gpointer user_
 
 // Completion callback for file transfer
 static void file_copy_complete_cb(GObject *source, GAsyncResult *result, gpointer user_data) {
-    (void)user_data;
+    file_transfer_context *ctx = (file_transfer_context *)user_data;
     SpiceMainChannel *channel = SPICE_MAIN_CHANNEL(source);
     GError *error = NULL;
 
@@ -818,6 +824,17 @@ static void file_copy_complete_cb(GObject *source, GAsyncResult *result, gpointe
     if (!success && error) {
         // Log error - could be extended to call back to Swift with error info
         g_error_free(error);
+    }
+
+    // Clean up GFile objects now that the transfer is complete
+    if (ctx) {
+        if (ctx->sources) {
+            for (size_t i = 0; i < ctx->file_count && ctx->sources[i]; i++) {
+                g_object_unref(ctx->sources[i]);
+            }
+            g_free(ctx->sources);
+        }
+        g_free(ctx);
     }
 }
 #endif
@@ -843,9 +860,18 @@ bool winrun_spice_send_drag_event(
     // Only handle DROP events for file transfer
     // Enter/Move/Leave are for visual feedback which Spice handles via cursor
     if (event->event_type == WINRUN_DRAG_EVENT_DROP && event->files && event->file_count > 0) {
+        // Create context to track resources for async operation
+        file_transfer_context *ctx = g_new0(file_transfer_context, 1);
+        if (!ctx) {
+            pthread_mutex_unlock(&stream->send_mutex);
+            return false;
+        }
+
         // Create array of GFile pointers (NULL-terminated)
-        GFile **sources = g_new0(GFile *, event->file_count + 1);
-        if (!sources) {
+        ctx->sources = g_new0(GFile *, event->file_count + 1);
+        ctx->file_count = event->file_count;
+        if (!ctx->sources) {
+            g_free(ctx);
             pthread_mutex_unlock(&stream->send_mutex);
             return false;
         }
@@ -853,8 +879,8 @@ bool winrun_spice_send_drag_event(
         bool all_valid = true;
         for (size_t i = 0; i < event->file_count; i++) {
             if (event->files[i].host_path) {
-                sources[i] = g_file_new_for_path(event->files[i].host_path);
-                if (!sources[i]) {
+                ctx->sources[i] = g_file_new_for_path(event->files[i].host_path);
+                if (!ctx->sources[i]) {
                     all_valid = false;
                     break;
                 }
@@ -864,30 +890,29 @@ bool winrun_spice_send_drag_event(
             }
         }
 
-        if (all_valid) {
-            // Initiate async file copy to guest
-            spice_main_channel_file_copy_async(
-                main,
-                sources,
-                G_FILE_COPY_NONE,
-                NULL,  // GCancellable
-                file_copy_progress_cb,
-                stream,
-                file_copy_complete_cb,
-                stream
-            );
-        }
-
-        // Clean up GFile objects (they're ref'd by the async operation)
-        for (size_t i = 0; i < event->file_count && sources[i]; i++) {
-            g_object_unref(sources[i]);
-        }
-        g_free(sources);
-
         if (!all_valid) {
+            // Clean up on failure
+            for (size_t i = 0; i < event->file_count && ctx->sources[i]; i++) {
+                g_object_unref(ctx->sources[i]);
+            }
+            g_free(ctx->sources);
+            g_free(ctx);
             pthread_mutex_unlock(&stream->send_mutex);
             return false;
         }
+
+        // Initiate async file copy to guest
+        // The context (including GFile objects) will be freed in the completion callback
+        spice_main_channel_file_copy_async(
+            main,
+            ctx->sources,
+            G_FILE_COPY_NONE,
+            NULL,  // GCancellable
+            file_copy_progress_cb,
+            NULL,  // progress user_data not needed
+            file_copy_complete_cb,
+            ctx    // Pass context for cleanup in completion callback
+        );
     }
 #else
     (void)event;
