@@ -145,6 +145,29 @@ define run-remote-workflow
 			echo "   3. Push to main and then test your branch"; \
 			echo ""; \
 			exit 1; \
+		elif grep -qi "Resource not accessible\|HTTP 403\|permission\|forbidden" /tmp/gh-error.txt 2>/dev/null; then \
+			echo ""; \
+			echo "❌ Permission denied: Cannot trigger workflow dispatch."; \
+			echo ""; \
+			cat /tmp/gh-error.txt; \
+			echo ""; \
+			echo "   The GitHub token doesn't have permission to trigger workflows."; \
+			echo "   This can happen when:"; \
+			echo "   • Running in an automated environment (CI, Cursor cloud agent, etc.)"; \
+			echo "   • The gh CLI is authenticated with a token missing 'workflow' scope"; \
+			echo "   • Repository settings restrict workflow dispatch"; \
+			echo ""; \
+			echo "   Solutions:"; \
+			echo "   1. Push your branch and create a PR - CI runs automatically on PRs"; \
+			echo "      git push -u origin $$BRANCH && gh pr create"; \
+			echo ""; \
+			echo "   2. Re-authenticate gh with workflow scope:"; \
+			echo "      gh auth login --scopes workflow"; \
+			echo ""; \
+			echo "   3. Use a Personal Access Token with 'workflow' permission:"; \
+			echo "      gh auth login --with-token"; \
+			echo ""; \
+			exit 1; \
 		else \
 			cat /tmp/gh-error.txt; \
 			exit 1; \
