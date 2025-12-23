@@ -48,7 +48,7 @@
     - [X] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
-- [ ] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
+- [X] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
   - [X] ISO validation + Windows version detection { new:host/Sources/WinRunSetup/ISOValidator.swift, new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
     - [X] Mount and parse Windows ISO metadata (install.wim/esd) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
@@ -72,7 +72,7 @@
     - [X] Write WinRunAgent installation script { new:infrastructure/windows/provision/install-agent.ps1 } <docs/decisions/windows-provisioning.md>
     - [X] Write Windows optimization/debloat script { new:infrastructure/windows/provision/optimize-windows.ps1 } <docs/decisions/windows-provisioning.md>
     - [X] Write finalization script with host signaling { new:infrastructure/windows/provision/finalize.ps1 } <docs/decisions/windows-provisioning.md>
-  - [ ] Guest provisioning protocol messages { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Guest provisioning protocol messages { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add ProvisionProgress, ProvisionError, ProvisionComplete message types { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
     - [X] Implement provisioning status reporter in guest agent { new:guest/WinRunAgent/Services/ProvisioningReporter.cs } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for provisioning message serialization { guest/WinRunAgent.Tests/MessagesTests.cs, host/Tests/WinRunSpiceBridgeTests/SpiceProtocolTests.swift } <docs/development.md>
