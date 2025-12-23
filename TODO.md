@@ -1,17 +1,23 @@
-- [X] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
-  - [X] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/, host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
+- [ ] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
+  - [ ] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/, host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
     - [X] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift } <docs/decisions/spice-bridge.md>
     - [X] Add C shim + pkg-config wiring for libspice-glib { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement reconnect/backoff + error metrics { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamModels.swift, host/Sources/WinRunShared/SpiceMetrics.swift } <docs/decisions/spice-bridge.md>
     - [X] Switch host transport to shared memory (vhost-user) { host/Sources/WinRunSpiceBridge/SpiceStreamConfiguration.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/spice-bridge.md>
+    - [ ] Implement Spice inputs channel integration (mouse + keyboard) in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/spice-bridge.md>
+    - [ ] Implement Spice clipboard channel integration (send/request + callbacks) in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/protocols.md>
+    - [ ] Implement Spice file transfer for drag/drop in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/spice-bridge.md>
 - [X] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions/virtualization.md>
     - [X] Drive Virtualization.framework boot/stop/snapshot flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
     - [X] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/VMConfiguration.swift } <docs/decisions/virtualization.md>
     - [X] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/Logging.swift } <docs/decisions/virtualization.md>
-  - [X] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions/protocols.md>
+  - [ ] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions/protocols.md>
     - [X] Stand up XPC listener + connect CLI/app clients { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
     - [X] Enforce authentication + request throttling { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunShared/XPCAuth.swift } <docs/decisions/protocols.md>
     - [X] Automate LaunchDaemon install/upgrade in bootstrap script { infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/development.md>
+    - [ ] Implement real session listing backed by guest agent { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift, host/Sources/WinRunSpiceBridge/SpiceMessageSerializer.swift } <docs/decisions/protocols.md>
+    - [ ] Implement close-session command forwarding to guest agent { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift, host/Sources/WinRunSpiceBridge/SpiceMessageSerializer.swift } <docs/decisions/protocols.md>
+    - [ ] Implement shortcut listing + sync backed by guest events and launcher generation { host/Sources/WinRunDaemon/main.swift, apps/launchers/, host/Sources/WinRunCLI/WinRunCLI.swift } <docs/decisions/protocols.md, docs/development.md>
   - [X] WinRun.app window shell { host/Sources/WinRunApp/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md>
     - [X] Render Spice frames via Metal layer + support Retina scaling { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
     - [X] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/ClipboardManager.swift, host/Sources/WinRunShared/InputModels.swift } <docs/decisions/spice-bridge.md>
@@ -28,7 +34,7 @@
     - [X] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [X] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
 
-- [X] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
+- [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
   - [X] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
@@ -41,6 +47,9 @@
     - [X] Extract & cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs } <docs/decisions/protocols.md>
     - [X] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [X] Transfer icon blobs + metadata via Spice payloads { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
+  - [ ] Drag and drop file ingestion (host → guest) { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
+    - [ ] Implement Windows-side drop handling (OLE drag/drop) with safe file copy staging { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+    - [ ] Add unit tests for drag/drop message parsing and validation { guest/WinRunAgent.Tests/MessagesTests.cs } <docs/development.md>
   - [X] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [X] Replace mock logger with structured sinks + ETW providers { guest/WinRunAgent/Services/Logging.cs } <docs/development.md>
     - [X] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
@@ -48,7 +57,7 @@
     - [X] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
-- [X] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
+- [ ] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
   - [X] ISO validation + Windows version detection { new:host/Sources/WinRunSetup/ISOValidator.swift, new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
     - [X] Mount and parse Windows ISO metadata (install.wim/esd) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
@@ -59,12 +68,13 @@
     - [X] Configure VM with ISO as boot CD-ROM + autounattend injection { new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
     - [X] Drive unattended Windows installation lifecycle { new:host/Sources/WinRunSetup/VMProvisioner.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for disk creation and provisioning state machine { new:host/Tests/WinRunSetupTests/DiskImageCreatorTests.swift, new:host/Tests/WinRunSetupTests/VMProvisionerTests.swift } <docs/development.md>
-  - [X] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
+  - [ ] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [X] Define provisioning phases and state transitions { new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [X] Orchestrate full setup flow from ISO to ready state { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Handle host↔guest progress signaling via Spice channel { new:host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
     - [X] Implement error recovery and rollback for failed provisioning { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for state machine transitions and error handling { new:host/Tests/WinRunSetupTests/SetupCoordinatorTests.swift, new:host/Tests/WinRunSetupTests/ProvisioningStateTests.swift } <docs/development.md>
+    - [ ] Wire post-install provisioning to real guest Spice messages (remove simulation) { host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift, host/Sources/WinRunSpiceBridge/SpiceMessageSerializer.swift } <docs/decisions/windows-provisioning.md, docs/decisions/protocols.md>
   - [X] Windows unattended installation assets { new:infrastructure/windows/autounattend.xml, new:infrastructure/windows/provision/ } <docs/decisions/windows-provisioning.md>
     - [X] Create autounattend.xml for silent Windows install { new:infrastructure/windows/autounattend.xml } <docs/decisions/windows-provisioning.md>
     - [X] Implement autounattend injection (FAT12 floppy image or ISO embedding) { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
