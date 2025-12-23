@@ -41,6 +41,9 @@ typedef struct winrun_spice_stream {
     winrun_spice_closed_cb closed_cb;
     winrun_clipboard_cb clipboard_cb;
     void *clipboard_user_data;
+    // Control channel callback
+    winrun_control_message_cb control_cb;
+    void *control_user_data;
     pthread_mutex_t send_mutex;
     // Tracks current button state for mouse motion events
     int button_state;
@@ -50,12 +53,15 @@ typedef struct winrun_spice_stream {
     SpiceSession *session;
     SpiceInputsChannel *inputs_channel;
     SpiceMainChannel *main_channel;
+    SpicePortChannel *control_channel;  // For bidirectional control messages
     gulong channel_new_handler_id;
     // Clipboard signal handlers on main channel
     gulong clipboard_grab_handler_id;
     gulong clipboard_data_handler_id;
     gulong clipboard_request_handler_id;
     gulong clipboard_release_handler_id;
+    // Control channel signal handler
+    gulong control_data_handler_id;
 #endif
 } winrun_spice_stream;
 
@@ -72,6 +78,11 @@ static void on_clipboard_request(SpiceMainChannel *channel, guint selection,
                                  guint type, gpointer user_data);
 static void on_clipboard_release(SpiceMainChannel *channel, guint selection,
                                  gpointer user_data);
+static void on_control_port_data(SpicePortChannel *channel, gpointer data,
+                                 gint size, gpointer user_data);
+
+// Port name for control channel - must match what guest listens on
+#define WINRUN_CONTROL_PORT_NAME "com.winrun.control"
 
 // Signal handler for new channels from Spice session
 static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointer user_data) {
@@ -140,6 +151,56 @@ static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointe
         );
 
         pthread_mutex_unlock(&stream->send_mutex);
+    } else if (SPICE_IS_PORT_CHANNEL(channel)) {
+        // Check if this is our control port channel
+        gchar *port_name = NULL;
+        g_object_get(channel, "port-name", &port_name, NULL);
+
+        if (port_name && g_strcmp0(port_name, WINRUN_CONTROL_PORT_NAME) == 0) {
+            pthread_mutex_lock(&stream->send_mutex);
+
+            // Disconnect old handler if reconnecting
+            if (stream->control_channel) {
+                if (stream->control_data_handler_id) {
+                    g_signal_handler_disconnect(stream->control_channel, stream->control_data_handler_id);
+                }
+                g_object_unref(stream->control_channel);
+            }
+
+            stream->control_channel = SPICE_PORT_CHANNEL(channel);
+            g_object_ref(stream->control_channel);
+
+            // Connect data received handler
+            stream->control_data_handler_id = g_signal_connect(
+                stream->control_channel,
+                "port-data",
+                G_CALLBACK(on_control_port_data),
+                stream
+            );
+
+            pthread_mutex_unlock(&stream->send_mutex);
+        }
+
+        g_free(port_name);
+    }
+}
+
+// Handler for receiving data from control port channel
+static void on_control_port_data(SpicePortChannel *channel, gpointer data,
+                                 gint size, gpointer user_data) {
+    (void)channel;
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream || !data || size <= 0) {
+        return;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+    winrun_control_message_cb cb = stream->control_cb;
+    void *cb_user_data = stream->control_user_data;
+    pthread_mutex_unlock(&stream->send_mutex);
+
+    if (cb) {
+        cb((const uint8_t *)data, (size_t)size, cb_user_data);
     }
 }
 
@@ -223,6 +284,8 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->closed_cb = closed_cb;
     stream->clipboard_cb = NULL;
     stream->clipboard_user_data = NULL;
+    stream->control_cb = NULL;
+    stream->control_user_data = NULL;
     stream->button_state = 0;
     stream->clipboard_sequence = 0;
     stream->worker_started = false;
@@ -232,11 +295,13 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->session = NULL;
     stream->inputs_channel = NULL;
     stream->main_channel = NULL;
+    stream->control_channel = NULL;
     stream->channel_new_handler_id = 0;
     stream->clipboard_grab_handler_id = 0;
     stream->clipboard_data_handler_id = 0;
     stream->clipboard_request_handler_id = 0;
     stream->clipboard_release_handler_id = 0;
+    stream->control_data_handler_id = 0;
 #endif
     return stream;
 }
@@ -268,6 +333,14 @@ static void winrun_spice_stream_free(winrun_spice_stream *stream) {
         if (stream->clipboard_release_handler_id) {
             g_signal_handler_disconnect(stream->main_channel, stream->clipboard_release_handler_id);
         }
+    }
+
+    // Disconnect control channel handler
+    if (stream->control_channel) {
+        if (stream->control_data_handler_id) {
+            g_signal_handler_disconnect(stream->control_channel, stream->control_data_handler_id);
+        }
+        g_object_unref(stream->control_channel);
     }
 
     if (stream->inputs_channel) {
@@ -946,6 +1019,70 @@ bool winrun_spice_send_drag_event(
     }
 #else
     (void)event;
+#endif
+
+    pthread_mutex_unlock(&stream->send_mutex);
+    return true;
+}
+
+// MARK: - Control Channel
+
+void winrun_spice_set_control_callback(
+    winrun_spice_stream_handle streamHandle,
+    winrun_control_message_cb control_cb,
+    void *user_data
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream) {
+        return;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+    stream->control_cb = control_cb;
+    stream->control_user_data = user_data;
+    pthread_mutex_unlock(&stream->send_mutex);
+}
+
+bool winrun_spice_send_control_message(
+    winrun_spice_stream_handle streamHandle,
+    const uint8_t *data,
+    size_t length
+) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)streamHandle;
+    if (!stream || !data || length == 0) {
+        return false;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+
+#if __APPLE__
+    SpicePortChannel *port = stream->control_channel;
+    if (!port) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return false;
+    }
+
+    // Check if port is opened and ready
+    gboolean is_opened = FALSE;
+    g_object_get(port, "port-opened", &is_opened, NULL);
+    if (!is_opened) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return false;
+    }
+
+    // Write data to port channel
+    // spice_port_channel_write_async sends data to the guest
+    spice_port_channel_write_async(
+        port,
+        data,
+        length,
+        NULL,  // GCancellable
+        NULL,  // GAsyncReadyCallback (fire and forget for now)
+        NULL   // user_data
+    );
+#else
+    (void)data;
+    (void)length;
 #endif
 
     pthread_mutex_unlock(&stream->send_mutex);

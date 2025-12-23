@@ -55,8 +55,12 @@ public actor SpiceControlChannel {
     private let logger: Logger
     private let configuration: SpiceStreamConfiguration
     private var messageIdCounter: UInt32 = 0
-    private var pendingRequests: [UInt32: CheckedContinuation<Any, Error>] = [:]
+    private var pendingStreams: [UInt32: AsyncThrowingStream<Any, Error>.Continuation] = [:]
     private var isConnected: Bool = false
+
+    // Transport for actual Spice communication
+    private var transport: SpiceStreamTransport?
+    private var transportSubscription: SpiceStreamSubscription?
 
     // Delegate (needs to be nonisolated for setting from non-actor context)
     private weak var _delegate: SpiceControlChannelDelegate?
@@ -78,25 +82,93 @@ public actor SpiceControlChannel {
         self.logger = logger
     }
 
+    /// Initialize with an existing transport (for testing or shared connections)
+    /// Note: This is internal because SpiceStreamTransport is an internal protocol
+    init(
+        transport: SpiceStreamTransport,
+        logger: Logger = StandardLogger(subsystem: "SpiceControlChannel")
+    ) {
+        self.configuration = SpiceStreamConfiguration.environmentDefault()
+        self.logger = logger
+        self.transport = transport
+    }
+
     /// Connect to the guest agent.
     public func connect() async throws {
         logger.info("Connecting to guest control channel")
-        // In the real implementation, this would establish a Spice connection
-        // For now, we mark as connected since the transport handles the actual connection
-        isConnected = true
-        _delegate?.controlChannelDidConnect(self)
+
+        // Create transport if not provided
+        if transport == nil {
+            #if os(macOS)
+            transport = LibSpiceStreamTransport(logger: logger)
+            #else
+            transport = MockSpiceStreamTransport(logger: logger)
+            #endif
+        }
+
+        // Open a stream for control channel (windowID 0 indicates control channel)
+        let callbacks = SpiceStreamCallbacks(
+            onFrame: { _ in },  // Control channel doesn't receive frames
+            onMetadata: { _ in },
+            onClosed: { [weak self] reason in
+                Task { [weak self] in
+                    await self?.handleTransportClosed(reason)
+                }
+            },
+            onClipboard: { _ in }
+        )
+
+        do {
+            transportSubscription = try transport?.openStream(
+                configuration: configuration,
+                windowID: 0,  // Control channel uses windowID 0
+                callbacks: callbacks
+            )
+
+            // Set up callback for receiving control messages
+            transport?.setControlCallback { [weak self] data in
+                Task { [weak self] in
+                    try? await self?.handleReceivedData(data)
+                }
+            }
+
+            isConnected = true
+            _delegate?.controlChannelDidConnect(self)
+            logger.info("Control channel connected")
+        } catch {
+            logger.error("Failed to connect control channel: \(error)")
+            throw SpiceControlError.sendFailed(error)
+        }
     }
 
     /// Disconnect from the guest agent.
     public func disconnect() {
         logger.info("Disconnecting from guest control channel")
+
+        if let subscription = transportSubscription {
+            transport?.closeStream(subscription)
+            transportSubscription = nil
+        }
+
         isConnected = false
 
-        // Cancel all pending requests
-        for (_, continuation) in pendingRequests {
-            continuation.resume(throwing: SpiceControlError.notConnected)
+        // Cancel all pending streams
+        for (_, streamContinuation) in pendingStreams {
+            streamContinuation.finish(throwing: SpiceControlError.notConnected)
         }
-        pendingRequests.removeAll()
+        pendingStreams.removeAll()
+        _delegate?.controlChannelDidDisconnect(self)
+    }
+
+    private func handleTransportClosed(_ reason: SpiceStreamCloseReason) {
+        logger.warn("Control channel transport closed: \(reason.message)")
+        isConnected = false
+
+        // Cancel all pending streams
+        for (_, streamContinuation) in pendingStreams {
+            streamContinuation.finish(throwing: SpiceControlError.notConnected)
+        }
+        pendingStreams.removeAll()
         _delegate?.controlChannelDidDisconnect(self)
     }
 
@@ -163,15 +235,16 @@ public actor SpiceControlChannel {
         default: nil
         }
 
-        if let messageId, let continuation = pendingRequests.removeValue(forKey: messageId) {
+        if let messageId, let streamContinuation = pendingStreams.removeValue(forKey: messageId) {
             // This is a response to a pending request
             if let errorMsg = message as? GuestErrorMessage {
-                continuation.resume(throwing: SpiceControlError.guestError(
+                streamContinuation.finish(throwing: SpiceControlError.guestError(
                     code: errorMsg.code,
                     message: errorMsg.message
                 ))
             } else {
-                continuation.resume(returning: message)
+                streamContinuation.yield(message)
+                streamContinuation.finish()
             }
         } else {
             // Unsolicited message - notify delegate
@@ -191,22 +264,45 @@ public actor SpiceControlChannel {
             throw SpiceControlError.notConnected
         }
 
-        // Serialize the message (will be sent via transport in full implementation)
+        guard let transport else {
+            throw SpiceControlError.notConnected
+        }
+
+        // Serialize the message
+        let data: Data
         do {
-            _ = try SpiceMessageSerializer.serialize(message)
+            data = try SpiceMessageSerializer.serialize(message)
         } catch {
             throw SpiceControlError.sendFailed(error)
         }
 
-        // Send and wait for response with timeout
+        // Send via transport
+        let sent = transport.sendControlMessage(data)
+        if !sent {
+            throw SpiceControlError.sendFailed(
+                NSError(domain: "SpiceControlChannel", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "Transport failed to send message",
+                ])
+            )
+        }
+
+        logger.debug("Sent control message (\(data.count) bytes)")
+
+        // Wait for response with timeout using AsyncStream approach
+        // This avoids actor-isolation issues with continuations
         return try await withThrowingTaskGroup(of: Any.self) { group in
+            // Create a stream that will receive the response
+            let (stream, streamContinuation) = AsyncThrowingStream<Any, Error>.makeStream()
+
+            // Register the stream continuation for this message ID
+            pendingStreams[messageId] = streamContinuation
+
             // Add the request task
             group.addTask {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
-                    Task {
-                        await self.registerPendingRequest(messageId: messageId, continuation: continuation)
-                    }
+                for try await response in stream {
+                    return response
                 }
+                throw SpiceControlError.timeout
             }
 
             // Add a timeout task
@@ -219,23 +315,17 @@ public actor SpiceControlChannel {
             do {
                 if let result = try await group.next() {
                     group.cancelAll()
+                    pendingStreams.removeValue(forKey: messageId)
                     return result
                 }
                 throw SpiceControlError.timeout
             } catch {
-                // Clean up pending request on timeout
-                // Note: pendingRequests cleanup handled by actor isolation
+                // Clean up pending stream on timeout
+                pendingStreams.removeValue(forKey: messageId)
+                streamContinuation.finish()
                 throw error
             }
         }
-    }
-
-    private func registerPendingRequest(messageId: UInt32, continuation: CheckedContinuation<Any, Error>) {
-        pendingRequests[messageId] = continuation
-    }
-
-    private func removePendingRequest(messageId: UInt32) {
-        _ = pendingRequests.removeValue(forKey: messageId)
     }
 
     /// Simulate receiving a response (for testing purposes).
@@ -245,7 +335,59 @@ public actor SpiceControlChannel {
     }
 
     /// Simulate a connected state (for testing purposes).
+    /// This sets up a mock transport that accepts messages without actually sending them.
     public func simulateConnected() {
         isConnected = true
+        // Always use mock transport for testing - it doesn't require a real connection
+        #if os(macOS)
+        // On macOS, we still need a mock for testing since LibSpiceStreamTransport
+        // requires an actual Spice connection
+        if transport == nil {
+            // Create a minimal mock that just accepts sends
+            transport = MockTestTransport(logger: logger)
+        }
+        #else
+        if transport == nil {
+            transport = MockSpiceStreamTransport(logger: logger)
+        }
+        #endif
     }
 }
+
+// MARK: - Mock Transport for Testing
+
+#if os(macOS)
+/// Minimal mock transport for testing on macOS without a real Spice connection
+private final class MockTestTransport: SpiceStreamTransport {
+    private let logger: Logger
+
+    init(logger: Logger) {
+        self.logger = logger
+    }
+
+    func openStream(
+        configuration: SpiceStreamConfiguration,
+        windowID: UInt64,
+        callbacks: SpiceStreamCallbacks
+    ) throws -> SpiceStreamSubscription {
+        SpiceStreamSubscription {}
+    }
+
+    func closeStream(_ subscription: SpiceStreamSubscription) {
+        subscription.cleanup()
+    }
+
+    func sendMouseEvent(_ event: MouseInputEvent) {}
+    func sendKeyboardEvent(_ event: KeyboardInputEvent) {}
+    func sendClipboard(_ clipboard: ClipboardData) {}
+    func requestClipboard(format: ClipboardFormat) {}
+    func sendDragDropEvent(_ event: DragDropEvent) {}
+
+    func setControlCallback(_ callback: @escaping (Data) -> Void) {}
+
+    func sendControlMessage(_ data: Data) -> Bool {
+        logger.debug("MockTestTransport: sendControlMessage size=\(data.count)")
+        return true
+    }
+}
+#endif

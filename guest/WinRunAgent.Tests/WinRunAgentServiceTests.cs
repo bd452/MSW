@@ -213,5 +213,192 @@ public sealed class WinRunAgentServiceTests : IDisposable
         Assert.NotNull(service.SessionManager);
     }
 
+    [Fact]
+    public async Task HandleCloseSession_SendsSuccessAckForExistingSession()
+    {
+        using var windowTracker = new WindowTracker(_logger);
+        using var launcher = new ProgramLauncher(_logger);
+        var iconService = new IconExtractionService(_logger);
+        var inputService = new InputInjectionService(_logger);
+        using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        var inbound = Channel.CreateUnbounded<HostMessage>();
+        var outbound = Channel.CreateUnbounded<GuestMessage>();
+
+        using var service = new WinRunAgentService(
+            windowTracker,
+            launcher,
+            iconService,
+            inputService,
+            clipboardService,
+            shortcutService,
+            inbound,
+            outbound,
+            _logger);
+
+        // Track a session first
+        var session = service.SessionManager.TrackSession(1234, @"C:\App.exe");
+        Assert.NotNull(session);
+
+        // Send close session message
+        var closeMessage = new CloseSessionMessage
+        {
+            MessageId = 200,
+            SessionId = "1234"  // Process ID as string
+        };
+        await inbound.Writer.WriteAsync(closeMessage);
+
+        // Allow enough time for shortcut scanning + message processing
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
+
+        try
+        {
+            await service.RunAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+
+        // Find the ACK message
+        var reader = outbound.Reader;
+        AckMessage? ack = null;
+        while (reader.TryRead(out var msg))
+        {
+            if (msg is AckMessage a && a.MessageId == 200)
+            {
+                ack = a;
+                break;
+            }
+        }
+
+        Assert.NotNull(ack);
+        Assert.True(ack.Success);
+        Assert.Null(ack.ErrorMessage);
+
+        // Verify session was marked as exited
+        var closedSession = service.SessionManager.GetSession(1234);
+        Assert.NotNull(closedSession);
+        Assert.Equal(SessionState.Exited, closedSession.State);
+    }
+
+    [Fact]
+    public async Task HandleCloseSession_SendsFailureAckForInvalidSessionId()
+    {
+        using var windowTracker = new WindowTracker(_logger);
+        using var launcher = new ProgramLauncher(_logger);
+        var iconService = new IconExtractionService(_logger);
+        var inputService = new InputInjectionService(_logger);
+        using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        var inbound = Channel.CreateUnbounded<HostMessage>();
+        var outbound = Channel.CreateUnbounded<GuestMessage>();
+
+        using var service = new WinRunAgentService(
+            windowTracker,
+            launcher,
+            iconService,
+            inputService,
+            clipboardService,
+            shortcutService,
+            inbound,
+            outbound,
+            _logger);
+
+        // Send close session message with non-numeric session ID
+        var closeMessage = new CloseSessionMessage
+        {
+            MessageId = 201,
+            SessionId = "not-a-number"
+        };
+        await inbound.Writer.WriteAsync(closeMessage);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
+
+        try
+        {
+            await service.RunAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+
+        // Find the ACK message
+        var reader = outbound.Reader;
+        AckMessage? ack = null;
+        while (reader.TryRead(out var msg))
+        {
+            if (msg is AckMessage a && a.MessageId == 201)
+            {
+                ack = a;
+                break;
+            }
+        }
+
+        Assert.NotNull(ack);
+        Assert.False(ack.Success);
+        Assert.Contains("Invalid session ID", ack.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task HandleCloseSession_SendsFailureAckForNonexistentSession()
+    {
+        using var windowTracker = new WindowTracker(_logger);
+        using var launcher = new ProgramLauncher(_logger);
+        var iconService = new IconExtractionService(_logger);
+        var inputService = new InputInjectionService(_logger);
+        using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        var inbound = Channel.CreateUnbounded<HostMessage>();
+        var outbound = Channel.CreateUnbounded<GuestMessage>();
+
+        using var service = new WinRunAgentService(
+            windowTracker,
+            launcher,
+            iconService,
+            inputService,
+            clipboardService,
+            shortcutService,
+            inbound,
+            outbound,
+            _logger);
+
+        // Send close session message for session that doesn't exist
+        var closeMessage = new CloseSessionMessage
+        {
+            MessageId = 202,
+            SessionId = "99999"
+        };
+        await inbound.Writer.WriteAsync(closeMessage);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
+
+        try
+        {
+            await service.RunAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+
+        // Find the ACK message
+        var reader = outbound.Reader;
+        AckMessage? ack = null;
+        while (reader.TryRead(out var msg))
+        {
+            if (msg is AckMessage a && a.MessageId == 202)
+            {
+                ack = a;
+                break;
+            }
+        }
+
+        Assert.NotNull(ack);
+        Assert.False(ack.Success);
+        Assert.Contains("Session not found", ack.ErrorMessage);
+    }
+
 }
 
