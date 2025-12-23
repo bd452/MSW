@@ -64,9 +64,18 @@ final class SetupFlowControllerTests: XCTestCase {
  
     @MainActor
     func testRoute_ready_callsNormalOperation() {
-        _ = NSApplication.shared
- 
-        let sut = SetupFlowController(preflight: .ready(configuration: VMConfiguration()))
+        let sut = SetupFlowController(
+            preflight: .ready(configuration: VMConfiguration()),
+            presentSetupWindow: { _ in
+                XCTFail("Did not expect setup window presentation")
+                return NSWindow(
+                    contentRect: .zero,
+                    styleMask: [.titled],
+                    backing: .buffered,
+                    defer: false
+                )
+            }
+        )
         var ranNormalOperation = false
  
         sut.routeToSetupOrNormalOperation {
@@ -78,39 +87,53 @@ final class SetupFlowControllerTests: XCTestCase {
  
     @MainActor
     func testRoute_needsSetup_diskImageMissing_presentsWelcomeViewController() {
-        _ = NSApplication.shared
- 
         let diskURL = URL(fileURLWithPath: "/tmp/winrun-missing.img")
-        let sut = SetupFlowController(preflight: .needsSetup(diskImagePath: diskURL, reason: .diskImageMissing))
+        var presentedController: NSViewController?
+        let sut = SetupFlowController(
+            preflight: .needsSetup(diskImagePath: diskURL, reason: .diskImageMissing),
+            presentSetupWindow: { controller in
+                presentedController = controller
+                return NSWindow(
+                    contentRect: .zero,
+                    styleMask: [.titled],
+                    backing: .buffered,
+                    defer: false
+                )
+            }
+        )
  
         sut.routeToSetupOrNormalOperation {
             XCTFail("Expected setup routing, not normal operation")
         }
  
-        let window = findLatestSetupWindow()
-        XCTAssertNotNil(window)
-        XCTAssertTrue(window?.contentViewController is WelcomeViewController)
-        window?.close()
+        XCTAssertNotNil(presentedController)
+        XCTAssertTrue(presentedController is WelcomeViewController)
     }
  
     @MainActor
     func testRoute_needsSetup_diskImageIsDirectory_presentsPlaceholderViewController() {
-        _ = NSApplication.shared
- 
         let diskURL = URL(fileURLWithPath: "/tmp/winrun-directory.img")
-        let sut = SetupFlowController(preflight: .needsSetup(diskImagePath: diskURL, reason: .diskImageIsDirectory))
+        var presentedController: NSViewController?
+        let sut = SetupFlowController(
+            preflight: .needsSetup(diskImagePath: diskURL, reason: .diskImageIsDirectory),
+            presentSetupWindow: { controller in
+                presentedController = controller
+                return NSWindow(
+                    contentRect: .zero,
+                    styleMask: [.titled],
+                    backing: .buffered,
+                    defer: false
+                )
+            }
+        )
  
         sut.routeToSetupOrNormalOperation {
             XCTFail("Expected setup routing, not normal operation")
         }
  
-        let window = findLatestSetupWindow()
-        XCTAssertNotNil(window)
- 
-        let controllerTypeName = String(describing: type(of: window?.contentViewController as Any))
+        XCTAssertNotNil(presentedController)
+        let controllerTypeName = String(describing: type(of: presentedController as Any))
         XCTAssertTrue(controllerTypeName.contains("SetupPlaceholderViewController"))
- 
-        window?.close()
     }
  
     // MARK: - Helpers
@@ -122,11 +145,6 @@ final class SetupFlowControllerTests: XCTestCase {
         return url
     }
  
-    @MainActor
-    private func findLatestSetupWindow() -> NSWindow? {
-        // Prefer the window created by SetupFlowController.
-        let setupWindows = NSApplication.shared.windows.filter { $0.title == "WinRun Setup" }
-        return setupWindows.last
-    }
+    // Note: We intentionally avoid scanning NSApplication.shared.windows in tests to reduce flakiness.
 }
 

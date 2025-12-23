@@ -8,17 +8,22 @@ import WinRunShared
 /// simple placeholder window that makes the required next step obvious.
 @available(macOS 13, *)
 final class SetupFlowController {
+    typealias SetupWindowPresenter = (_ controller: NSViewController) -> NSWindow
+
     private let logger: Logger
     private let preflight: ProvisioningPreflightResult
+    private let presentSetupWindow: SetupWindowPresenter
 
     private var window: NSWindow?
 
     init(
         preflight: ProvisioningPreflightResult,
-        logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupFlowController")
+        logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupFlowController"),
+        presentSetupWindow: @escaping SetupWindowPresenter = SetupFlowController.defaultSetupWindowPresenter
     ) {
         self.preflight = preflight
         self.logger = logger
+        self.presentSetupWindow = presentSetupWindow
     }
 
     func routeToSetupOrNormalOperation(normalOperation: () -> Void) {
@@ -33,8 +38,6 @@ final class SetupFlowController {
     }
 
     private func presentSetupPlaceholder(diskImagePath: URL, reason: ProvisioningPreflightResult.Reason) {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-
         let controller: NSViewController
         switch reason {
         case .diskImageMissing:
@@ -45,6 +48,11 @@ final class SetupFlowController {
                 reason: reason
             )
         }
+        self.window = presentSetupWindow(controller)
+    }
+
+    private static func defaultSetupWindowPresenter(controller: NSViewController) -> NSWindow {
+        NSApplication.shared.activate(ignoringOtherApps: true)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 360),
@@ -56,8 +64,7 @@ final class SetupFlowController {
         window.contentViewController = controller
         window.center()
         window.makeKeyAndOrderFront(nil)
-
-        self.window = window
+        return window
     }
 }
 
