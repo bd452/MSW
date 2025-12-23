@@ -79,7 +79,7 @@
 
 - [ ] Setup UI (First-Run Experience) { host/Sources/WinRunApp/Setup/, host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
   - [ ] First-run detection + setup flow routing { host/Sources/WinRunApp/AppMain.swift, new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Detect missing VM disk image on app launch { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Detect missing VM disk image on app launch { host/Sources/WinRunApp/AppMain.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Route to setup wizard vs normal operation { new:host/Sources/WinRunApp/Setup/SetupFlowController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] Welcome + ISO acquisition view { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Display welcome message and Windows requirements { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
