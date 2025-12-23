@@ -133,76 +133,9 @@ public struct KeyboardInputEvent: Codable, Hashable {
 }
 
 // MARK: - Clipboard
-
-/// Supported clipboard data formats.
-/// String values must match guest's ClipboardFormat enum when serialized as JSON.
-/// Guest uses JsonNamingPolicy.CamelCase, so values are camelCase strings.
-public enum ClipboardFormat: String, Codable, Hashable, CaseIterable {
-    case plainText
-    case rtf
-    case html
-    case png
-    case tiff
-    case fileUrl
-}
-
-/// Direction of clipboard synchronization
-public enum ClipboardDirection: Int32, Codable, Hashable {
-    case hostToGuest = 0
-    case guestToHost = 1
-}
-
-/// Clipboard data to be synchronized between host and guest
-public struct ClipboardData: Codable, Hashable {
-    /// The format of the clipboard content
-    public let format: ClipboardFormat
-
-    /// The actual data (encoded appropriately for the format)
-    public let data: Data
-
-    /// Sequence number for ordering/deduplication
-    public let sequenceNumber: UInt64
-
-    public init(format: ClipboardFormat, data: Data, sequenceNumber: UInt64 = 0) {
-        self.format = format
-        self.data = data
-        self.sequenceNumber = sequenceNumber
-    }
-
-    /// Create clipboard data from a string
-    public static func text(_ string: String, sequenceNumber: UInt64 = 0) -> ClipboardData? {
-        guard let data = string.data(using: .utf8) else { return nil }
-        return ClipboardData(format: .plainText, data: data, sequenceNumber: sequenceNumber)
-    }
-
-    /// Extract text content if format is plainText
-    public var textContent: String? {
-        guard format == .plainText else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-}
-
-/// A clipboard synchronization event
-public struct ClipboardEvent: Codable, Hashable {
-    /// Direction of the sync
-    public let direction: ClipboardDirection
-
-    /// Available formats (best format first)
-    public let availableFormats: [ClipboardFormat]
-
-    /// The clipboard data for the preferred format
-    public let content: ClipboardData?
-
-    public init(
-        direction: ClipboardDirection,
-        availableFormats: [ClipboardFormat],
-        content: ClipboardData? = nil
-    ) {
-        self.direction = direction
-        self.availableFormats = availableFormats
-        self.content = content
-    }
-}
+// Note: ClipboardFormat, ClipboardDirection, ClipboardData, and ClipboardEvent
+// are now defined in WinRunSpiceBridge/ClipboardTypes.swift to use the
+// generated ClipboardFormat from Protocol.generated.swift
 
 // MARK: - Drag and Drop
 
