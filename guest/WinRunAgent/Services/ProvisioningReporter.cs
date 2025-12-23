@@ -57,7 +57,7 @@ public sealed class ProvisioningReporter : IDisposable
         CurrentPhase = phase;
         CurrentPercent = Math.Min((byte)100, percent);
 
-        _logger.LogInfo($"[Provisioning] {phase}: {percent}% - {message}");
+        _logger.Info($"[Provisioning] {phase}: {percent}% - {message}");
 
         var msg = SpiceMessageSerializer.CreateProvisionProgress(phase, percent, message);
         await _outboundChannel.Writer.WriteAsync(msg, cancellationToken);
@@ -76,7 +76,7 @@ public sealed class ProvisioningReporter : IDisposable
         bool isRecoverable = false,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogError($"[Provisioning] {phase} error (0x{errorCode:X8}): {message}");
+        _logger.Error($"[Provisioning] {phase} error (0x{errorCode:X8}): {message}");
 
         var msg = SpiceMessageSerializer.CreateProvisionError(phase, errorCode, message, isRecoverable);
         await _outboundChannel.Writer.WriteAsync(msg, cancellationToken);
@@ -93,7 +93,7 @@ public sealed class ProvisioningReporter : IDisposable
         var windowsVersion = GetWindowsVersion();
         var agentVersion = GetAgentVersion();
 
-        _logger.LogInfo(
+        _logger.Info(
             $"[Provisioning] Complete - Windows: {windowsVersion}, " +
             $"Agent: {agentVersion}, Disk: {diskUsageMB}MB");
 
@@ -116,7 +116,7 @@ public sealed class ProvisioningReporter : IDisposable
     {
         var windowsVersion = GetWindowsVersion();
 
-        _logger.LogError($"[Provisioning] Failed: {errorMessage}");
+        _logger.Error($"[Provisioning] Failed: {errorMessage}");
 
         var msg = SpiceMessageSerializer.CreateProvisionFailed(errorMessage, windowsVersion);
         await _outboundChannel.Writer.WriteAsync(msg, cancellationToken);
