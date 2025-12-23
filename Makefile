@@ -147,8 +147,8 @@ LIVE_LOG ?= 1
 LIVE_LOG_REFRESH_SECONDS ?= 2
 # Safety: avoid hanging forever if status/log fetching gets stuck.
 # Total seconds before aborting log streaming (0 = no timeout).
-# Default: 2 hours.
-LIVE_LOG_TIMEOUT_SECONDS ?= 7200
+# Default: 30 minutes (reasonable for local dev).
+LIVE_LOG_TIMEOUT_SECONDS ?= 1800
 # Abort after this many consecutive log fetch failures (rate limits, transient API errors).
 LIVE_LOG_MAX_CONSECUTIVE_ERRORS ?= 60
 # Exponential backoff cap (seconds) when log fetch fails repeatedly.
