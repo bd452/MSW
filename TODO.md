@@ -85,10 +85,10 @@
     - [X] Display welcome message and Windows requirements { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Link to Microsoft Windows ARM download page { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Recommend Windows 11 IoT Enterprise LTSC 2024 ARM64 { new:host/Sources/WinRunApp/Setup/WelcomeViewController.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] ISO import view with drag-drop { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [X] ISO import view with drag-drop { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Implement drag-drop zone for ISO files { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Add file picker fallback for accessibility { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Display validation results and warnings inline { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Add file picker fallback for accessibility { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Display validation results and warnings inline { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] Installation progress view { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Show phase-based progress with descriptive status { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Display estimated time remaining when possible { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>

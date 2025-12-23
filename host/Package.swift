@@ -70,7 +70,8 @@ var targets: [Target] = [
         dependencies: [
             "WinRunShared",
             "WinRunXPC",
-            "WinRunSpiceBridge"
+            "WinRunSpiceBridge",
+            "WinRunSetup"
         ],
         path: "Sources/WinRunApp",
         resources: [

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import WinRunSetup
 
 /// Setup wizard screen for importing a Windows ISO.
 @available(macOS 13, *)
@@ -7,10 +8,16 @@ final class ISOImportViewController: NSViewController {
     private let titleLabel = NSTextField(labelWithString: "Import a Windows ISO")
     private let subtitleLabel = NSTextField(wrappingLabelWithString: "Drag and drop a Windows 11 ARM64 .iso file to begin.")
     private let selectedFileLabel = NSTextField(labelWithString: "No ISO selected")
+    private let chooseFileButton = NSButton(title: "Choose ISO…", target: nil, action: nil)
+    private let validationStatusLabel = NSTextField(labelWithString: "")
+    private let warningsLabel = NSTextField(wrappingLabelWithString: "")
     private let dropZoneView = ISODropZoneView()
 
     /// Called when a valid ISO file is selected via drag/drop.
     var onISOSelected: ((URL) -> Void)?
+
+    private var validationTask: Task<Void, Never>?
+    private var lastSelectedISO: URL?
 
     override func loadView() {
         view = NSView()
@@ -22,12 +29,32 @@ final class ISOImportViewController: NSViewController {
         selectedFileLabel.font = .systemFont(ofSize: 12)
         selectedFileLabel.textColor = .secondaryLabelColor
 
+        chooseFileButton.target = self
+        chooseFileButton.action = #selector(chooseISOFile)
+        chooseFileButton.bezelStyle = .rounded
+
+        validationStatusLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        validationStatusLabel.textColor = .secondaryLabelColor
+        validationStatusLabel.stringValue = "No ISO selected"
+
+        warningsLabel.font = .systemFont(ofSize: 12)
+        warningsLabel.textColor = .secondaryLabelColor
+        warningsLabel.lineBreakMode = .byWordWrapping
+        warningsLabel.maximumNumberOfLines = 0
+
         dropZoneView.onFileAccepted = { [weak self] url in
-            self?.selectedFileLabel.stringValue = url.lastPathComponent
-            self?.onISOSelected?(url)
+            self?.handleISOSelected(url)
         }
 
-        for subview in [titleLabel, subtitleLabel, dropZoneView, selectedFileLabel] {
+        for subview in [
+            titleLabel,
+            subtitleLabel,
+            dropZoneView,
+            chooseFileButton,
+            selectedFileLabel,
+            validationStatusLabel,
+            warningsLabel,
+        ] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -46,11 +73,99 @@ final class ISOImportViewController: NSViewController {
             dropZoneView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             dropZoneView.heightAnchor.constraint(equalToConstant: 180),
 
-            selectedFileLabel.topAnchor.constraint(equalTo: dropZoneView.bottomAnchor, constant: 12),
+            chooseFileButton.topAnchor.constraint(equalTo: dropZoneView.bottomAnchor, constant: 12),
+            chooseFileButton.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+
+            selectedFileLabel.topAnchor.constraint(equalTo: chooseFileButton.bottomAnchor, constant: 10),
             selectedFileLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             selectedFileLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            selectedFileLabel.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
+
+            validationStatusLabel.topAnchor.constraint(equalTo: selectedFileLabel.bottomAnchor, constant: 8),
+            validationStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            validationStatusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+
+            warningsLabel.topAnchor.constraint(equalTo: validationStatusLabel.bottomAnchor, constant: 8),
+            warningsLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            warningsLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            warningsLabel.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
         ])
+    }
+
+    private func handleISOSelected(_ url: URL) {
+        lastSelectedISO = url
+        selectedFileLabel.stringValue = url.lastPathComponent
+        validationStatusLabel.stringValue = "Validating…"
+        warningsLabel.stringValue = ""
+
+        onISOSelected?(url)
+
+        validationTask?.cancel()
+        validationTask = Task { [weak self] in
+            guard let self else { return }
+
+            let validator = ISOValidator()
+            do {
+                let result = try await validator.validate(isoURL: url)
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    guard self.lastSelectedISO == url else { return }
+                    self.applyValidationResult(result)
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    guard self.lastSelectedISO == url else { return }
+                    self.validationStatusLabel.stringValue = "Could not validate ISO"
+                    self.validationStatusLabel.textColor = .systemRed
+                    self.warningsLabel.stringValue = (error as NSError).localizedDescription
+                }
+            }
+        }
+    }
+
+    private func applyValidationResult(_ result: ISOValidationResult) {
+        if let info = result.editionInfo {
+            validationStatusLabel.stringValue = "\(info.editionName) • \(info.architecture) • \(info.version)"
+            validationStatusLabel.textColor = info.isARM64 ? .secondaryLabelColor : .systemRed
+        } else {
+            validationStatusLabel.stringValue = "Validated, but Windows version details could not be read"
+            validationStatusLabel.textColor = .secondaryLabelColor
+        }
+
+        if result.warnings.isEmpty {
+            warningsLabel.stringValue = result.isRecommended
+                ? "Looks good — this is the recommended Windows edition for WinRun."
+                : "No issues detected."
+            return
+        }
+
+        warningsLabel.stringValue = result.warnings
+            .map { warning in
+                let prefix: String = switch warning.severity {
+                case .critical: "Critical"
+                case .warning: "Warning"
+                case .info: "Info"
+                }
+                if let suggestion = warning.suggestion, !suggestion.isEmpty {
+                    return "\(prefix): \(warning.message)\n  \(suggestion)"
+                }
+                return "\(prefix): \(warning.message)"
+            }
+            .joined(separator: "\n\n")
+    }
+
+    @objc private func chooseISOFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedFileTypes = ["iso"]
+        panel.title = "Choose a Windows ISO"
+        panel.message = "Select a Windows 11 ARM64 .iso file."
+
+        let response = panel.runModal()
+        guard response == .OK, let url = panel.url else { return }
+        handleISOSelected(url)
     }
 }
 
