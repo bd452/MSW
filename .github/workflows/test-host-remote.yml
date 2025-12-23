@@ -1,0 +1,55 @@
+name: Test Host (Remote)
+
+# This workflow runs host build and tests on macOS for any branch.
+# Use `make test-host-remote` to trigger and wait for results.
+#
+# IMPORTANT: This workflow must exist on the default branch (main) to be
+# discoverable by `gh workflow run`. Once on main, it can test any branch
+# by passing the branch name as the `ref` input.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to test (branch, tag, or SHA)'
+        required: false
+        default: ''
+      build_only:
+        description: 'Only build, skip tests'
+        required: false
+        default: 'false'
+
+jobs:
+  test:
+    name: Host Build & Test (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Show ref being tested
+        run: |
+          echo "Testing ref: ${{ github.event.inputs.ref || github.ref }}"
+          git log -1 --oneline
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build') }}
+          restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install dependencies
+        run: |
+          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          pkg-config --modversion spice-client-glib-2.0
+
+      - name: Build
+        working-directory: host
+        run: swift build
+
+      - name: Test
+        if: ${{ github.event.inputs.build_only != 'true' }}
+        working-directory: host
+        run: swift test

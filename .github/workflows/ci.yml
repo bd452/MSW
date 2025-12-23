@@ -12,10 +12,35 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
-  # Host (macOS) - runs in parallel with Guest jobs
+  # Detect which paths changed to conditionally run jobs
+  # ─────────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      host: ${{ steps.filter.outputs.host }}
+      guest: ${{ steps.filter.outputs.guest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            host:
+              - 'host/**'
+              - '.github/workflows/ci.yml'
+              - '.github/Brewfile.host-*'
+            guest:
+              - 'guest/**'
+              - '.github/workflows/ci.yml'
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Host (macOS) - runs only when host paths change
   # ─────────────────────────────────────────────────────────────────────────────
   host-build:
     name: Host Build & Test
+    needs: changes
+    if: needs.changes.outputs.host == 'true'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +63,8 @@ jobs:
 
   host-lint:
     name: Host Lint
+    needs: changes
+    if: needs.changes.outputs.host == 'true'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -56,10 +83,12 @@ jobs:
         run: swiftlint lint --strict --no-cache --reporter github-actions-logging
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Guest (Windows) - runs in parallel with Host jobs
+  # Guest (Windows) - runs only when guest paths change
   # ─────────────────────────────────────────────────────────────────────────────
   guest-build:
     name: Guest Build & Test
+    needs: changes
+    if: needs.changes.outputs.guest == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +109,8 @@ jobs:
 
   guest-lint:
     name: Guest Lint
+    needs: changes
+    if: needs.changes.outputs.guest == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,28 +125,47 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Final gate - require this single check in branch protection
+  # Jobs are successful if they passed OR were skipped (no relevant changes)
   # ─────────────────────────────────────────────────────────────────────────────
   ci:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [host-build, host-lint, guest-build, guest-lint]
+    needs: [changes, host-build, host-lint, guest-build, guest-lint]
     steps:
       - name: Check all jobs passed
         run: |
-          results=(
-            "${{ needs.host-build.result }}"
-            "${{ needs.host-lint.result }}"
-            "${{ needs.guest-build.result }}"
-            "${{ needs.guest-lint.result }}"
-          )
+          echo "Job results:"
+          echo "  changes:    ${{ needs.changes.result }}"
+          echo "  host-build: ${{ needs.host-build.result }}"
+          echo "  host-lint:  ${{ needs.host-lint.result }}"
+          echo "  guest-build: ${{ needs.guest-build.result }}"
+          echo "  guest-lint:  ${{ needs.guest-lint.result }}"
+          echo ""
           
-          for result in "${results[@]}"; do
-            if [[ "$result" != "success" ]]; then
-              echo "❌ One or more jobs failed"
-              exit 1
+          # A job is OK if it succeeded or was skipped (no relevant files changed)
+          check_job() {
+            local result="$1"
+            local name="$2"
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "❌ $name failed (status: $result)"
+              return 1
             fi
-          done
+            return 0
+          }
+          
+          failed=0
+          check_job "${{ needs.changes.result }}" "changes" || failed=1
+          check_job "${{ needs.host-build.result }}" "host-build" || failed=1
+          check_job "${{ needs.host-lint.result }}" "host-lint" || failed=1
+          check_job "${{ needs.guest-build.result }}" "guest-build" || failed=1
+          check_job "${{ needs.guest-lint.result }}" "guest-lint" || failed=1
+          
+          if [[ $failed -eq 1 ]]; then
+            echo ""
+            echo "❌ One or more jobs failed"
+            exit 1
+          fi
           
           echo "✅ All CI checks passed!"
 

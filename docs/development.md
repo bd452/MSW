@@ -274,14 +274,26 @@ Tests are required for:
 ### Running Tests
 
 ```bash
-# All platforms (from repo root)
-make test-host test-guest
+# All platforms (from repo root, requires macOS for host)
+make test
 
-# Host only (macOS, requires Xcode)
+# Host only (requires macOS)
+make test-host
+# Or directly:
 cd host && swift test
 
-# Guest only (Windows or cross-platform .NET SDK)
+# Guest only (requires .NET SDK)
+make test-guest
+# Or directly:
 cd guest && dotnet test WinRunAgent.sln
+
+# Remote execution (opt-in, via GitHub Actions)
+make test-guest-remote   # REQUIRED for guest code changes (runs on Windows)
+make test-host-remote    # run host tests on macOS remotely
+make check-remote        # full CI remotely (host on macOS, guest on Windows)
+
+# Linux-friendly (runs what works locally on Linux)
+make check-linux         # lint both + guest build/test
 ```
 
 ### Test Organization
@@ -308,21 +320,26 @@ All checks must pass before merge. See [Branch Protection](#branch-protection) b
 
 ```bash
 # Run all checks (lint + build + test) - use before committing
-make check
+make check              # Full CI (requires macOS for host)
+make check-linux        # Linux-friendly (lint both + guest build/test)
 
-# Platform-specific checks
-make check-host    # SwiftLint + build + test
-make check-guest   # dotnet format + build + test
+# Platform-specific checks (native)
+make check-host         # SwiftLint + build + test (requires macOS)
+make check-guest        # dotnet format + build + test
+
+# Remote checks (opt-in, via GitHub Actions)
+make check-host-remote  # Run host CI on macOS remotely
+make check-remote       # Run full CI remotely (host on macOS, guest on Windows)
 
 # Lint only (verify style)
-make lint          # Both platforms
-make lint-host     # SwiftLint --strict
-make lint-guest    # dotnet format --verify-no-changes
+make lint               # Both platforms
+make lint-host          # SwiftLint --strict
+make lint-guest         # dotnet format --verify-no-changes
 
 # Format (auto-fix style issues)
-make format        # Both platforms
-make format-host   # SwiftLint --fix
-make format-guest  # dotnet format
+make format             # Both platforms
+make format-host        # SwiftLint --fix
+make format-guest       # dotnet format
 ```
 
 ### Installing Linters
@@ -347,22 +364,39 @@ dotnet tool list -g
 
 ### Pre-Commit Workflow
 
-Before pushing changes, run:
+Before pushing changes, run the appropriate checks based on your environment:
+
+**On macOS (full native checks):**
 ```bash
 # For host code changes
 make check-host
 
 # For guest code changes
 make check-guest          # Local lint + build (catches most issues)
-# Ensure your branch is pushed/up to date before running remote tests
-git push
+git push                  # Push first — remote tests run against remote branch
 make test-guest-remote    # REQUIRED: Tests on Windows CI (catches platform-specific issues)
+```
+
+**On Linux (or non-macOS environments like Cursor web agent):**
+```bash
+# Run everything that works locally
+make check-linux          # Lint both + guest build/test
+
+# For guest code changes, also run remote Windows tests
+git push
+make test-guest-remote    # REQUIRED: Tests on Windows CI
+
+# For host code changes, run remote macOS tests
+git push
+make test-host-remote     # Runs build + test on macOS via GitHub Actions
 ```
 
 **Important for Guest Code**: Always run `make test-guest-remote` after modifying guest code. This catches:
 - Line ending issues (CRLF enforcement on Windows)
 - Windows-specific test failures
 - Platform-specific linting differences
+
+**Important for Host Code on Non-macOS**: Use `make test-host-remote` to run host tests on macOS via GitHub Actions. Native host build/test requires macOS due to Apple framework dependencies (Virtualization.framework, AppKit, Metal).
 
 **Remote tests run against the remote branch**: if you have local-only changes, push them first or the remote workflow won’t see them.
 
@@ -379,16 +413,20 @@ To enforce CI checks before merge, configure branch protection in GitHub:
    - ☑️ Require status checks to pass before merging
    - ☑️ Require branches to be up to date before merging
 4. Select required status checks:
-   - `Host (macOS) / Build & Test`
-   - `Host (macOS) / Lint`
-   - `Guest (Windows) / Build & Test`
-   - `Guest (Windows) / Lint`
+   - `CI` (the final gate job that aggregates all results)
 5. Save changes
+
+> **Note:** Only require the `CI` job, not individual jobs. Individual jobs may be skipped when their files haven't changed, but the `CI` gate handles this correctly.
 
 ### Path-Based Triggers
 
-CI workflows only run when relevant files change:
-- **Host workflow**: Triggered by changes in `host/**`
-- **Guest workflow**: Triggered by changes in `guest/**`
+CI jobs only run when relevant files change:
 
-This saves CI minutes when changes are isolated to one platform.
+| Job | Triggered by changes in |
+|-----|------------------------|
+| Host Build & Test | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
+| Host Lint | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
+| Guest Build & Test | `guest/**`, `.github/workflows/ci.yml` |
+| Guest Lint | `guest/**`, `.github/workflows/ci.yml` |
+
+This saves CI minutes when changes are isolated to one platform. The final `CI` gate job treats skipped jobs as successful.
