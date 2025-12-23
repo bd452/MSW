@@ -196,7 +196,7 @@ protocol SpiceStreamTransport {
                 y: event.y,
                 scroll_delta_x: event.scrollDeltaX,
                 scroll_delta_y: event.scrollDeltaY,
-                modifiers: event.modifiers.rawValue
+                modifiers: Int32(event.modifiers.rawValue)
             )
 
             _ = winrun_spice_send_mouse_event(handle, &cEvent)
@@ -216,7 +216,7 @@ protocol SpiceStreamTransport {
                         key_code: event.keyCode,
                         scan_code: event.scanCode,
                         is_extended_key: event.isExtendedKey,
-                        modifiers: event.modifiers.rawValue,
+                        modifiers: Int32(event.modifiers.rawValue),
                         character: charPtr
                     )
                     _ = winrun_spice_send_keyboard_event(handle, &cEvent)
@@ -228,7 +228,7 @@ protocol SpiceStreamTransport {
                     key_code: event.keyCode,
                     scan_code: event.scanCode,
                     is_extended_key: event.isExtendedKey,
-                    modifiers: event.modifiers.rawValue,
+                    modifiers: Int32(event.modifiers.rawValue),
                     character: nil
                 )
                 _ = winrun_spice_send_keyboard_event(handle, &cEvent)
