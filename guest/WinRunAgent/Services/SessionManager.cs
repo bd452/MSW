@@ -419,12 +419,10 @@ public sealed class SessionManager : IDisposable
 
     private static bool IsWindowOwnedByProcess(ulong windowId, int processId)
     {
-        // On Windows, we would use GetWindowThreadProcessId
-        // For now, this is a placeholder that returns false
-        // The actual implementation requires P/Invoke on Windows
-        _ = windowId;
-        _ = processId;
-        return false;
+        // Use GetWindowThreadProcessId to determine window ownership
+        var hwnd = (nint)windowId;
+        _ = Win32.GetWindowThreadProcessId(hwnd, out var windowProcessId);
+        return windowProcessId == (uint)processId;
     }
 
     private static (float CpuPercent, long MemoryBytes) GetProcessMetrics()
