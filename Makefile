@@ -131,7 +131,25 @@ define run-remote-workflow
 	BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
 	REPO=$$(gh repo view --json nameWithOwner --jq '.nameWithOwner'); \
 	echo "📍 Testing branch: $$BRANCH"; \
-	gh workflow run $(1) --ref "$$BRANCH" -f ref="$$BRANCH" $(3); \
+	if ! gh workflow run $(1) --ref "$$BRANCH" -f ref="$$BRANCH" $(3) 2>/tmp/gh-error.txt; then \
+		if grep -q "not found" /tmp/gh-error.txt 2>/dev/null; then \
+			echo ""; \
+			echo "❌ Workflow '$(1)' not found on default branch."; \
+			echo ""; \
+			echo "   GitHub requires workflow files to exist on the default branch (main)"; \
+			echo "   before they can be triggered via workflow_dispatch."; \
+			echo ""; \
+			echo "   Options:"; \
+			echo "   1. Push a PR to add the workflow file to main first"; \
+			echo "   2. Use 'gh pr create' to open a PR - CI runs automatically on PRs"; \
+			echo "   3. Push to main and then test your branch"; \
+			echo ""; \
+			exit 1; \
+		else \
+			cat /tmp/gh-error.txt; \
+			exit 1; \
+		fi; \
+	fi; \
 	echo "⏳ Waiting for workflow to start..."; \
 	sleep 5; \
 	RUN_ID=$$(gh run list --workflow=$(1) --branch="$$BRANCH" --limit=1 --json databaseId --jq '.[0].databaseId'); \

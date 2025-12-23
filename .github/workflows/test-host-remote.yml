@@ -1,8 +1,11 @@
 name: Test Host (Remote)
 
-# This workflow is manually triggered to run host build and tests on macOS.
+# This workflow runs host build and tests on macOS for any branch.
 # Use `make test-host-remote` to trigger and wait for results.
-# This is separate from the main CI workflow and does not run automatically.
+#
+# IMPORTANT: This workflow must exist on the default branch (main) to be
+# discoverable by `gh workflow run`. Once on main, it can test any branch
+# by passing the branch name as the `ref` input.
 
 on:
   workflow_dispatch:
@@ -24,6 +27,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Show ref being tested
+        run: |
+          echo "Testing ref: ${{ github.event.inputs.ref || github.ref }}"
+          git log -1 --oneline
 
       - name: Cache Homebrew downloads
         uses: actions/cache@v4
