@@ -138,11 +138,25 @@ final class ProtocolValidationTests: XCTestCase {
     }
 
     func testProvisioningPhasesMatchGenerated() {
-        // Case-insensitive comparison since existing uses lowercase enum case names
-        XCTAssertEqual(GuestProvisioningPhase.drivers.rawValue.lowercased(), "drivers")
-        XCTAssertEqual(GuestProvisioningPhase.agent.rawValue.lowercased(), "agent")
-        XCTAssertEqual(GuestProvisioningPhase.optimize.rawValue.lowercased(), "optimize")
-        XCTAssertEqual(GuestProvisioningPhase.finalize.rawValue.lowercased(), "finalize")
-        XCTAssertEqual(GuestProvisioningPhase.complete.rawValue.lowercased(), "complete")
+        XCTAssertEqual(
+            GuestProvisioningPhase.drivers.rawValue,
+            GeneratedProvisioningPhase.drivers.rawValue
+        )
+        XCTAssertEqual(
+            GuestProvisioningPhase.agent.rawValue,
+            GeneratedProvisioningPhase.agent.rawValue
+        )
+        XCTAssertEqual(
+            GuestProvisioningPhase.optimize.rawValue,
+            GeneratedProvisioningPhase.optimize.rawValue
+        )
+        XCTAssertEqual(
+            GuestProvisioningPhase.finalize.rawValue,
+            GeneratedProvisioningPhase.finalize.rawValue
+        )
+        XCTAssertEqual(
+            GuestProvisioningPhase.complete.rawValue,
+            GeneratedProvisioningPhase.complete.rawValue
+        )
     }
 }

@@ -142,22 +142,24 @@ WINDOW_EVENT_UPDATED = 7
 # ===========================================================================
 # String values for JSON serialization
 
+# String values here are the actual wire format (C# uses CamelCase JSON policy)
 [CLIPBOARD_FORMATS]
-CLIPBOARD_FORMAT_PLAIN_TEXT = PlainText
-CLIPBOARD_FORMAT_RTF = Rtf
-CLIPBOARD_FORMAT_HTML = Html
-CLIPBOARD_FORMAT_PNG = Png
-CLIPBOARD_FORMAT_TIFF = Tiff
-CLIPBOARD_FORMAT_FILE_URL = FileUrl
+CLIPBOARD_FORMAT_PLAIN_TEXT = plainText
+CLIPBOARD_FORMAT_RTF = rtf
+CLIPBOARD_FORMAT_HTML = html
+CLIPBOARD_FORMAT_PNG = png
+CLIPBOARD_FORMAT_TIFF = tiff
+CLIPBOARD_FORMAT_FILE_URL = fileUrl
 
 # ===========================================================================
 # Provisioning Phases
 # ===========================================================================
 # String values for JSON serialization
 
+# String values here are the actual wire format (lowercase)
 [PROVISIONING_PHASES]
-PROVISION_PHASE_DRIVERS = Drivers
-PROVISION_PHASE_AGENT = Agent
-PROVISION_PHASE_OPTIMIZE = Optimize
-PROVISION_PHASE_FINALIZE = Finalize
-PROVISION_PHASE_COMPLETE = Complete
+PROVISION_PHASE_DRIVERS = drivers
+PROVISION_PHASE_AGENT = agent
+PROVISION_PHASE_OPTIMIZE = optimize
+PROVISION_PHASE_FINALIZE = finalize
+PROVISION_PHASE_COMPLETE = complete
