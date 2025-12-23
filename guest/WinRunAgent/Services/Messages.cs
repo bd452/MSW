@@ -939,7 +939,7 @@ public static class SpiceMessageSerializer
         IEnumerable<ProgramSession> sessions) => new()
         {
             MessageId = messageId,
-            Sessions = sessions.Select(s => new SessionInfo
+            Sessions = [.. sessions.Select(s => new SessionInfo
             {
                 SessionId = s.ProcessId.ToString(),
                 ProcessId = s.ProcessId,
@@ -956,6 +956,6 @@ public static class SpiceMessageSerializer
                     _ => SessionStateType.Active
                 },
                 WindowCount = s.WindowCount
-            }).ToArray()
+            })]
         };
 }

@@ -116,7 +116,7 @@ import Security
 
                 // Query guest agent for actual sessions
                 let vmState = await vmController.currentState()
-                guard vmState.isRunning else {
+                guard vmState.status == .running else {
                     // VM not running, return empty list
                     let sessions = GuestSessionList(sessions: [])
                     reply(try encode(sessions), nil)
@@ -151,7 +151,7 @@ import Security
 
                 // Check VM state
                 let vmState = await vmController.currentState()
-                guard vmState.isRunning else {
+                guard vmState.status == .running else {
                     logger.warn("Cannot close session - VM not running")
                     reply(nil)
                     return

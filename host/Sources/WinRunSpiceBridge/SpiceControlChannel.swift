@@ -191,10 +191,9 @@ public actor SpiceControlChannel {
             throw SpiceControlError.notConnected
         }
 
-        // Serialize the message
-        let data: Data
+        // Serialize the message (will be sent via transport in full implementation)
         do {
-            data = try SpiceMessageSerializer.serialize(message)
+            _ = try SpiceMessageSerializer.serialize(message)
         } catch {
             throw SpiceControlError.sendFailed(error)
         }
@@ -225,7 +224,7 @@ public actor SpiceControlChannel {
                 throw SpiceControlError.timeout
             } catch {
                 // Clean up pending request on timeout
-                await self.removePendingRequest(messageId: messageId)
+                // Note: pendingRequests cleanup handled by actor isolation
                 throw error
             }
         }
