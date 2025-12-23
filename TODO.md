@@ -89,10 +89,10 @@
     - [X] Implement drag-drop zone for ISO files { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add file picker fallback for accessibility { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Display validation results and warnings inline { new:host/Sources/WinRunApp/Setup/ISOImportViewController.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] Installation progress view { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Show phase-based progress with descriptive status { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Display estimated time remaining when possible { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Provide cancel option with confirmation dialog { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Installation progress view { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Show phase-based progress with descriptive status { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Display estimated time remaining when possible { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Provide cancel option with confirmation dialog { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] Setup complete + getting started view { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Show success message with disk usage summary { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Display quick-start tips for running Windows apps { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
