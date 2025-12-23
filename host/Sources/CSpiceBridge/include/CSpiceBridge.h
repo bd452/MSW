@@ -197,6 +197,31 @@ bool winrun_spice_send_drag_event(
     const winrun_drag_event *event
 );
 
+// MARK: - Control Channel (Agent Messages)
+
+/// Callback for receiving control messages from guest agent
+typedef void (*winrun_control_message_cb)(
+    const uint8_t *data,
+    size_t length,
+    void *user_data
+);
+
+/// Set control message callback for receiving guest agent messages
+void winrun_spice_set_control_callback(
+    winrun_spice_stream_handle stream,
+    winrun_control_message_cb control_cb,
+    void *user_data
+);
+
+/// Send a control message to the guest agent
+/// Message format: [Type:1][Length:4][Payload:N] (binary envelope)
+/// Returns true on success, false on failure
+bool winrun_spice_send_control_message(
+    winrun_spice_stream_handle stream,
+    const uint8_t *data,
+    size_t length
+);
+
 #ifdef __cplusplus
 }
 #endif

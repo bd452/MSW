@@ -27,6 +27,10 @@ protocol SpiceStreamTransport {
 
     // Drag and drop
     func sendDragDropEvent(_ event: DragDropEvent)
+
+    // Control channel
+    func setControlCallback(_ callback: @escaping (Data) -> Void)
+    func sendControlMessage(_ data: Data) -> Bool
 }
 
 // MARK: - macOS Implementation
@@ -299,6 +303,34 @@ protocol SpiceStreamTransport {
             }
         }
 
+        // MARK: - Control Channel
+
+        private var controlCallback: ((Data) -> Void)?
+        private var controlTrampoline: ControlCallbackTrampoline?
+
+        func setControlCallback(_ callback: @escaping (Data) -> Void) {
+            guard let handle = currentHandle else { return }
+
+            controlCallback = callback
+            controlTrampoline = ControlCallbackTrampoline(callback: callback)
+
+            let unmanaged = Unmanaged.passRetained(controlTrampoline!)
+            winrun_spice_set_control_callback(handle, controlMessageThunk, unmanaged.toOpaque())
+        }
+
+        func sendControlMessage(_ data: Data) -> Bool {
+            guard let handle = currentHandle else { return false }
+
+            return data.withUnsafeBytes { buffer in
+                guard let baseAddress = buffer.baseAddress else { return false }
+                return winrun_spice_send_control_message(
+                    handle,
+                    baseAddress.assumingMemoryBound(to: UInt8.self),
+                    data.count
+                )
+            }
+        }
+
         private func clipboardFormatToC(_ format: ClipboardFormat) -> winrun_clipboard_format {
             switch format {
             case .plainText: return WINRUN_CLIPBOARD_FORMAT_TEXT
@@ -336,6 +368,31 @@ protocol SpiceStreamTransport {
             callbacks.onClipboard(clipboard)
         }
     }
+
+    private final class ControlCallbackTrampoline {
+        private let callback: (Data) -> Void
+
+        init(callback: @escaping (Data) -> Void) {
+            self.callback = callback
+        }
+
+        func handleControlMessage(_ data: Data) {
+            callback(data)
+        }
+    }
+
+    private let controlMessageThunk:
+        @convention(c) (
+            UnsafePointer<UInt8>?,
+            Int,
+            UnsafeMutableRawPointer?
+        ) -> Void = { bytes, length, userData in
+            guard let bytes, let userData, length > 0 else { return }
+            let trampoline = Unmanaged<ControlCallbackTrampoline>.fromOpaque(userData)
+                .takeUnretainedValue()
+            let data = Data(bytes: bytes, count: length)
+            trampoline.handleControlMessage(data)
+        }
 
     private let spiceFrameThunk:
         @convention(c) (
@@ -472,6 +529,25 @@ protocol SpiceStreamTransport {
         func sendDragDropEvent(_ event: DragDropEvent) {
             logger.debug(
                 "Mock: sendDragDropEvent type=\(event.eventType) files=\(event.files.count)")
+        }
+
+        // MARK: - Control Channel (Mock)
+
+        private var mockControlCallback: ((Data) -> Void)?
+
+        func setControlCallback(_ callback: @escaping (Data) -> Void) {
+            mockControlCallback = callback
+            logger.debug("Mock: setControlCallback")
+        }
+
+        func sendControlMessage(_ data: Data) -> Bool {
+            logger.debug("Mock: sendControlMessage size=\(data.count)")
+            return true
+        }
+
+        /// Simulate receiving a control message (for testing)
+        func simulateControlMessage(_ data: Data) {
+            mockControlCallback?(data)
         }
     }
 #endif

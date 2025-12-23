@@ -55,13 +55,14 @@ public sealed class WinRunAgentService : IDisposable
     }
 
     /// <summary>
-    /// Backward compatibility constructor without outbound channel and optional services.
+    /// Simplified constructor with separate inbound/outbound channels.
     /// </summary>
     public WinRunAgentService(
         WindowTracker windowTracker,
         ProgramLauncher launcher,
         IconExtractionService iconService,
         Channel<HostMessage> inboundChannel,
+        Channel<GuestMessage> outboundChannel,
         IAgentLogger logger)
     {
         _windowTracker = windowTracker;
@@ -70,7 +71,7 @@ public sealed class WinRunAgentService : IDisposable
         _inputService = new InputInjectionService(logger);
         _clipboardService = new ClipboardSyncService(logger);
         _inboundChannel = inboundChannel;
-        _outboundChannel = Channel.CreateUnbounded<GuestMessage>();
+        _outboundChannel = outboundChannel;
         _logger = logger;
         Telemetry = new SpiceChannelTelemetry(logger, _outboundChannel);
 
@@ -90,6 +91,20 @@ public sealed class WinRunAgentService : IDisposable
 
         // Subscribe to clipboard changes
         _clipboardService.ClipboardChanged += OnClipboardChanged;
+    }
+
+    /// <summary>
+    /// Backward compatibility constructor without outbound channel.
+    /// Creates internal outbound channel that is not connected to any transport.
+    /// </summary>
+    public WinRunAgentService(
+        WindowTracker windowTracker,
+        ProgramLauncher launcher,
+        IconExtractionService iconService,
+        Channel<HostMessage> inboundChannel,
+        IAgentLogger logger)
+        : this(windowTracker, launcher, iconService, inboundChannel, Channel.CreateUnbounded<GuestMessage>(), logger)
+    {
     }
 
     /// <summary>

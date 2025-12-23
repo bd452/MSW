@@ -19,13 +19,43 @@ public static class Program
         var launcher = new ProgramLauncher(logger);
         var iconService = new IconExtractionService(logger);
 
+        // Create channels for host<->agent communication
+        var inboundChannel = Channel.CreateUnbounded<HostMessage>();
+        var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
+
+        // Set up Spice control port for host communication
+        var controlPort = new SpiceControlPort(logger, inboundChannel, outboundChannel);
+        var useControlPort = controlPort.TryOpen();
+
+        if (useControlPort)
+        {
+            controlPort.Start();
+            logger.Info("Connected to Spice control port");
+        }
+        else
+        {
+            logger.Warn("Spice control port not available - running in standalone mode");
+        }
+
         var agent = new WinRunAgentService(
             windowTracker,
             launcher,
             iconService,
-            Channel.CreateUnbounded<HostMessage>(),
+            inboundChannel,
+            outboundChannel,
             logger);
 
-        await agent.RunAsync(cancellationSource.Token);
+        try
+        {
+            await agent.RunAsync(cancellationSource.Token);
+        }
+        finally
+        {
+            if (useControlPort)
+            {
+                await controlPort.StopAsync();
+                controlPort.Dispose();
+            }
+        }
     }
 }
