@@ -332,7 +332,12 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     
     for (name, value) in def.clipboardFormats {
         let caseName = toSwiftEnumCase(name, prefix: "CLIPBOARD_FORMAT_")
-        out += "    case \(caseName) = \"\(value)\"\n"
+        // Only output explicit raw value if it differs from case name
+        if caseName == value {
+            out += "    case \(caseName)\n"
+        } else {
+            out += "    case \(caseName) = \"\(value)\"\n"
+        }
     }
     
     out += """
@@ -347,7 +352,12 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     
     for (name, value) in def.provisioningPhases {
         let caseName = toSwiftEnumCase(name, prefix: "PROVISION_PHASE_")
-        out += "    case \(caseName) = \"\(value)\"\n"
+        // Only output explicit raw value if it differs from case name
+        if caseName == value {
+            out += "    case \(caseName)\n"
+        } else {
+            out += "    case \(caseName) = \"\(value)\"\n"
+        }
     }
     
     out += "}\n"

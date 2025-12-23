@@ -155,21 +155,21 @@ public enum GeneratedWindowEventType: Int32, Codable {
 
 /// Clipboard format identifiers - generated from shared/protocol.def
 public enum GeneratedClipboardFormat: String, Codable, CaseIterable {
-    case plainText = "plainText"
-    case rtf = "rtf"
-    case html = "html"
-    case png = "png"
-    case tiff = "tiff"
-    case fileUrl = "fileUrl"
+    case plainText
+    case rtf
+    case html
+    case png
+    case tiff
+    case fileUrl
 }
 
 // MARK: - Provisioning Phases
 
 /// Provisioning phase identifiers - generated from shared/protocol.def
 public enum GeneratedProvisioningPhase: String, Codable, CaseIterable {
-    case drivers = "drivers"
-    case agent = "agent"
-    case optimize = "optimize"
-    case finalize = "finalize"
-    case complete = "complete"
+    case drivers
+    case agent
+    case optimize
+    case finalize
+    case complete
 }
