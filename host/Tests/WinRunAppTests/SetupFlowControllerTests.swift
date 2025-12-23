@@ -132,7 +132,8 @@ final class SetupFlowControllerTests: XCTestCase {
         }
 
         XCTAssertNotNil(presentedController)
-        let controllerTypeName = String(describing: type(of: presentedController as Any))
+        let unwrapped = try XCTUnwrap(presentedController)
+        let controllerTypeName = String(describing: type(of: unwrapped))
         XCTAssertTrue(controllerTypeName.contains("SetupPlaceholderViewController"))
     }
 
