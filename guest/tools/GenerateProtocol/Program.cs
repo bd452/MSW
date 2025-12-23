@@ -149,6 +149,18 @@ static string ToCSharpEnumName(string name, string prefix)
     if (result.StartsWith(prefix))
         result = result[prefix.Length..];
 
+    // Special case for key event types to preserve existing API
+    if (prefix == "KEY_EVENT_")
+    {
+        return result switch
+        {
+            "DOWN" => "KeyDown",
+            "UP" => "KeyUp",
+            _ => string.Join("", result.Split('_')
+                .Select(p => char.ToUpper(p[0]) + p[1..].ToLower()))
+        };
+    }
+
     // Convert SNAKE_CASE to PascalCase
     return string.Join("", result.Split('_')
         .Select(p => char.ToUpper(p[0]) + p[1..].ToLower()));
@@ -176,7 +188,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Protocol version constants - generated from shared/protocol.def
         /// </summary>
-        public static class GeneratedProtocolVersion
+        public static class SpiceProtocolVersion
         {
         """);
 
@@ -195,7 +207,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Message type codes - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedMessageType : byte
+        public enum SpiceMessageType : byte
         {
             // Host → Guest (0x00-0x7F)
         """);
@@ -228,7 +240,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// Guest capability flags - generated from shared/protocol.def
         /// </summary>
         [Flags]
-        public enum GeneratedCapabilities : uint
+        public enum GuestCapabilities : uint
         {
             None = 0,
         """);
@@ -251,7 +263,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Mouse button codes - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedMouseButton : byte
+        public enum MouseButton : byte
         {
         """);
 
@@ -269,7 +281,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Mouse event types - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedMouseEventType : byte
+        public enum MouseEventType : byte
         {
         """);
 
@@ -291,7 +303,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Key event types - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedKeyEventType : byte
+        public enum KeyEventType : byte
         {
         """);
 
@@ -310,7 +322,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// Key modifier flags - generated from shared/protocol.def
         /// </summary>
         [Flags]
-        public enum GeneratedKeyModifiers : byte
+        public enum KeyModifiers : byte
         {
         """);
 
@@ -332,7 +344,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Drag/drop event types - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedDragDropEventType : byte
+        public enum DragDropEventType : byte
         {
         """);
 
@@ -350,7 +362,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Drag operation types - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedDragOperation : byte
+        public enum DragOperation : byte
         {
         """);
 
@@ -372,7 +384,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Pixel format types - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedPixelFormat : byte
+        public enum PixelFormatType : byte
         {
         """);
 
@@ -394,7 +406,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Window event types - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedWindowEventType : int
+        public enum WindowEventType : int
         {
         """);
 
@@ -416,7 +428,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Clipboard format identifiers - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedClipboardFormat
+        public enum ClipboardFormat
         {
         """);
 
@@ -438,7 +450,7 @@ static string GenerateCSharp(ProtocolDefinition def)
         /// <summary>
         /// Provisioning phase identifiers - generated from shared/protocol.def
         /// </summary>
-        public enum GeneratedProvisioningPhase
+        public enum ProvisioningPhase
         {
         """);
 
@@ -450,7 +462,64 @@ static string GenerateCSharp(ProtocolDefinition def)
 
     sb.AppendLine("}");
 
+    // Backwards compatibility typealiases
+    sb.AppendLine("""
+
+        // ============================================================================
+        // Backwards Compatibility Aliases
+        // ============================================================================
+        // These allow existing code referencing Generated* types to continue working
+        // TODO: Remove these after migrating all code to use the canonical type names
+
+        #pragma warning disable CA1711 // Identifiers should not have incorrect suffix
+
+        /// <summary>Backwards compatibility alias - use SpiceProtocolVersion instead</summary>
+        [Obsolete("Use SpiceProtocolVersion instead")]
+        public static class GeneratedProtocolVersion
+        {
+            public const ushort Major = SpiceProtocolVersion.Major;
+            public const ushort Minor = SpiceProtocolVersion.Minor;
+            public static uint Combined => SpiceProtocolVersion.Combined;
+        }
+
+        /// <summary>Backwards compatibility alias - use SpiceMessageType instead</summary>
+        [Obsolete("Use SpiceMessageType instead")]
+        public enum GeneratedMessageType : byte
+        {
+        """);
+
+    foreach (var (name, value) in def.MessageTypesHostToGuest)
+    {
+        var enumName = ToCSharpEnumName(name, "MSG_");
+        sb.AppendLine($"    {enumName} = 0x{value:X2},");
+    }
+    foreach (var (name, value) in def.MessageTypesGuestToHost)
+    {
+        var enumName = ToCSharpEnumName(name, "MSG_");
+        sb.AppendLine($"    {enumName} = 0x{value:X2},");
+    }
+
+    sb.AppendLine("""
+        }
+
+        /// <summary>Backwards compatibility alias - use GuestCapabilities instead</summary>
+        [Obsolete("Use GuestCapabilities instead")]
+        [Flags]
+        public enum GeneratedCapabilities : uint
+        {
+            None = 0,
+        """);
+
+    foreach (var (name, value) in def.Capabilities)
+    {
+        var enumName = ToCSharpEnumName(name, "CAP_");
+        sb.AppendLine($"    {enumName} = 0x{value:X2},");
+    }
+
+    sb.AppendLine("}");
+
     sb.AppendLine();
+    sb.AppendLine("#pragma warning restore CA1711");
     sb.AppendLine("#pragma warning restore CA1008");
 
     return sb.ToString();

@@ -4,72 +4,12 @@ using System.Text.Json.Serialization;
 
 namespace WinRun.Agent.Services;
 
-/// <summary>
-/// Protocol version for host↔guest communication.
-/// Increment when making breaking changes to message formats.
-/// </summary>
-public static class ProtocolVersion
-{
-    public const ushort Major = 1;
-    public const ushort Minor = 0;
-
-    public static uint Combined => ((uint)Major << 16) | Minor;
-}
-
-/// <summary>
-/// Message type identifiers for Spice channel serialization.
-/// Values 0x00-0x7F are reserved for host→guest messages.
-/// Values 0x80-0xFF are reserved for guest→host messages.
-/// </summary>
-public enum SpiceMessageType : byte
-{
-    // Host → Guest (0x00-0x7F)
-    LaunchProgram = 0x01,
-    RequestIcon = 0x02,
-    ClipboardData = 0x03,
-    MouseInput = 0x04,
-    KeyboardInput = 0x05,
-    DragDropEvent = 0x06,
-    ListSessions = 0x08,
-    CloseSession = 0x09,
-    ListShortcuts = 0x0A,
-    Shutdown = 0x0F,
-
-    // Guest → Host (0x80-0xFF)
-    WindowMetadata = 0x80,
-    FrameData = 0x81,
-    CapabilityFlags = 0x82,
-    DpiInfo = 0x83,
-    IconData = 0x84,
-    ShortcutDetected = 0x85,
-    ClipboardChanged = 0x86,
-    Heartbeat = 0x87,
-    TelemetryReport = 0x88,
-    ProvisionProgress = 0x89,
-    ProvisionError = 0x8A,
-    ProvisionComplete = 0x8B,
-    SessionList = 0x8C,
-    ShortcutList = 0x8D,
-    Error = 0xFE,
-    Ack = 0xFF
-}
-
-/// <summary>
-/// Capability flags reported by the guest agent.
-/// </summary>
-[Flags]
-public enum GuestCapabilities : uint
-{
-    None = 0,
-    WindowTracking = 1 << 0,
-    DesktopDuplication = 1 << 1,
-    ClipboardSync = 1 << 2,
-    DragDrop = 1 << 3,
-    IconExtraction = 1 << 4,
-    ShortcutDetection = 1 << 5,
-    HighDpiSupport = 1 << 6,
-    MultiMonitor = 1 << 7
-}
+// ============================================================================
+// Note: Core protocol types (SpiceMessageType, GuestCapabilities, MouseButton,
+// MouseEventType, KeyEventType, KeyModifiers, DragDropEventType, DragOperation,
+// PixelFormatType, ClipboardFormat, ProvisioningPhase, etc.) are defined in
+// Protocol.generated.cs which is auto-generated from shared/protocol.def.
+// ============================================================================
 
 // ============================================================================
 // Host → Guest Messages
@@ -429,29 +369,6 @@ public sealed record ShortcutListMessage : GuestMessage
 // ============================================================================
 
 /// <summary>
-/// Phase of post-install provisioning running in the guest.
-/// Values must match host's GuestProvisioningPhase enum exactly for protocol compatibility.
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum ProvisioningPhase
-{
-    /// <summary>Installing VirtIO drivers.</summary>
-    Drivers,
-
-    /// <summary>Installing WinRun Agent.</summary>
-    Agent,
-
-    /// <summary>Optimizing Windows (removing bloat, disabling services).</summary>
-    Optimize,
-
-    /// <summary>Finalizing configuration before shutdown.</summary>
-    Finalize,
-
-    /// <summary>Provisioning complete.</summary>
-    Complete
-}
-
-/// <summary>
 /// Progress update during guest provisioning.
 /// Sent by the guest during post-install provisioning to report progress
 /// on driver installation, agent setup, and Windows optimization.
@@ -542,98 +459,6 @@ public sealed record DraggedFileInfo
     public string? GuestPath { get; init; }
     public ulong FileSize { get; init; }
     public bool IsDirectory { get; init; }
-}
-
-/// <summary>
-/// Pixel format for frame data.
-/// </summary>
-public enum PixelFormatType : byte
-{
-    Bgra32 = 0,
-    Rgba32 = 1
-}
-
-/// <summary>
-/// Mouse button identifiers (matching Windows VK codes).
-/// </summary>
-public enum MouseButton : byte
-{
-    Left = 1,
-    Right = 2,
-    Middle = 4,
-    Extra1 = 5,
-    Extra2 = 6
-}
-
-/// <summary>
-/// Mouse event types.
-/// </summary>
-public enum MouseEventType : byte
-{
-    Move = 0,
-    Press = 1,
-    Release = 2,
-    Scroll = 3
-}
-
-/// <summary>
-/// Keyboard event types.
-/// </summary>
-public enum KeyEventType : byte
-{
-    KeyDown = 0,
-    KeyUp = 1
-}
-
-/// <summary>
-/// Modifier key flags.
-/// </summary>
-[Flags]
-public enum KeyModifiers : byte
-{
-    None = 0,
-    Shift = 1 << 0,
-    Control = 1 << 1,
-    Alt = 1 << 2,
-    Command = 1 << 3,
-    CapsLock = 1 << 4,
-    NumLock = 1 << 5
-}
-
-/// <summary>
-/// Drag operation types.
-/// </summary>
-public enum DragOperation : byte
-{
-    None = 0,
-    Copy = 1,
-    Move = 2,
-    Link = 3
-}
-
-/// <summary>
-/// Drag and drop event types.
-/// </summary>
-public enum DragDropEventType : byte
-{
-    Enter = 0,
-    Move = 1,
-    Leave = 2,
-    Drop = 3
-}
-
-/// <summary>
-/// Clipboard data formats (matching macOS UTI identifiers).
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum ClipboardFormat
-{
-    PlainText,
-    Rtf,
-    Html,
-    Png,
-    Tiff,
-    FileUrl
 }
 
 // ============================================================================
@@ -793,7 +618,7 @@ public static class SpiceMessageSerializer
     public static CapabilityFlagsMessage CreateCapabilityMessage(GuestCapabilities capabilities) => new()
     {
         Capabilities = capabilities,
-        ProtocolVersion = ProtocolVersion.Combined
+        ProtocolVersion = SpiceProtocolVersion.Combined
     };
 
     /// <summary>

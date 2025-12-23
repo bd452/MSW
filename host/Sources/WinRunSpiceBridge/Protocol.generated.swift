@@ -20,8 +20,9 @@ public enum SpiceProtocolVersion {
 // MARK: - Message Types
 
 /// Message type codes - generated from shared/protocol.def
-public enum SpiceMessageType: UInt8, CaseIterable, Codable {
+public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
     // Host → Guest (0x00-0x7F)
+
     case launchProgram = 0x01
     case requestIcon = 0x02
     case clipboardData = 0x03
@@ -58,7 +59,7 @@ public enum SpiceMessageType: UInt8, CaseIterable, Codable {
 // MARK: - Guest Capabilities
 
 /// Guest capability flags - generated from shared/protocol.def
-public struct GuestCapabilities: OptionSet, Codable, Hashable {
+public struct GuestCapabilities: OptionSet, Codable, Hashable, Sendable {
     public let rawValue: UInt32
     public init(rawValue: UInt32) { self.rawValue = rawValue }
 
@@ -79,7 +80,8 @@ public struct GuestCapabilities: OptionSet, Codable, Hashable {
 // MARK: - Mouse Input
 
 /// Mouse button codes - generated from shared/protocol.def
-public enum MouseButton: UInt8, Codable {
+public enum MouseButton: UInt8, Codable, Sendable {
+
     case left = 1
     case right = 2
     case middle = 4
@@ -88,7 +90,8 @@ public enum MouseButton: UInt8, Codable {
 }
 
 /// Mouse event types - generated from shared/protocol.def
-public enum MouseEventType: UInt8, Codable {
+public enum MouseEventType: UInt8, Codable, Sendable {
+
     case move = 0
     case press = 1
     case release = 2
@@ -98,13 +101,14 @@ public enum MouseEventType: UInt8, Codable {
 // MARK: - Keyboard Input
 
 /// Key event types - generated from shared/protocol.def
-public enum KeyEventType: UInt8, Codable {
-    case keyDown = 0
-    case keyUp = 1
+public enum KeyEventType: UInt8, Codable, Sendable {
+
+    case down = 0
+    case up = 1
 }
 
 /// Key modifier flags - generated from shared/protocol.def
-public struct KeyModifiers: OptionSet, Codable, Hashable {
+public struct KeyModifiers: OptionSet, Codable, Hashable, Sendable {
     public let rawValue: UInt8
     public init(rawValue: UInt8) { self.rawValue = rawValue }
 
@@ -119,7 +123,8 @@ public struct KeyModifiers: OptionSet, Codable, Hashable {
 // MARK: - Drag and Drop
 
 /// Drag/drop event types - generated from shared/protocol.def
-public enum DragDropEventType: UInt8, Codable {
+public enum DragDropEventType: UInt8, Codable, Sendable {
+
     case enter = 0
     case move = 1
     case leave = 2
@@ -127,7 +132,8 @@ public enum DragDropEventType: UInt8, Codable {
 }
 
 /// Drag operation types - generated from shared/protocol.def
-public enum DragOperation: UInt8, Codable {
+public enum DragOperation: UInt8, Codable, Sendable {
+
     case none = 0
     case copy = 1
     case move = 2
@@ -137,7 +143,8 @@ public enum DragOperation: UInt8, Codable {
 // MARK: - Pixel Formats
 
 /// Pixel format types - generated from shared/protocol.def
-public enum SpicePixelFormat: UInt8, Codable {
+public enum SpicePixelFormat: UInt8, Codable, Sendable {
+
     case bgra32 = 0
     case rgba32 = 1
 }
@@ -145,7 +152,8 @@ public enum SpicePixelFormat: UInt8, Codable {
 // MARK: - Window Events
 
 /// Window event types - generated from shared/protocol.def
-public enum WindowEventType: Int32, Codable {
+public enum WindowEventType: Int32, Codable, Sendable {
+
     case created = 0
     case destroyed = 1
     case moved = 2
@@ -159,7 +167,8 @@ public enum WindowEventType: Int32, Codable {
 // MARK: - Clipboard Formats
 
 /// Clipboard format identifiers - generated from shared/protocol.def
-public enum ClipboardFormat: String, Codable, CaseIterable {
+public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
+
     case plainText
     case rtf
     case html
@@ -172,6 +181,7 @@ public enum ClipboardFormat: String, Codable, CaseIterable {
 
 /// Provisioning phase identifiers - generated from shared/protocol.def
 public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
+
     case drivers
     case agent
     case optimize
@@ -181,17 +191,31 @@ public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
 
 // MARK: - Backwards Compatibility Typealiases
 // These allow existing code referencing Generated* types to continue working
+// TODO: Remove these after migrating all code to use the canonical type names
 
+@available(*, deprecated, renamed: "SpiceProtocolVersion")
 public typealias GeneratedProtocolVersion = SpiceProtocolVersion
+@available(*, deprecated, renamed: "SpiceMessageType")
 public typealias GeneratedMessageType = SpiceMessageType
+@available(*, deprecated, renamed: "GuestCapabilities")
 public typealias GeneratedCapabilities = GuestCapabilities
+@available(*, deprecated, renamed: "MouseButton")
 public typealias GeneratedMouseButton = MouseButton
+@available(*, deprecated, renamed: "MouseEventType")
 public typealias GeneratedMouseEventType = MouseEventType
+@available(*, deprecated, renamed: "KeyEventType")
 public typealias GeneratedKeyEventType = KeyEventType
+@available(*, deprecated, renamed: "KeyModifiers")
 public typealias GeneratedKeyModifiers = KeyModifiers
+@available(*, deprecated, renamed: "DragDropEventType")
 public typealias GeneratedDragDropEventType = DragDropEventType
+@available(*, deprecated, renamed: "DragOperation")
 public typealias GeneratedDragOperation = DragOperation
+@available(*, deprecated, renamed: "SpicePixelFormat")
 public typealias GeneratedPixelFormat = SpicePixelFormat
+@available(*, deprecated, renamed: "WindowEventType")
 public typealias GeneratedWindowEventType = WindowEventType
+@available(*, deprecated, renamed: "ClipboardFormat")
 public typealias GeneratedClipboardFormat = ClipboardFormat
+@available(*, deprecated, renamed: "GuestProvisioningPhase")
 public typealias GeneratedProvisioningPhase = GuestProvisioningPhase
