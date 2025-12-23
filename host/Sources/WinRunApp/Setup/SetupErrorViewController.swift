@@ -5,13 +5,28 @@ import WinRunShared
 /// Setup wizard screen for displaying an actionable provisioning error.
 @available(macOS 13, *)
 final class SetupErrorViewController: NSViewController {
+    private enum RecoveryActionID: String {
+        case retrySetup = "retry_setup"
+        case chooseDifferentISO = "choose_different_iso"
+        case contactSupport = "contact_support"
+        case reviewDetails = "review_details"
+    }
+ 
     struct RecoveryAction {
+        let id: RecoveryActionID
         let title: String
         let help: String?
         let isPrimary: Bool
         let handler: (() -> Void)?
  
-        init(title: String, help: String? = nil, isPrimary: Bool = false, handler: (() -> Void)? = nil) {
+        init(
+            id: RecoveryActionID,
+            title: String,
+            help: String? = nil,
+            isPrimary: Bool = false,
+            handler: (() -> Void)? = nil
+        ) {
+            self.id = id
             self.title = title
             self.help = help
             self.isPrimary = isPrimary
@@ -33,9 +48,23 @@ final class SetupErrorViewController: NSViewController {
     private let error: Error
     private let recoveryActions: [RecoveryAction]
  
-    init(error: Error, recoveryActions: [RecoveryAction] = []) {
+    private static let supportURL = URL(string: "https://github.com/winrun/winrun/issues")!
+ 
+    init(
+        error: Error,
+        onRetrySetup: (() -> Void)? = nil,
+        onChooseDifferentISO: (() -> Void)? = nil,
+        onContactSupport: (() -> Void)? = nil,
+        recoveryActions: [RecoveryAction] = []
+    ) {
         self.error = error
-        self.recoveryActions = recoveryActions
+        self.recoveryActions = recoveryActions.isEmpty
+            ? Self.defaultRecoveryActions(
+                onRetrySetup: onRetrySetup,
+                onChooseDifferentISO: onChooseDifferentISO,
+                onContactSupport: onContactSupport
+            )
+            : recoveryActions
         super.init(nibName: nil, bundle: nil)
     }
  
@@ -106,18 +135,7 @@ final class SetupErrorViewController: NSViewController {
     private func rebuildActions() {
         actionsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
  
-        let actions = recoveryActions.isEmpty
-            ? [
-                RecoveryAction(
-                    title: "Review the error details above",
-                    help: "If this keeps happening, try a different Windows ISO or free up disk space.",
-                    isPrimary: false,
-                    handler: nil
-                )
-            ]
-            : recoveryActions
- 
-        for action in actions {
+        for action in recoveryActions {
             let row = NSStackView()
             row.orientation = .vertical
             row.alignment = .leading
@@ -126,7 +144,7 @@ final class SetupErrorViewController: NSViewController {
             let button = NSButton(title: action.title, target: self, action: #selector(runRecoveryAction(_:)))
             button.bezelStyle = action.isPrimary ? .prominentSquare : .rounded
             button.keyEquivalent = action.isPrimary ? "\r" : ""
-            button.identifier = NSUserInterfaceItemIdentifier(action.title)
+            button.identifier = NSUserInterfaceItemIdentifier(action.id.rawValue)
             button.isEnabled = action.handler != nil
  
             row.addArrangedSubview(button)
@@ -141,6 +159,47 @@ final class SetupErrorViewController: NSViewController {
  
             actionsStack.addArrangedSubview(row)
         }
+    }
+ 
+    private static func defaultRecoveryActions(
+        onRetrySetup: (() -> Void)?,
+        onChooseDifferentISO: (() -> Void)?,
+        onContactSupport: (() -> Void)?
+    ) -> [RecoveryAction] {
+        let contact = onContactSupport ?? {
+            NSWorkspace.shared.open(supportURL)
+        }
+ 
+        return [
+            RecoveryAction(
+                id: .retrySetup,
+                title: "Retry setup",
+                help: "Try again with the same settings. If this keeps failing, try a different ISO.",
+                isPrimary: true,
+                handler: onRetrySetup
+            ),
+            RecoveryAction(
+                id: .chooseDifferentISO,
+                title: "Choose a different Windows ISO…",
+                help: "Some ISOs (e.g. Windows Server or non‑ARM64) won’t work well with WinRun.",
+                isPrimary: false,
+                handler: onChooseDifferentISO
+            ),
+            RecoveryAction(
+                id: .contactSupport,
+                title: "Contact support…",
+                help: "Opens the WinRun issue tracker so you can include this error message.",
+                isPrimary: false,
+                handler: contact
+            ),
+            RecoveryAction(
+                id: .reviewDetails,
+                title: "Review error details",
+                help: "Copy the error above into your support request. Also ensure you have enough free disk space.",
+                isPrimary: false,
+                handler: nil
+            ),
+        ]
     }
  
     private func formatDetails(error: Error) -> String {
@@ -158,7 +217,7 @@ final class SetupErrorViewController: NSViewController {
  
     @objc private func runRecoveryAction(_ sender: NSButton) {
         guard let id = sender.identifier?.rawValue else { return }
-        guard let action = recoveryActions.first(where: { $0.title == id }) else { return }
+        guard let action = recoveryActions.first(where: { $0.id.rawValue == id }) else { return }
         action.handler?()
     }
  

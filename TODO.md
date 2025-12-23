@@ -96,9 +96,9 @@
   - [X] Setup complete + getting started view { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Show success message with disk usage summary { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Display quick-start tips for running Windows apps { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
-  - [ ] Error handling + recovery UI { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Error handling + recovery UI { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Display actionable error messages with recovery options { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Offer retry, choose different ISO, or contact support { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Offer retry, choose different ISO, or contact support { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] Setup UI tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
     - [ ] Add unit tests for first-run detection logic { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
     - [ ] Add view controller state transition tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
