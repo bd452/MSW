@@ -34,6 +34,9 @@ public sealed class ProtocolValidationTests
         Assert.Equal((byte)GeneratedMessageType.MouseInput, (byte)SpiceMessageType.MouseInput);
         Assert.Equal((byte)GeneratedMessageType.KeyboardInput, (byte)SpiceMessageType.KeyboardInput);
         Assert.Equal((byte)GeneratedMessageType.DragDropEvent, (byte)SpiceMessageType.DragDropEvent);
+        Assert.Equal((byte)GeneratedMessageType.ListSessions, (byte)SpiceMessageType.ListSessions);
+        Assert.Equal((byte)GeneratedMessageType.CloseSession, (byte)SpiceMessageType.CloseSession);
+        Assert.Equal((byte)GeneratedMessageType.ListShortcuts, (byte)SpiceMessageType.ListShortcuts);
         Assert.Equal((byte)GeneratedMessageType.Shutdown, (byte)SpiceMessageType.Shutdown);
     }
 
@@ -52,6 +55,8 @@ public sealed class ProtocolValidationTests
         Assert.Equal((byte)GeneratedMessageType.ProvisionProgress, (byte)SpiceMessageType.ProvisionProgress);
         Assert.Equal((byte)GeneratedMessageType.ProvisionError, (byte)SpiceMessageType.ProvisionError);
         Assert.Equal((byte)GeneratedMessageType.ProvisionComplete, (byte)SpiceMessageType.ProvisionComplete);
+        Assert.Equal((byte)GeneratedMessageType.SessionList, (byte)SpiceMessageType.SessionList);
+        Assert.Equal((byte)GeneratedMessageType.ShortcutList, (byte)SpiceMessageType.ShortcutList);
         Assert.Equal((byte)GeneratedMessageType.Error, (byte)SpiceMessageType.Error);
         Assert.Equal((byte)GeneratedMessageType.Ack, (byte)SpiceMessageType.Ack);
     }

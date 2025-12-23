@@ -23,6 +23,9 @@ final class ProtocolValidationTests: XCTestCase {
         XCTAssertEqual(SpiceMessageType.mouseInput.rawValue, GeneratedMessageType.mouseInput.rawValue)
         XCTAssertEqual(SpiceMessageType.keyboardInput.rawValue, GeneratedMessageType.keyboardInput.rawValue)
         XCTAssertEqual(SpiceMessageType.dragDropEvent.rawValue, GeneratedMessageType.dragDropEvent.rawValue)
+        XCTAssertEqual(SpiceMessageType.listSessions.rawValue, GeneratedMessageType.listSessions.rawValue)
+        XCTAssertEqual(SpiceMessageType.closeSession.rawValue, GeneratedMessageType.closeSession.rawValue)
+        XCTAssertEqual(SpiceMessageType.listShortcuts.rawValue, GeneratedMessageType.listShortcuts.rawValue)
         XCTAssertEqual(SpiceMessageType.shutdown.rawValue, GeneratedMessageType.shutdown.rawValue)
     }
 
@@ -46,6 +49,11 @@ final class ProtocolValidationTests: XCTestCase {
         XCTAssertEqual(SpiceMessageType.provisionComplete.rawValue, GeneratedMessageType.provisionComplete.rawValue)
         XCTAssertEqual(SpiceMessageType.error.rawValue, GeneratedMessageType.error.rawValue)
         XCTAssertEqual(SpiceMessageType.ack.rawValue, GeneratedMessageType.ack.rawValue)
+    }
+
+    func testSessionAndShortcutMessageTypesMatchGenerated() {
+        XCTAssertEqual(SpiceMessageType.sessionList.rawValue, GeneratedMessageType.sessionList.rawValue)
+        XCTAssertEqual(SpiceMessageType.shortcutList.rawValue, GeneratedMessageType.shortcutList.rawValue)
     }
 
     // MARK: - Guest Capabilities
