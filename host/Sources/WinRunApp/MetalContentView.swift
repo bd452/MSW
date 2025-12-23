@@ -408,11 +408,11 @@ final class MetalContentView: NSView {
     // MARK: - Keyboard Event Handling
 
     override func keyDown(with event: NSEvent) {
-        handleKeyboardEvent(event, type: .keyDown)
+        handleKeyboardEvent(event, type: .down)
     }
 
     override func keyUp(with event: NSEvent) {
-        handleKeyboardEvent(event, type: .keyUp)
+        handleKeyboardEvent(event, type: .up)
     }
 
     override func flagsChanged(with event: NSEvent) {
@@ -422,7 +422,7 @@ final class MetalContentView: NSView {
 
         let keyboardEvent = KeyboardInputEvent(
             windowID: windowID,
-            eventType: isKeyDown ? .keyDown : .keyUp,
+            eventType: isKeyDown ? .down : .up,
             keyCode: keyCode,
             scanCode: UInt32(event.keyCode),
             isExtendedKey: false,

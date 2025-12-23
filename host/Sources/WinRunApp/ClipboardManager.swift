@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import WinRunShared
+import WinRunSpiceBridge
 
 // MARK: - ClipboardManagerDelegate
 

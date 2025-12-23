@@ -11,18 +11,7 @@ public protocol GuestMessage: Codable {
 
 // MARK: - Supporting Types
 
-/// Window event type from guest.
-/// Values must match guest's WindowEventType enum exactly for protocol compatibility.
-public enum WindowEventType: Int32, Codable {
-    case created = 0
-    case destroyed = 1
-    case moved = 2
-    case titleChanged = 3
-    case focusChanged = 4
-    case minimized = 5
-    case restored = 6
-    case updated = 7
-}
+// Note: WindowEventType enum is defined in Protocol.generated.swift
 
 /// Rectangle bounds information (matching guest's RectInfo).
 public struct RectInfo: Codable, Hashable {
@@ -39,11 +28,7 @@ public struct RectInfo: Codable, Hashable {
     }
 }
 
-/// Pixel format for frame data.
-public enum SpicePixelFormat: UInt8, Codable {
-    case bgra32 = 0
-    case rgba32 = 1
-}
+// Note: SpicePixelFormat enum is defined in Protocol.generated.swift
 
 /// Monitor/display information.
 public struct MonitorInfo: Codable, Hashable {
@@ -419,145 +404,66 @@ public struct SessionListMessage: GuestMessage {
     }
 }
 
-// MARK: - Provisioning Messages
+// MARK: - Shortcut Messages
 
-/// Phase of post-install provisioning running in the guest.
-public enum GuestProvisioningPhase: String, Codable, Sendable {
-    /// Installing VirtIO drivers.
-    case drivers
+/// Individual shortcut information from the guest.
+public struct SpiceShortcutInfo: Codable, Hashable {
+    public let shortcutPath: String
+    public let targetPath: String
+    public let displayName: String
+    public let iconPath: String?
+    public let iconIndex: Int32
+    public let arguments: String?
+    public let workingDirectory: String?
 
-    /// Installing WinRun Agent.
-    case agent
+    public init(
+        shortcutPath: String,
+        targetPath: String,
+        displayName: String,
+        iconPath: String?,
+        iconIndex: Int32,
+        arguments: String?,
+        workingDirectory: String?
+    ) {
+        self.shortcutPath = shortcutPath
+        self.targetPath = targetPath
+        self.displayName = displayName
+        self.iconPath = iconPath
+        self.iconIndex = iconIndex
+        self.arguments = arguments
+        self.workingDirectory = workingDirectory
+    }
 
-    /// Optimizing Windows (removing bloat, disabling services).
-    case optimize
-
-    /// Finalizing configuration before shutdown.
-    case finalize
-
-    /// Provisioning complete.
-    case complete
-
-    /// User-friendly display name.
-    public var displayName: String {
-        switch self {
-        case .drivers: return "Installing drivers"
-        case .agent: return "Installing WinRun Agent"
-        case .optimize: return "Optimizing Windows"
-        case .finalize: return "Finalizing"
-        case .complete: return "Complete"
-        }
+    /// Converts this Spice shortcut info to the shared WindowsShortcut type.
+    public func toWindowsShortcut() -> WinRunShared.WindowsShortcut {
+        WinRunShared.WindowsShortcut(
+            shortcutPath: shortcutPath,
+            targetPath: targetPath,
+            displayName: displayName,
+            iconPath: iconPath,
+            arguments: arguments
+        )
     }
 }
 
-/// Progress update during guest provisioning.
-///
-/// Sent by the guest during post-install provisioning to report progress
-/// on driver installation, agent setup, and Windows optimization.
-public struct ProvisionProgressMessage: GuestMessage {
+/// Response message containing the list of detected shortcuts.
+public struct ShortcutListMessage: GuestMessage {
     public let timestamp: Int64
-
-    /// Current provisioning phase.
-    public let phase: GuestProvisioningPhase
-
-    /// Progress within the current phase (0-100).
-    public let percent: UInt8
-
-    /// Human-readable status message.
-    public let message: String
+    public let messageId: UInt32
+    public let shortcuts: [SpiceShortcutInfo]
 
     public init(
         timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
-        phase: GuestProvisioningPhase,
-        percent: UInt8,
-        message: String
+        messageId: UInt32,
+        shortcuts: [SpiceShortcutInfo]
     ) {
         self.timestamp = timestamp
-        self.phase = phase
-        self.percent = min(100, percent)
-        self.message = message
+        self.messageId = messageId
+        self.shortcuts = shortcuts
     }
 
-    /// Progress as a fraction (0.0 to 1.0).
-    public var progressFraction: Double {
-        Double(percent) / 100.0
-    }
-}
-
-/// Error during guest provisioning.
-///
-/// Sent when a provisioning step fails. The host may choose to retry,
-/// continue with warnings, or abort provisioning.
-public struct ProvisionErrorMessage: GuestMessage {
-    public let timestamp: Int64
-
-    /// Phase where the error occurred.
-    public let phase: GuestProvisioningPhase
-
-    /// Windows error code (HRESULT or Win32 error).
-    public let errorCode: UInt32
-
-    /// Human-readable error message.
-    public let message: String
-
-    /// Whether provisioning can continue despite this error.
-    public let isRecoverable: Bool
-
-    public init(
-        timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
-        phase: GuestProvisioningPhase,
-        errorCode: UInt32,
-        message: String,
-        isRecoverable: Bool = false
-    ) {
-        self.timestamp = timestamp
-        self.phase = phase
-        self.errorCode = errorCode
-        self.message = message
-        self.isRecoverable = isRecoverable
-    }
-}
-
-/// Provisioning completion notification.
-///
-/// Sent when guest provisioning completes successfully or fails terminally.
-/// Contains final status information about the provisioned VM.
-public struct ProvisionCompleteMessage: GuestMessage {
-    public let timestamp: Int64
-
-    /// Whether provisioning completed successfully.
-    public let success: Bool
-
-    /// Disk space used by Windows in megabytes.
-    public let diskUsageMB: UInt64
-
-    /// Windows version string (e.g., "Windows 11 23H2").
-    public let windowsVersion: String
-
-    /// WinRun Agent version installed.
-    public let agentVersion: String
-
-    /// Error message if provisioning failed.
-    public let errorMessage: String?
-
-    public init(
-        timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
-        success: Bool,
-        diskUsageMB: UInt64,
-        windowsVersion: String,
-        agentVersion: String,
-        errorMessage: String? = nil
-    ) {
-        self.timestamp = timestamp
-        self.success = success
-        self.diskUsageMB = diskUsageMB
-        self.windowsVersion = windowsVersion
-        self.agentVersion = agentVersion
-        self.errorMessage = errorMessage
-    }
-
-    /// Disk usage in bytes.
-    public var diskUsageBytes: UInt64 {
-        diskUsageMB * 1024 * 1024
+    /// Converts to WindowsShortcutList for XPC responses.
+    public func toWindowsShortcutList() -> WinRunShared.WindowsShortcutList {
+        WinRunShared.WindowsShortcutList(shortcuts: shortcuts.map { $0.toWindowsShortcut() })
     }
 }

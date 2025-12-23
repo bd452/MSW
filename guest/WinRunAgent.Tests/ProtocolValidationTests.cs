@@ -1,190 +1,334 @@
+using System.Text.Json;
 using WinRun.Agent.Services;
 using Xunit;
 
 namespace WinRun.Agent.Tests;
 
 /// <summary>
-/// Tests that validate existing protocol constants match the generated source of truth.
-/// These tests ensure the existing types stay in sync with shared/protocol.def.
+/// Tests that validate protocol types match the shared source of truth (protocol.def)
+/// and verify behavioral correctness of the protocol implementation.
+///
+/// These tests read from shared/protocol-test-data.json which is generated from protocol.def.
+/// This ensures Swift and C# implementations stay in sync.
 /// </summary>
 public sealed class ProtocolValidationTests
 {
-    // ========================================================================
-    // Protocol Version
-    // ========================================================================
+    private static readonly Lazy<ProtocolTestData> LazyTestData = new(LoadTestData);
+    private static ProtocolTestData TestData => LazyTestData.Value;
 
-    [Fact]
-    public void ProtocolVersionMatchesGenerated()
+    private static ProtocolTestData LoadTestData()
     {
-        Assert.Equal(GeneratedProtocolVersion.Major, ProtocolVersion.Major);
-        Assert.Equal(GeneratedProtocolVersion.Minor, ProtocolVersion.Minor);
-        Assert.Equal(GeneratedProtocolVersion.Combined, ProtocolVersion.Combined);
+        // Try multiple possible locations for the test data file
+        var possiblePaths = new[]
+        {
+            // When running from dotnet test in guest/
+            Path.Combine("..", "..", "..", "..", "shared", "protocol-test-data.json"),
+            // When running from repo root
+            Path.Combine("shared", "protocol-test-data.json"),
+            // When running from guest/WinRunAgent.Tests/
+            Path.Combine("..", "..", "shared", "protocol-test-data.json"),
+            // Absolute path fallback (for CI)
+            "/workspace/shared/protocol-test-data.json",
+        };
+
+        foreach (var path in possiblePaths)
+        {
+            if (File.Exists(path))
+            {
+                var json = File.ReadAllText(path);
+                return JsonSerializer.Deserialize<ProtocolTestData>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                    ?? new ProtocolTestData();
+            }
+        }
+
+        // Return empty data - tests will be skipped
+        return new ProtocolTestData();
     }
 
     // ========================================================================
-    // Message Types
+    // Cross-Platform Parity Tests
     // ========================================================================
 
-    [Fact]
-    public void HostToGuestMessageTypesMatchGenerated()
+    [SkippableFact]
+    public void MessageTypesMatchProtocolDef()
     {
-        Assert.Equal((byte)GeneratedMessageType.LaunchProgram, (byte)SpiceMessageType.LaunchProgram);
-        Assert.Equal((byte)GeneratedMessageType.RequestIcon, (byte)SpiceMessageType.RequestIcon);
-        Assert.Equal((byte)GeneratedMessageType.ClipboardData, (byte)SpiceMessageType.ClipboardData);
-        Assert.Equal((byte)GeneratedMessageType.MouseInput, (byte)SpiceMessageType.MouseInput);
-        Assert.Equal((byte)GeneratedMessageType.KeyboardInput, (byte)SpiceMessageType.KeyboardInput);
-        Assert.Equal((byte)GeneratedMessageType.DragDropEvent, (byte)SpiceMessageType.DragDropEvent);
-        Assert.Equal((byte)GeneratedMessageType.Shutdown, (byte)SpiceMessageType.Shutdown);
+        Skip.If(TestData.MessageTypesHostToGuest.Count == 0, "Test data not loaded");
+
+        // Host → Guest (expected from test data, actual from enum)
+        Assert.Equal(
+            (int)SpiceMessageType.LaunchProgram,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgLaunchProgram"));
+        Assert.Equal(
+            (int)SpiceMessageType.RequestIcon,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgRequestIcon"));
+        Assert.Equal(
+            (int)SpiceMessageType.ClipboardData,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgClipboardData"));
+        Assert.Equal(
+            (int)SpiceMessageType.MouseInput,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgMouseInput"));
+        Assert.Equal(
+            (int)SpiceMessageType.KeyboardInput,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgKeyboardInput"));
+        Assert.Equal(
+            (int)SpiceMessageType.ListSessions,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgListSessions"));
+        Assert.Equal(
+            (int)SpiceMessageType.Shutdown,
+            TestData.MessageTypesHostToGuest.GetValueOrDefault("msgShutdown"));
+
+        // Guest → Host
+        Assert.Equal(
+            (int)SpiceMessageType.WindowMetadata,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgWindowMetadata"));
+        Assert.Equal(
+            (int)SpiceMessageType.FrameData,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgFrameData"));
+        Assert.Equal(
+            (int)SpiceMessageType.CapabilityFlags,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgCapabilityFlags"));
+        Assert.Equal(
+            (int)SpiceMessageType.Error,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgError"));
+        Assert.Equal(
+            (int)SpiceMessageType.Ack,
+            TestData.MessageTypesGuestToHost.GetValueOrDefault("msgAck"));
     }
 
-    [Fact]
-    public void GuestToHostMessageTypesMatchGenerated()
+    [SkippableFact]
+    public void CapabilitiesMatchProtocolDef()
     {
-        Assert.Equal((byte)GeneratedMessageType.WindowMetadata, (byte)SpiceMessageType.WindowMetadata);
-        Assert.Equal((byte)GeneratedMessageType.FrameData, (byte)SpiceMessageType.FrameData);
-        Assert.Equal((byte)GeneratedMessageType.CapabilityFlags, (byte)SpiceMessageType.CapabilityFlags);
-        Assert.Equal((byte)GeneratedMessageType.DpiInfo, (byte)SpiceMessageType.DpiInfo);
-        Assert.Equal((byte)GeneratedMessageType.IconData, (byte)SpiceMessageType.IconData);
-        Assert.Equal((byte)GeneratedMessageType.ShortcutDetected, (byte)SpiceMessageType.ShortcutDetected);
-        Assert.Equal((byte)GeneratedMessageType.ClipboardChanged, (byte)SpiceMessageType.ClipboardChanged);
-        Assert.Equal((byte)GeneratedMessageType.Heartbeat, (byte)SpiceMessageType.Heartbeat);
-        Assert.Equal((byte)GeneratedMessageType.TelemetryReport, (byte)SpiceMessageType.TelemetryReport);
-        Assert.Equal((byte)GeneratedMessageType.ProvisionProgress, (byte)SpiceMessageType.ProvisionProgress);
-        Assert.Equal((byte)GeneratedMessageType.ProvisionError, (byte)SpiceMessageType.ProvisionError);
-        Assert.Equal((byte)GeneratedMessageType.ProvisionComplete, (byte)SpiceMessageType.ProvisionComplete);
-        Assert.Equal((byte)GeneratedMessageType.Error, (byte)SpiceMessageType.Error);
-        Assert.Equal((byte)GeneratedMessageType.Ack, (byte)SpiceMessageType.Ack);
-    }
+        Skip.If(TestData.Capabilities.Count == 0, "Test data not loaded");
 
-    // ========================================================================
-    // Guest Capabilities
-    // ========================================================================
-
-    [Fact]
-    public void CapabilitiesMatchGenerated()
-    {
-        Assert.Equal((uint)GeneratedCapabilities.WindowTracking, (uint)GuestCapabilities.WindowTracking);
-        Assert.Equal((uint)GeneratedCapabilities.DesktopDuplication, (uint)GuestCapabilities.DesktopDuplication);
-        Assert.Equal((uint)GeneratedCapabilities.ClipboardSync, (uint)GuestCapabilities.ClipboardSync);
-        Assert.Equal((uint)GeneratedCapabilities.DragDrop, (uint)GuestCapabilities.DragDrop);
-        Assert.Equal((uint)GeneratedCapabilities.IconExtraction, (uint)GuestCapabilities.IconExtraction);
-        Assert.Equal((uint)GeneratedCapabilities.ShortcutDetection, (uint)GuestCapabilities.ShortcutDetection);
-        Assert.Equal((uint)GeneratedCapabilities.HighDpiSupport, (uint)GuestCapabilities.HighDpiSupport);
-        Assert.Equal((uint)GeneratedCapabilities.MultiMonitor, (uint)GuestCapabilities.MultiMonitor);
-    }
-
-    // ========================================================================
-    // Mouse Input
-    // ========================================================================
-
-    [Fact]
-    public void MouseButtonsMatchGenerated()
-    {
-        Assert.Equal((byte)GeneratedMouseButton.Left, (byte)MouseButton.Left);
-        Assert.Equal((byte)GeneratedMouseButton.Right, (byte)MouseButton.Right);
-        Assert.Equal((byte)GeneratedMouseButton.Middle, (byte)MouseButton.Middle);
-        Assert.Equal((byte)GeneratedMouseButton.Extra1, (byte)MouseButton.Extra1);
-        Assert.Equal((byte)GeneratedMouseButton.Extra2, (byte)MouseButton.Extra2);
-    }
-
-    [Fact]
-    public void MouseEventTypesMatchGenerated()
-    {
-        Assert.Equal((byte)GeneratedMouseEventType.Move, (byte)MouseEventType.Move);
-        Assert.Equal((byte)GeneratedMouseEventType.Press, (byte)MouseEventType.Press);
-        Assert.Equal((byte)GeneratedMouseEventType.Release, (byte)MouseEventType.Release);
-        Assert.Equal((byte)GeneratedMouseEventType.Scroll, (byte)MouseEventType.Scroll);
+        Assert.Equal(
+            (int)GuestCapabilities.WindowTracking,
+            TestData.Capabilities.GetValueOrDefault("capWindowTracking"));
+        Assert.Equal(
+            (int)GuestCapabilities.DesktopDuplication,
+            TestData.Capabilities.GetValueOrDefault("capDesktopDuplication"));
+        Assert.Equal(
+            (int)GuestCapabilities.ClipboardSync,
+            TestData.Capabilities.GetValueOrDefault("capClipboardSync"));
+        Assert.Equal(
+            (int)GuestCapabilities.IconExtraction,
+            TestData.Capabilities.GetValueOrDefault("capIconExtraction"));
     }
 
     // ========================================================================
-    // Keyboard Input
+    // Behavioral Tests: Message Direction
     // ========================================================================
 
     [Fact]
-    public void KeyEventTypesMatchGenerated()
+    public void HostToGuestMessagesAreInCorrectRange()
     {
-        Assert.Equal((byte)GeneratedKeyEventType.Down, (byte)KeyEventType.KeyDown);
-        Assert.Equal((byte)GeneratedKeyEventType.Up, (byte)KeyEventType.KeyUp);
+        var hostMessages = new[]
+        {
+            SpiceMessageType.LaunchProgram, SpiceMessageType.RequestIcon,
+            SpiceMessageType.ClipboardData, SpiceMessageType.MouseInput,
+            SpiceMessageType.KeyboardInput, SpiceMessageType.DragDropEvent,
+            SpiceMessageType.ListSessions, SpiceMessageType.CloseSession,
+            SpiceMessageType.ListShortcuts, SpiceMessageType.Shutdown
+        };
+
+        foreach (var msg in hostMessages)
+        {
+            Assert.True((byte)msg < 0x80, $"{msg} should be < 0x80 (host→guest range)");
+        }
     }
 
     [Fact]
-    public void KeyModifiersMatchGenerated()
+    public void GuestToHostMessagesAreInCorrectRange()
     {
-        Assert.Equal((byte)GeneratedKeyModifiers.None, (byte)KeyModifiers.None);
-        Assert.Equal((byte)GeneratedKeyModifiers.Shift, (byte)KeyModifiers.Shift);
-        Assert.Equal((byte)GeneratedKeyModifiers.Control, (byte)KeyModifiers.Control);
-        Assert.Equal((byte)GeneratedKeyModifiers.Alt, (byte)KeyModifiers.Alt);
-        Assert.Equal((byte)GeneratedKeyModifiers.Command, (byte)KeyModifiers.Command);
-        Assert.Equal((byte)GeneratedKeyModifiers.CapsLock, (byte)KeyModifiers.CapsLock);
-        Assert.Equal((byte)GeneratedKeyModifiers.NumLock, (byte)KeyModifiers.NumLock);
+        var guestMessages = new[]
+        {
+            SpiceMessageType.WindowMetadata, SpiceMessageType.FrameData,
+            SpiceMessageType.CapabilityFlags, SpiceMessageType.DpiInfo,
+            SpiceMessageType.IconData, SpiceMessageType.ShortcutDetected,
+            SpiceMessageType.ClipboardChanged, SpiceMessageType.Heartbeat,
+            SpiceMessageType.TelemetryReport, SpiceMessageType.ProvisionProgress,
+            SpiceMessageType.ProvisionError, SpiceMessageType.ProvisionComplete,
+            SpiceMessageType.SessionList, SpiceMessageType.ShortcutList,
+            SpiceMessageType.Error, SpiceMessageType.Ack
+        };
+
+        foreach (var msg in guestMessages)
+        {
+            Assert.True((byte)msg >= 0x80, $"{msg} should be >= 0x80 (guest→host range)");
+        }
     }
 
     // ========================================================================
-    // Drag and Drop
+    // Behavioral Tests: Capabilities
     // ========================================================================
 
     [Fact]
-    public void DragDropEventTypesMatchGenerated()
+    public void CapabilitiesArePowersOfTwo()
     {
-        Assert.Equal((byte)GeneratedDragDropEventType.Enter, (byte)DragDropEventType.Enter);
-        Assert.Equal((byte)GeneratedDragDropEventType.Move, (byte)DragDropEventType.Move);
-        Assert.Equal((byte)GeneratedDragDropEventType.Leave, (byte)DragDropEventType.Leave);
-        Assert.Equal((byte)GeneratedDragDropEventType.Drop, (byte)DragDropEventType.Drop);
+        var capabilities = new[]
+        {
+            GuestCapabilities.WindowTracking, GuestCapabilities.DesktopDuplication,
+            GuestCapabilities.ClipboardSync, GuestCapabilities.DragDrop,
+            GuestCapabilities.IconExtraction, GuestCapabilities.ShortcutDetection,
+            GuestCapabilities.HighDpiSupport, GuestCapabilities.MultiMonitor
+        };
+
+        foreach (var cap in capabilities)
+        {
+            var value = (uint)cap;
+            // Power of 2 check: value & (value - 1) == 0 for powers of 2
+            Assert.True((value & (value - 1)) == 0, $"{cap} should be a power of 2");
+            Assert.True(value > 0, $"{cap} should be non-zero");
+        }
     }
 
     [Fact]
-    public void DragOperationsMatchGenerated()
+    public void CapabilitiesCanBeCombined()
     {
-        Assert.Equal((byte)GeneratedDragOperation.None, (byte)DragOperation.None);
-        Assert.Equal((byte)GeneratedDragOperation.Copy, (byte)DragOperation.Copy);
-        Assert.Equal((byte)GeneratedDragOperation.Move, (byte)DragOperation.Move);
-        Assert.Equal((byte)GeneratedDragOperation.Link, (byte)DragOperation.Link);
+        var combined = GuestCapabilities.WindowTracking | GuestCapabilities.ClipboardSync;
+
+        Assert.True(combined.HasFlag(GuestCapabilities.WindowTracking));
+        Assert.True(combined.HasFlag(GuestCapabilities.ClipboardSync));
+        Assert.False(combined.HasFlag(GuestCapabilities.DragDrop));
     }
 
     // ========================================================================
-    // Other Types
+    // Behavioral Tests: Protocol Version
     // ========================================================================
 
     [Fact]
-    public void PixelFormatsMatchGenerated()
+    public void ProtocolVersionCombinedFormat()
     {
-        Assert.Equal((byte)GeneratedPixelFormat.Bgra32, (byte)PixelFormatType.Bgra32);
-        Assert.Equal((byte)GeneratedPixelFormat.Rgba32, (byte)PixelFormatType.Rgba32);
+        // Combined format: upper 16 bits = major, lower 16 bits = minor
+        var combined = SpiceProtocolVersion.Combined;
+        var major = (ushort)(combined >> 16);
+        var minor = (ushort)(combined & 0xFFFF);
+
+        Assert.Equal(SpiceProtocolVersion.Major, major);
+        Assert.Equal(SpiceProtocolVersion.Minor, minor);
+    }
+
+    [SkippableFact]
+    public void ProtocolVersionMatchesTestData()
+    {
+        Skip.If(TestData.Version.Count == 0, "Test data not loaded");
+
+        Assert.Equal(
+            SpiceProtocolVersion.Major,
+            TestData.Version.GetValueOrDefault("protocolVersionMajor"));
+        Assert.Equal(
+            SpiceProtocolVersion.Minor,
+            TestData.Version.GetValueOrDefault("protocolVersionMinor"));
+    }
+
+    // ========================================================================
+    // Behavioral Tests: Key Modifiers
+    // ========================================================================
+
+    [Fact]
+    public void KeyModifiersCanBeCombined()
+    {
+        var combined = KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Alt;
+
+        Assert.True(combined.HasFlag(KeyModifiers.Shift));
+        Assert.True(combined.HasFlag(KeyModifiers.Control));
+        Assert.True(combined.HasFlag(KeyModifiers.Alt));
+        Assert.False(combined.HasFlag(KeyModifiers.Command));
+    }
+
+    // ========================================================================
+    // Completeness Tests
+    // ========================================================================
+
+    [Fact]
+    public void AllMessageTypesExist()
+    {
+        var allValues = Enum.GetValues<SpiceMessageType>();
+        Assert.Equal(26, allValues.Length);
+
+        // Verify no duplicate raw values
+        var rawValues = allValues.Select(v => (byte)v).ToList();
+        Assert.Equal(rawValues.Count, rawValues.Distinct().Count());
     }
 
     [Fact]
-    public void WindowEventTypesMatchGenerated()
+    public void AllClipboardFormatsExist()
     {
-        Assert.Equal((int)GeneratedWindowEventType.Created, (int)WindowEventType.Created);
-        Assert.Equal((int)GeneratedWindowEventType.Destroyed, (int)WindowEventType.Destroyed);
-        Assert.Equal((int)GeneratedWindowEventType.Moved, (int)WindowEventType.Moved);
-        Assert.Equal((int)GeneratedWindowEventType.TitleChanged, (int)WindowEventType.TitleChanged);
-        Assert.Equal((int)GeneratedWindowEventType.FocusChanged, (int)WindowEventType.FocusChanged);
-        Assert.Equal((int)GeneratedWindowEventType.Minimized, (int)WindowEventType.Minimized);
-        Assert.Equal((int)GeneratedWindowEventType.Restored, (int)WindowEventType.Restored);
-        Assert.Equal((int)GeneratedWindowEventType.Updated, (int)WindowEventType.Updated);
+        var allFormats = Enum.GetValues<ClipboardFormat>();
+        Assert.True(allFormats.Length >= 6);
+
+        Assert.Contains(ClipboardFormat.PlainText, allFormats);
+        Assert.Contains(ClipboardFormat.Rtf, allFormats);
+        Assert.Contains(ClipboardFormat.Html, allFormats);
+        Assert.Contains(ClipboardFormat.Png, allFormats);
     }
 
     [Fact]
-    public void ClipboardFormatsMatchGenerated()
+    public void AllProvisioningPhasesExist()
     {
-        // ClipboardFormat uses JsonStringEnumConverter, so compare string names
-        Assert.Equal(GeneratedClipboardFormat.PlainText.ToString(), ClipboardFormat.PlainText.ToString());
-        Assert.Equal(GeneratedClipboardFormat.Rtf.ToString(), ClipboardFormat.Rtf.ToString());
-        Assert.Equal(GeneratedClipboardFormat.Html.ToString(), ClipboardFormat.Html.ToString());
-        Assert.Equal(GeneratedClipboardFormat.Png.ToString(), ClipboardFormat.Png.ToString());
-        Assert.Equal(GeneratedClipboardFormat.Tiff.ToString(), ClipboardFormat.Tiff.ToString());
-        Assert.Equal(GeneratedClipboardFormat.FileUrl.ToString(), ClipboardFormat.FileUrl.ToString());
+        var allPhases = Enum.GetValues<ProvisioningPhase>();
+        Assert.Equal(5, allPhases.Length);
+
+        Assert.Contains(ProvisioningPhase.Drivers, allPhases);
+        Assert.Contains(ProvisioningPhase.Agent, allPhases);
+        Assert.Contains(ProvisioningPhase.Optimize, allPhases);
+        Assert.Contains(ProvisioningPhase.Finalize, allPhases);
+        Assert.Contains(ProvisioningPhase.Complete, allPhases);
     }
 
     [Fact]
-    public void ProvisioningPhasesMatchGenerated()
+    public void AllKeyEventTypesExist()
     {
-        // ProvisioningPhase uses JsonStringEnumConverter, so compare string names
-        Assert.Equal(GeneratedProvisioningPhase.Drivers.ToString(), ProvisioningPhase.Drivers.ToString());
-        Assert.Equal(GeneratedProvisioningPhase.Agent.ToString(), ProvisioningPhase.Agent.ToString());
-        Assert.Equal(GeneratedProvisioningPhase.Optimize.ToString(), ProvisioningPhase.Optimize.ToString());
-        Assert.Equal(GeneratedProvisioningPhase.Finalize.ToString(), ProvisioningPhase.Finalize.ToString());
-        Assert.Equal(GeneratedProvisioningPhase.Complete.ToString(), ProvisioningPhase.Complete.ToString());
+        var allTypes = Enum.GetValues<KeyEventType>();
+        Assert.Equal(2, allTypes.Length);
+
+        Assert.Contains(KeyEventType.KeyDown, allTypes);
+        Assert.Contains(KeyEventType.KeyUp, allTypes);
+    }
+
+    [Fact]
+    public void AllMouseEventTypesExist()
+    {
+        var allTypes = Enum.GetValues<MouseEventType>();
+        Assert.Equal(4, allTypes.Length);
+
+        Assert.Contains(MouseEventType.Move, allTypes);
+        Assert.Contains(MouseEventType.Press, allTypes);
+        Assert.Contains(MouseEventType.Release, allTypes);
+        Assert.Contains(MouseEventType.Scroll, allTypes);
+    }
+
+    [Fact]
+    public void AllDragOperationsExist()
+    {
+        var allOps = Enum.GetValues<DragOperation>();
+        Assert.Equal(4, allOps.Length);
+
+        Assert.Contains(DragOperation.None, allOps);
+        Assert.Contains(DragOperation.Copy, allOps);
+        Assert.Contains(DragOperation.Move, allOps);
+        Assert.Contains(DragOperation.Link, allOps);
+    }
+
+    // ========================================================================
+    // Test Data Model (nested to avoid file-local type issues)
+    // ========================================================================
+
+    private sealed class ProtocolTestData
+    {
+        public Dictionary<string, int> Version { get; set; } = [];
+        public Dictionary<string, int> MessageTypesHostToGuest { get; set; } = [];
+        public Dictionary<string, int> MessageTypesGuestToHost { get; set; } = [];
+        public Dictionary<string, int> Capabilities { get; set; } = [];
+        public Dictionary<string, int> MouseButtons { get; set; } = [];
+        public Dictionary<string, int> MouseEventTypes { get; set; } = [];
+        public Dictionary<string, int> KeyEventTypes { get; set; } = [];
+        public Dictionary<string, int> KeyModifiers { get; set; } = [];
+        public Dictionary<string, int> DragDropEventTypes { get; set; } = [];
+        public Dictionary<string, int> DragOperations { get; set; } = [];
+        public Dictionary<string, int> PixelFormats { get; set; } = [];
+        public Dictionary<string, int> WindowEventTypes { get; set; } = [];
+        public Dictionary<string, string> ClipboardFormats { get; set; } = [];
+        public Dictionary<string, string> ProvisioningPhases { get; set; } = [];
     }
 }

@@ -335,7 +335,7 @@ final class SpiceWindowStreamInputTests: XCTestCase {
 
         let keyEvent = KeyboardInputEvent(
             windowID: 1,
-            eventType: .keyDown,
+            eventType: .down,
             keyCode: 0x00,  // 'A' key
             scanCode: 0x1E,
             isExtendedKey: false,

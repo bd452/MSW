@@ -8,9 +8,9 @@ public sealed class MessagesTests
     [Fact]
     public void ProtocolVersionCombinedIsCorrect()
     {
-        var expected = ((uint)ProtocolVersion.Major << 16) | ProtocolVersion.Minor;
+        var expected = ((uint)SpiceProtocolVersion.Major << 16) | SpiceProtocolVersion.Minor;
 
-        Assert.Equal(expected, ProtocolVersion.Combined);
+        Assert.Equal(expected, SpiceProtocolVersion.Combined);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class MessagesTests
         var message = SpiceMessageSerializer.CreateCapabilityMessage(caps);
 
         Assert.Equal(caps, message.Capabilities);
-        Assert.Equal(ProtocolVersion.Combined, message.ProtocolVersion);
+        Assert.Equal(SpiceProtocolVersion.Combined, message.ProtocolVersion);
         Assert.NotEmpty(message.AgentVersion);
         Assert.NotEmpty(message.OsVersion);
     }
@@ -115,7 +115,7 @@ public sealed class MessagesTests
         var message = new CapabilityFlagsMessage
         {
             Capabilities = GuestCapabilities.WindowTracking | GuestCapabilities.DesktopDuplication,
-            ProtocolVersion = ProtocolVersion.Combined
+            ProtocolVersion = SpiceProtocolVersion.Combined
         };
 
         var bytes = SpiceMessageSerializer.Serialize(message);

@@ -219,7 +219,7 @@ final class SpiceMessageSerializerTests: XCTestCase {
         let message = KeyboardInputSpiceMessage(
             messageId: 2,
             windowId: 12345,
-            eventType: .keyDown,
+            eventType: .down,
             keyCode: 0x41,  // 'A'
             scanCode: 0x1E,
             modifiers: [.control, .shift]

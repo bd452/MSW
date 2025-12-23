@@ -15,7 +15,7 @@ namespace WinRun.Agent.Services;
 /// <summary>
 /// Protocol version constants - generated from shared/protocol.def
 /// </summary>
-public static class GeneratedProtocolVersion
+public static class SpiceProtocolVersion
 {
     public const ushort Major = 1;
     public const ushort Minor = 0;
@@ -29,7 +29,7 @@ public static class GeneratedProtocolVersion
 /// <summary>
 /// Message type codes - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedMessageType : byte
+public enum SpiceMessageType : byte
 {
     // Host → Guest (0x00-0x7F)
     LaunchProgram = 0x01,
@@ -38,6 +38,9 @@ public enum GeneratedMessageType : byte
     MouseInput = 0x04,
     KeyboardInput = 0x05,
     DragDropEvent = 0x06,
+    ListSessions = 0x08,
+    CloseSession = 0x09,
+    ListShortcuts = 0x0A,
     Shutdown = 0x0F,
 
     // Guest → Host (0x80-0xFF)
@@ -53,6 +56,8 @@ public enum GeneratedMessageType : byte
     ProvisionProgress = 0x89,
     ProvisionError = 0x8A,
     ProvisionComplete = 0x8B,
+    SessionList = 0x8C,
+    ShortcutList = 0x8D,
     Error = 0xFE,
     Ack = 0xFF,
 }
@@ -65,7 +70,7 @@ public enum GeneratedMessageType : byte
 /// Guest capability flags - generated from shared/protocol.def
 /// </summary>
 [Flags]
-public enum GeneratedCapabilities : uint
+public enum GuestCapabilities : uint
 {
     None = 0,
     WindowTracking = 0x01,
@@ -85,7 +90,7 @@ public enum GeneratedCapabilities : uint
 /// <summary>
 /// Mouse button codes - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedMouseButton : byte
+public enum MouseButton : byte
 {
     Left = 1,
     Right = 2,
@@ -97,7 +102,7 @@ public enum GeneratedMouseButton : byte
 /// <summary>
 /// Mouse event types - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedMouseEventType : byte
+public enum MouseEventType : byte
 {
     Move = 0,
     Press = 1,
@@ -112,17 +117,17 @@ public enum GeneratedMouseEventType : byte
 /// <summary>
 /// Key event types - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedKeyEventType : byte
+public enum KeyEventType : byte
 {
-    Down = 0,
-    Up = 1,
+    KeyDown = 0,
+    KeyUp = 1,
 }
 
 /// <summary>
 /// Key modifier flags - generated from shared/protocol.def
 /// </summary>
 [Flags]
-public enum GeneratedKeyModifiers : byte
+public enum KeyModifiers : byte
 {
     None = 0x00,
     Shift = 0x01,
@@ -140,7 +145,7 @@ public enum GeneratedKeyModifiers : byte
 /// <summary>
 /// Drag/drop event types - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedDragDropEventType : byte
+public enum DragDropEventType : byte
 {
     Enter = 0,
     Move = 1,
@@ -151,7 +156,7 @@ public enum GeneratedDragDropEventType : byte
 /// <summary>
 /// Drag operation types - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedDragOperation : byte
+public enum DragOperation : byte
 {
     None = 0,
     Copy = 1,
@@ -166,7 +171,7 @@ public enum GeneratedDragOperation : byte
 /// <summary>
 /// Pixel format types - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedPixelFormat : byte
+public enum PixelFormatType : byte
 {
     Bgra32 = 0,
     Rgba32 = 1,
@@ -179,7 +184,7 @@ public enum GeneratedPixelFormat : byte
 /// <summary>
 /// Window event types - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedWindowEventType : int
+public enum WindowEventType : int
 {
     Created = 0,
     Destroyed = 1,
@@ -198,7 +203,7 @@ public enum GeneratedWindowEventType : int
 /// <summary>
 /// Clipboard format identifiers - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedClipboardFormat
+public enum ClipboardFormat
 {
     PlainText,
     Rtf,
@@ -215,7 +220,7 @@ public enum GeneratedClipboardFormat
 /// <summary>
 /// Provisioning phase identifiers - generated from shared/protocol.def
 /// </summary>
-public enum GeneratedProvisioningPhase
+public enum ProvisioningPhase
 {
     Drivers,
     Agent,
@@ -224,4 +229,70 @@ public enum GeneratedProvisioningPhase
     Complete,
 }
 
+// ============================================================================
+// Backwards Compatibility Aliases
+// ============================================================================
+// These allow existing code referencing Generated* types to continue working
+// TODO: Remove these after migrating all code to use the canonical type names
+
+#pragma warning disable CA1711 // Identifiers should not have incorrect suffix
+
+/// <summary>Backwards compatibility alias - use SpiceProtocolVersion instead</summary>
+[Obsolete("Use SpiceProtocolVersion instead")]
+public static class GeneratedProtocolVersion
+{
+    public const ushort Major = SpiceProtocolVersion.Major;
+    public const ushort Minor = SpiceProtocolVersion.Minor;
+    public static uint Combined => SpiceProtocolVersion.Combined;
+}
+
+/// <summary>Backwards compatibility alias - use SpiceMessageType instead</summary>
+[Obsolete("Use SpiceMessageType instead")]
+public enum GeneratedMessageType : byte
+{
+    LaunchProgram = 0x01,
+    RequestIcon = 0x02,
+    ClipboardData = 0x03,
+    MouseInput = 0x04,
+    KeyboardInput = 0x05,
+    DragDropEvent = 0x06,
+    ListSessions = 0x08,
+    CloseSession = 0x09,
+    ListShortcuts = 0x0A,
+    Shutdown = 0x0F,
+    WindowMetadata = 0x80,
+    FrameData = 0x81,
+    CapabilityFlags = 0x82,
+    DpiInfo = 0x83,
+    IconData = 0x84,
+    ShortcutDetected = 0x85,
+    ClipboardChanged = 0x86,
+    Heartbeat = 0x87,
+    TelemetryReport = 0x88,
+    ProvisionProgress = 0x89,
+    ProvisionError = 0x8A,
+    ProvisionComplete = 0x8B,
+    SessionList = 0x8C,
+    ShortcutList = 0x8D,
+    Error = 0xFE,
+    Ack = 0xFF,
+}
+
+/// <summary>Backwards compatibility alias - use GuestCapabilities instead</summary>
+[Obsolete("Use GuestCapabilities instead")]
+[Flags]
+public enum GeneratedCapabilities : uint
+{
+    None = 0,
+    WindowTracking = 0x01,
+    DesktopDuplication = 0x02,
+    ClipboardSync = 0x04,
+    DragDrop = 0x08,
+    IconExtraction = 0x10,
+    ShortcutDetection = 0x20,
+    HighDpiSupport = 0x40,
+    MultiMonitor = 0x80,
+}
+
+#pragma warning restore CA1711
 #pragma warning restore CA1008

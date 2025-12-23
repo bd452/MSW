@@ -247,6 +247,10 @@ public sealed class WinRunAgentService : IDisposable
                 await HandleCloseSessionAsync(closeSession);
                 break;
 
+            case ListShortcutsMessage listShortcuts:
+                await HandleListShortcutsAsync(listShortcuts);
+                break;
+
             default:
                 _logger.Warn($"Unhandled message type {message.GetType().Name}");
                 await SendAckAsync(message.MessageId, success: false, "Unknown message type");
@@ -404,6 +408,27 @@ public sealed class WinRunAgentService : IDisposable
 
         _logger.Info($"Session {request.SessionId} closed");
         await SendAckAsync(request.MessageId, success: true);
+    }
+
+    private async Task HandleListShortcutsAsync(ListShortcutsMessage request)
+    {
+        _logger.Debug("Listing detected shortcuts");
+
+        // Parse all known shortcuts to get their full info
+        var shortcuts = new List<ShortcutInfo>();
+        foreach (var path in ShortcutService.KnownShortcuts)
+        {
+            var info = ShortcutService.ParseShortcut(path);
+            if (info != null)
+            {
+                shortcuts.Add(info);
+            }
+        }
+
+        var response = SpiceMessageSerializer.CreateShortcutList(request.MessageId, shortcuts);
+
+        _logger.Info($"Returning {response.Shortcuts.Length} detected shortcuts");
+        await SendMessageAsync(response);
     }
 
     private async Task SendCapabilityAnnouncementAsync()

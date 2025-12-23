@@ -429,21 +429,7 @@ public sealed record WindowEventArgs(
     Rect Bounds,
     WindowEventType EventType = WindowEventType.Updated);
 
-/// <summary>
-/// Type of window event.
-/// Values must match host's WindowEventType enum exactly for protocol compatibility.
-/// </summary>
-public enum WindowEventType
-{
-    Created = 0,
-    Destroyed = 1,
-    Moved = 2,
-    TitleChanged = 3,
-    FocusChanged = 4,
-    Minimized = 5,
-    Restored = 6,
-    Updated = 7
-}
+// Note: WindowEventType enum is defined in Protocol.generated.cs
 
 /// <summary>
 /// Window bounds rectangle.

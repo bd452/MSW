@@ -139,32 +139,32 @@ func toHex(_ value: Int, minWidth: Int = 2) -> String {
 
 func generateSwift(_ def: ProtocolDefinition) -> String {
     var out = """
-    // Protocol.generated.swift
-    // AUTO-GENERATED FROM shared/protocol.def - DO NOT EDIT DIRECTLY
-    //
-    // To regenerate: make generate-protocol
-    // Source of truth: shared/protocol.def
-    
-    import Foundation
-    
-    // MARK: - Protocol Version
-    
-    /// Protocol version constants - generated from shared/protocol.def
-    public enum GeneratedProtocolVersion {
-        public static let major: UInt16 = \(def.version.major)
-        public static let minor: UInt16 = \(def.version.minor)
-        public static var combined: UInt32 {
-            (UInt32(major) << 16) | UInt32(minor)
-        }
+// Protocol.generated.swift
+// AUTO-GENERATED FROM shared/protocol.def - DO NOT EDIT DIRECTLY
+//
+// To regenerate: make generate-protocol
+// Source of truth: shared/protocol.def
+
+import Foundation
+
+// MARK: - Protocol Version
+
+/// Protocol version constants - generated from shared/protocol.def
+public enum SpiceProtocolVersion {
+    public static let major: UInt16 = \(def.version.major)
+    public static let minor: UInt16 = \(def.version.minor)
+    public static var combined: UInt32 {
+        (UInt32(major) << 16) | UInt32(minor)
     }
-    
-    // MARK: - Message Types
-    
-    /// Message type codes - generated from shared/protocol.def
-    public enum GeneratedMessageType: UInt8, CaseIterable {
-        // Host → Guest (0x00-0x7F)
-    
-    """
+}
+
+// MARK: - Message Types
+
+/// Message type codes - generated from shared/protocol.def
+public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
+    // Host → Guest (0x00-0x7F)
+
+"""
     
     for (name, value) in def.messageTypesHostToGuest {
         let caseName = toSwiftEnumCase(name, prefix: "MSG_")
@@ -179,39 +179,39 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    
-        public var isHostToGuest: Bool { rawValue < 0x80 }
-        public var isGuestToHost: Bool { rawValue >= 0x80 }
-    }
-    
-    // MARK: - Guest Capabilities
-    
-    /// Guest capability flags - generated from shared/protocol.def
-    public struct GeneratedCapabilities: OptionSet, Hashable {
-        public let rawValue: UInt32
-        public init(rawValue: UInt32) { self.rawValue = rawValue }
-    
-    
-    """
+
+    public var isHostToGuest: Bool { rawValue < 0x80 }
+    public var isGuestToHost: Bool { rawValue >= 0x80 }
+}
+
+// MARK: - Guest Capabilities
+
+/// Guest capability flags - generated from shared/protocol.def
+public struct GuestCapabilities: OptionSet, Codable, Hashable, Sendable {
+    public let rawValue: UInt32
+    public init(rawValue: UInt32) { self.rawValue = rawValue }
+
+
+"""
     
     for (name, value) in def.capabilities {
         let caseName = toSwiftEnumCase(name, prefix: "CAP_")
-        out += "    public static let \(caseName) = GeneratedCapabilities(rawValue: 0x\(toHex(value)))\n"
+        out += "    public static let \(caseName) = GuestCapabilities(rawValue: 0x\(toHex(value)))\n"
     }
     
     out += """
-    
-        public static let allCore: GeneratedCapabilities = [
-            .windowTracking, .desktopDuplication, .clipboardSync, .iconExtraction
-        ]
-    }
-    
-    // MARK: - Mouse Input
-    
-    /// Mouse button codes - generated from shared/protocol.def
-    public enum GeneratedMouseButton: UInt8, Codable {
-    
-    """
+
+    public static let allCore: GuestCapabilities = [
+        .windowTracking, .desktopDuplication, .clipboardSync, .iconExtraction
+    ]
+}
+
+// MARK: - Mouse Input
+
+/// Mouse button codes - generated from shared/protocol.def
+public enum MouseButton: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.mouseButtons {
         let caseName = toSwiftEnumCase(name, prefix: "MOUSE_BUTTON_")
@@ -219,12 +219,12 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    /// Mouse event types - generated from shared/protocol.def
-    public enum GeneratedMouseEventType: UInt8, Codable {
-    
-    """
+}
+
+/// Mouse event types - generated from shared/protocol.def
+public enum MouseEventType: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.mouseEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "MOUSE_EVENT_")
@@ -232,14 +232,14 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    // MARK: - Keyboard Input
-    
-    /// Key event types - generated from shared/protocol.def
-    public enum GeneratedKeyEventType: UInt8, Codable {
-    
-    """
+}
+
+// MARK: - Keyboard Input
+
+/// Key event types - generated from shared/protocol.def
+public enum KeyEventType: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.keyEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "KEY_EVENT_")
@@ -247,30 +247,30 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    /// Key modifier flags - generated from shared/protocol.def
-    public struct GeneratedKeyModifiers: OptionSet, Codable, Hashable {
-        public let rawValue: UInt8
-        public init(rawValue: UInt8) { self.rawValue = rawValue }
-    
-    
-    """
+}
+
+/// Key modifier flags - generated from shared/protocol.def
+public struct KeyModifiers: OptionSet, Codable, Hashable, Sendable {
+    public let rawValue: UInt8
+    public init(rawValue: UInt8) { self.rawValue = rawValue }
+
+
+"""
     
     for (name, value) in def.keyModifiers where name != "KEY_MOD_NONE" {
         let caseName = toSwiftEnumCase(name, prefix: "KEY_MOD_")
-        out += "    public static let \(caseName) = GeneratedKeyModifiers(rawValue: 0x\(toHex(value)))\n"
+        out += "    public static let \(caseName) = KeyModifiers(rawValue: 0x\(toHex(value)))\n"
     }
     
     out += """
-    }
-    
-    // MARK: - Drag and Drop
-    
-    /// Drag/drop event types - generated from shared/protocol.def
-    public enum GeneratedDragDropEventType: UInt8, Codable {
-    
-    """
+}
+
+// MARK: - Drag and Drop
+
+/// Drag/drop event types - generated from shared/protocol.def
+public enum DragDropEventType: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.dragDropEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "DRAG_EVENT_")
@@ -278,12 +278,12 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    /// Drag operation types - generated from shared/protocol.def
-    public enum GeneratedDragOperation: UInt8, Codable {
-    
-    """
+}
+
+/// Drag operation types - generated from shared/protocol.def
+public enum DragOperation: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.dragOperations {
         let caseName = toSwiftEnumCase(name, prefix: "DRAG_OP_")
@@ -291,14 +291,14 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    // MARK: - Pixel Formats
-    
-    /// Pixel format types - generated from shared/protocol.def
-    public enum GeneratedPixelFormat: UInt8, Codable {
-    
-    """
+}
+
+// MARK: - Pixel Formats
+
+/// Pixel format types - generated from shared/protocol.def
+public enum SpicePixelFormat: UInt8, Codable, Sendable {
+
+"""
     
     for (name, value) in def.pixelFormats {
         let caseName = toSwiftEnumCase(name, prefix: "PIXEL_FORMAT_")
@@ -306,14 +306,14 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    // MARK: - Window Events
-    
-    /// Window event types - generated from shared/protocol.def
-    public enum GeneratedWindowEventType: Int32, Codable {
-    
-    """
+}
+
+// MARK: - Window Events
+
+/// Window event types - generated from shared/protocol.def
+public enum WindowEventType: Int32, Codable, Sendable {
+
+"""
     
     for (name, value) in def.windowEventTypes {
         let caseName = toSwiftEnumCase(name, prefix: "WINDOW_EVENT_")
@@ -321,14 +321,14 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    // MARK: - Clipboard Formats
-    
-    /// Clipboard format identifiers - generated from shared/protocol.def
-    public enum GeneratedClipboardFormat: String, Codable, CaseIterable {
-    
-    """
+}
+
+// MARK: - Clipboard Formats
+
+/// Clipboard format identifiers - generated from shared/protocol.def
+public enum ClipboardFormat: String, Codable, CaseIterable, Sendable {
+
+"""
     
     for (name, value) in def.clipboardFormats {
         let caseName = toSwiftEnumCase(name, prefix: "CLIPBOARD_FORMAT_")
@@ -341,14 +341,14 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
     }
     
     out += """
-    }
-    
-    // MARK: - Provisioning Phases
-    
-    /// Provisioning phase identifiers - generated from shared/protocol.def
-    public enum GeneratedProvisioningPhase: String, Codable, CaseIterable {
-    
-    """
+}
+
+// MARK: - Provisioning Phases
+
+/// Provisioning phase identifiers - generated from shared/protocol.def
+public enum GuestProvisioningPhase: String, Codable, CaseIterable, Sendable {
+
+"""
     
     for (name, value) in def.provisioningPhases {
         let caseName = toSwiftEnumCase(name, prefix: "PROVISION_PHASE_")
@@ -360,7 +360,41 @@ func generateSwift(_ def: ProtocolDefinition) -> String {
         }
     }
     
-    out += "}\n"
+    out += """
+}
+
+// MARK: - Backwards Compatibility Typealiases
+// These allow existing code referencing Generated* types to continue working
+// TODO: Remove these after migrating all code to use the canonical type names
+
+@available(*, deprecated, renamed: "SpiceProtocolVersion")
+public typealias GeneratedProtocolVersion = SpiceProtocolVersion
+@available(*, deprecated, renamed: "SpiceMessageType")
+public typealias GeneratedMessageType = SpiceMessageType
+@available(*, deprecated, renamed: "GuestCapabilities")
+public typealias GeneratedCapabilities = GuestCapabilities
+@available(*, deprecated, renamed: "MouseButton")
+public typealias GeneratedMouseButton = MouseButton
+@available(*, deprecated, renamed: "MouseEventType")
+public typealias GeneratedMouseEventType = MouseEventType
+@available(*, deprecated, renamed: "KeyEventType")
+public typealias GeneratedKeyEventType = KeyEventType
+@available(*, deprecated, renamed: "KeyModifiers")
+public typealias GeneratedKeyModifiers = KeyModifiers
+@available(*, deprecated, renamed: "DragDropEventType")
+public typealias GeneratedDragDropEventType = DragDropEventType
+@available(*, deprecated, renamed: "DragOperation")
+public typealias GeneratedDragOperation = DragOperation
+@available(*, deprecated, renamed: "SpicePixelFormat")
+public typealias GeneratedPixelFormat = SpicePixelFormat
+@available(*, deprecated, renamed: "WindowEventType")
+public typealias GeneratedWindowEventType = WindowEventType
+@available(*, deprecated, renamed: "ClipboardFormat")
+public typealias GeneratedClipboardFormat = ClipboardFormat
+@available(*, deprecated, renamed: "GuestProvisioningPhase")
+public typealias GeneratedProvisioningPhase = GuestProvisioningPhase
+
+"""
     
     return out
 }
