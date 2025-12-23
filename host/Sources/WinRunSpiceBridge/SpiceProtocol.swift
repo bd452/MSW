@@ -62,6 +62,8 @@ public enum SpiceMessageType: UInt8, Codable {
     case mouseInput = 0x04
     case keyboardInput = 0x05
     case dragDropEvent = 0x06
+    case listSessions = 0x08
+    case closeSession = 0x09
     case shutdown = 0x0F
 
     // Guest → Host (0x80-0xFF)
@@ -77,6 +79,7 @@ public enum SpiceMessageType: UInt8, Codable {
     case provisionProgress = 0x89
     case provisionError = 0x8A
     case provisionComplete = 0x8B
+    case sessionList = 0x8C
     case error = 0xFE
     case ack = 0xFF
 

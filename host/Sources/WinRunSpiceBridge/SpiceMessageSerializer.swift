@@ -58,6 +58,10 @@ public enum SpiceMessageSerializer {
             type = .keyboardInput
         case is DragDropSpiceMessage:
             type = .dragDropEvent
+        case is ListSessionsSpiceMessage:
+            type = .listSessions
+        case is CloseSessionSpiceMessage:
+            type = .closeSession
         case is ShutdownSpiceMessage:
             type = .shutdown
         default:
@@ -140,6 +144,17 @@ public enum SpiceMessageSerializer {
     }
 
     private static func decodePayload(type: SpiceMessageType, payload: Data) throws -> Any {
+        // Handle host→guest messages (should not be received on host)
+        if type.isHostToGuest {
+            throw SpiceProtocolError.unexpectedMessageDirection(type)
+        }
+
+        // Decode guest→host messages
+        return try decodeGuestMessage(type: type, payload: payload)
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
+    private static func decodeGuestMessage(type: SpiceMessageType, payload: Data) throws -> Any {
         switch type {
         case .windowMetadata:
             return try decoder.decode(WindowMetadataMessage.self, from: payload)
@@ -158,7 +173,6 @@ public enum SpiceMessageSerializer {
         case .heartbeat:
             return try decoder.decode(HeartbeatMessage.self, from: payload)
         case .telemetryReport:
-            // TelemetryReport decoded as raw JSON for flexibility
             return try JSONSerialization.jsonObject(with: payload)
         case .provisionProgress:
             return try decoder.decode(ProvisionProgressMessage.self, from: payload)
@@ -166,13 +180,13 @@ public enum SpiceMessageSerializer {
             return try decoder.decode(ProvisionErrorMessage.self, from: payload)
         case .provisionComplete:
             return try decoder.decode(ProvisionCompleteMessage.self, from: payload)
+        case .sessionList:
+            return try decoder.decode(SessionListMessage.self, from: payload)
         case .error:
             return try decoder.decode(GuestErrorMessage.self, from: payload)
         case .ack:
             return try decoder.decode(AckMessage.self, from: payload)
-        case .launchProgram, .requestIcon, .clipboardData, .mouseInput,
-             .keyboardInput, .dragDropEvent, .shutdown:
-            // Host→guest messages shouldn't be received on host
+        default:
             throw SpiceProtocolError.unexpectedMessageDirection(type)
         }
     }

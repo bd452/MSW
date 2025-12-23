@@ -51,6 +51,10 @@ help:
 	@echo "  check-host-remote  Run host checks on macOS via GitHub Actions"
 	@echo "  build-host-remote  Build host on macOS via GitHub Actions"
 	@echo ""
+	@echo "  Remote targets accept GH_TOKEN for authentication:"
+	@echo "    make test-guest-remote GH_TOKEN=ghp_xxx"
+	@echo "  Token requires 'workflow' scope. Create at: https://github.com/settings/tokens/new"
+	@echo ""
 	@echo "Protocol targets:"
 	@echo "  generate-protocol      Regenerate protocol code from shared/protocol.def"
 	@echo "  generate-protocol-host Generate Swift protocol code (requires macOS)"
@@ -129,12 +133,21 @@ build-host-remote:
 check-host-remote: test-host-remote
 	@echo "✅ Remote host checks passed!"
 
+# GitHub token for remote workflows (can be passed via environment or make variable)
+# Usage: make test-guest-remote GH_TOKEN=ghp_xxx
+# Token requires 'workflow' scope (and 'repo' for private repos)
+GH_TOKEN ?=
+export GH_TOKEN
+
 # Helper function for running remote workflows
 # Usage: $(call run-remote-workflow,workflow-file,description,extra-args)
 define run-remote-workflow
 	if ! command -v gh >/dev/null 2>&1; then \
 		echo "❌ GitHub CLI (gh) not found. Install with: brew install gh"; \
 		exit 1; \
+	fi; \
+	if [ -n "$$GH_TOKEN" ]; then \
+		echo "🔑 Using provided GH_TOKEN for authentication"; \
 	fi; \
 	BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
 	REPO=$$(gh repo view --json nameWithOwner --jq '.nameWithOwner'); \
@@ -151,6 +164,32 @@ define run-remote-workflow
 			echo "   1. Push a PR to add the workflow file to main first"; \
 			echo "   2. Use 'gh pr create' to open a PR - CI runs automatically on PRs"; \
 			echo "   3. Push to main and then test your branch"; \
+			echo ""; \
+			exit 1; \
+		elif grep -qi "Resource not accessible\|HTTP 403\|permission\|forbidden" /tmp/gh-error.txt 2>/dev/null; then \
+			echo ""; \
+			echo "❌ Permission denied: Cannot trigger workflow dispatch."; \
+			echo ""; \
+			cat /tmp/gh-error.txt; \
+			echo ""; \
+			echo "   The GitHub token doesn't have permission to trigger workflows."; \
+			echo "   This can happen when:"; \
+			echo "   • Running in an automated environment (CI, Cursor cloud agent, etc.)"; \
+			echo "   • The gh CLI is authenticated with a token missing 'workflow' scope"; \
+			echo "   • Repository settings restrict workflow dispatch"; \
+			echo ""; \
+			echo "   Solutions:"; \
+			echo "   1. Provide a token with 'workflow' scope:"; \
+			echo "      make $@ GH_TOKEN=ghp_your_token_here"; \
+			echo ""; \
+			echo "   2. Push your branch and create a PR - CI runs automatically on PRs"; \
+			echo "      git push -u origin $$BRANCH && gh pr create"; \
+			echo ""; \
+			echo "   3. Re-authenticate gh with workflow scope:"; \
+			echo "      gh auth login --scopes workflow"; \
+			echo ""; \
+			echo "   To create a token: https://github.com/settings/tokens/new"; \
+			echo "   Required scopes: 'workflow' (and 'repo' for private repositories)"; \
 			echo ""; \
 			exit 1; \
 		else \

@@ -224,6 +224,14 @@ public sealed class WinRunAgentService : IDisposable
                 HandleDragDrop(dragDrop);
                 break;
 
+            case ListSessionsMessage listSessions:
+                await HandleListSessionsAsync(listSessions);
+                break;
+
+            case CloseSessionMessage closeSession:
+                await HandleCloseSessionAsync(closeSession);
+                break;
+
             default:
                 _logger.Warn($"Unhandled message type {message.GetType().Name}");
                 await SendAckAsync(message.MessageId, success: false, "Unknown message type");
@@ -343,6 +351,44 @@ public sealed class WinRunAgentService : IDisposable
         // TODO: Full drag/drop implementation requires Windows OLE drag-drop APIs
         // For now, log the event
         _logger.Debug($"DragDrop {dragDrop.EventType} for window {dragDrop.WindowId}, {dragDrop.Files.Length} files");
+    }
+
+    private async Task HandleListSessionsAsync(ListSessionsMessage request)
+    {
+        _logger.Debug("Listing active sessions");
+
+        var sessions = SessionManager.GetActiveSessions();
+        var response = SpiceMessageSerializer.CreateSessionList(request.MessageId, sessions);
+
+        _logger.Info($"Returning {response.Sessions.Length} active sessions");
+        await SendMessageAsync(response);
+    }
+
+    private async Task HandleCloseSessionAsync(CloseSessionMessage request)
+    {
+        _logger.Info($"Close session requested: {request.SessionId}");
+
+        // Parse session ID (which is the process ID as a string)
+        if (!int.TryParse(request.SessionId, out var processId))
+        {
+            _logger.Warn($"Invalid session ID format: {request.SessionId}");
+            await SendAckAsync(request.MessageId, success: false, $"Invalid session ID: {request.SessionId}");
+            return;
+        }
+
+        var session = SessionManager.GetSession(processId);
+        if (session == null)
+        {
+            _logger.Warn($"Session not found: {request.SessionId}");
+            await SendAckAsync(request.MessageId, success: false, $"Session not found: {request.SessionId}");
+            return;
+        }
+
+        // Mark session as exited (this will notify host via existing event handling)
+        SessionManager.MarkSessionExited(processId);
+
+        _logger.Info($"Session {request.SessionId} closed");
+        await SendAckAsync(request.MessageId, success: true);
     }
 
     private async Task SendCapabilityAnnouncementAsync()

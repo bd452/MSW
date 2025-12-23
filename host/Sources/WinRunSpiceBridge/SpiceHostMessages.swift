@@ -171,3 +171,23 @@ public struct ShutdownSpiceMessage: HostMessage {
         self.timeoutMs = timeoutMs
     }
 }
+
+/// Request to list active sessions from the guest.
+public struct ListSessionsSpiceMessage: HostMessage {
+    public let messageId: UInt32
+
+    public init(messageId: UInt32) {
+        self.messageId = messageId
+    }
+}
+
+/// Request to close a specific session on the guest.
+public struct CloseSessionSpiceMessage: HostMessage {
+    public let messageId: UInt32
+    public let sessionId: String
+
+    public init(messageId: UInt32, sessionId: String) {
+        self.messageId = messageId
+        self.sessionId = sessionId
+    }
+}
