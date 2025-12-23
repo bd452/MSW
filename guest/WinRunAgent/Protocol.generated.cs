@@ -38,6 +38,9 @@ public enum GeneratedMessageType : byte
     MouseInput = 0x04,
     KeyboardInput = 0x05,
     DragDropEvent = 0x06,
+    ListSessions = 0x08,
+    CloseSession = 0x09,
+    ListShortcuts = 0x0A,
     Shutdown = 0x0F,
 
     // Guest → Host (0x80-0xFF)
@@ -53,6 +56,8 @@ public enum GeneratedMessageType : byte
     ProvisionProgress = 0x89,
     ProvisionError = 0x8A,
     ProvisionComplete = 0x8B,
+    SessionList = 0x8C,
+    ShortcutList = 0x8D,
     Error = 0xFE,
     Ack = 0xFF,
 }
