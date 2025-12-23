@@ -335,6 +335,10 @@ validate-protocol-host:
 		if ! diff -q $(REPO_ROOT)/host/Sources/WinRunSpiceBridge/Protocol.generated.swift /tmp/Protocol.generated.swift.bak >/dev/null 2>&1; then \
 			echo "❌ Protocol.generated.swift is out of date!"; \
 			echo "   Run 'make generate-protocol' and commit the changes."; \
+			echo ""; \
+			echo "=== DIFF (committed vs generated) ==="; \
+			diff -u /tmp/Protocol.generated.swift.bak $(REPO_ROOT)/host/Sources/WinRunSpiceBridge/Protocol.generated.swift || true; \
+			echo "=== END DIFF ==="; \
 			mv /tmp/Protocol.generated.swift.bak $(REPO_ROOT)/host/Sources/WinRunSpiceBridge/Protocol.generated.swift; \
 			exit 1; \
 		fi; \
@@ -352,6 +356,10 @@ ifdef DOTNET_ROOT
 	if ! diff -q $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs /tmp/Protocol.generated.cs.bak >/dev/null 2>&1; then \
 		echo "❌ Protocol.generated.cs is out of date!"; \
 		echo "   Run 'make generate-protocol' and commit the changes."; \
+		echo ""; \
+		echo "=== DIFF (committed vs generated) ==="; \
+		diff -u /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs || true; \
+		echo "=== END DIFF ==="; \
 		mv /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs; \
 		exit 1; \
 	fi; \
@@ -364,6 +372,10 @@ else
 		if ! diff -q $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs /tmp/Protocol.generated.cs.bak >/dev/null 2>&1; then \
 			echo "❌ Protocol.generated.cs is out of date!"; \
 			echo "   Run 'make generate-protocol' and commit the changes."; \
+			echo ""; \
+			echo "=== DIFF (committed vs generated) ==="; \
+			diff -u /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs || true; \
+			echo "=== END DIFF ==="; \
 			mv /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs; \
 			exit 1; \
 		fi; \
