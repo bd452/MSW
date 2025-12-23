@@ -5,7 +5,7 @@ import WinRunShared
 /// Setup wizard screen for displaying an actionable provisioning error.
 @available(macOS 13, *)
 final class SetupErrorViewController: NSViewController {
-    private enum RecoveryActionID: String {
+    enum RecoveryActionID: String {
         case retrySetup = "retry_setup"
         case chooseDifferentISO = "choose_different_iso"
         case contactSupport = "contact_support"
@@ -142,8 +142,12 @@ final class SetupErrorViewController: NSViewController {
             row.spacing = 4
 
             let button = NSButton(title: action.title, target: self, action: #selector(runRecoveryAction(_:)))
-            button.bezelStyle = action.isPrimary ? .prominentSquare : .rounded
+            // Keep to macOS 13-compatible styles. Emphasize primary action via default key + font weight.
+            button.bezelStyle = .rounded
             button.keyEquivalent = action.isPrimary ? "\r" : ""
+            if action.isPrimary {
+                button.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            }
             button.identifier = NSUserInterfaceItemIdentifier(action.id.rawValue)
             button.isEnabled = action.handler != nil
 
