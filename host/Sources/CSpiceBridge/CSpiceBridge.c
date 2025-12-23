@@ -11,6 +11,23 @@
 
 #if __APPLE__
 #include "shim.h"
+
+// Spice protocol clipboard constants (from spice-protocol/spice/vd_agent.h)
+// These are stable protocol values that may not be exposed by spice-client.h
+#ifndef VD_AGENT_CLIPBOARD_NONE
+#define VD_AGENT_CLIPBOARD_NONE 0
+#define VD_AGENT_CLIPBOARD_UTF8_TEXT 1
+#define VD_AGENT_CLIPBOARD_IMAGE_PNG 2
+#define VD_AGENT_CLIPBOARD_IMAGE_BMP 3
+#define VD_AGENT_CLIPBOARD_IMAGE_TIFF 4
+#define VD_AGENT_CLIPBOARD_IMAGE_JPG 5
+#endif
+
+#ifndef VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD
+#define VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD 0
+#define VD_AGENT_CLIPBOARD_SELECTION_PRIMARY 1
+#define VD_AGENT_CLIPBOARD_SELECTION_SECONDARY 2
+#endif
 #endif
 
 typedef struct winrun_spice_stream {
