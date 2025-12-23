@@ -26,11 +26,18 @@ typedef struct winrun_spice_stream {
     pthread_mutex_t send_mutex;
     // Tracks current button state for mouse motion events
     int button_state;
+    // Clipboard sequence number for deduplication
+    uint64_t clipboard_sequence;
 #if __APPLE__
     SpiceSession *session;
     SpiceInputsChannel *inputs_channel;
     SpiceMainChannel *main_channel;
     gulong channel_new_handler_id;
+    // Clipboard signal handlers on main channel
+    gulong clipboard_grab_handler_id;
+    gulong clipboard_data_handler_id;
+    gulong clipboard_request_handler_id;
+    gulong clipboard_release_handler_id;
 #endif
 } winrun_spice_stream;
 
@@ -47,13 +54,62 @@ static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointe
 
     if (SPICE_IS_INPUTS_CHANNEL(channel)) {
         pthread_mutex_lock(&stream->send_mutex);
+        // Release previous channel if reconnecting
+        if (stream->inputs_channel) {
+            g_object_unref(stream->inputs_channel);
+        }
         stream->inputs_channel = SPICE_INPUTS_CHANNEL(channel);
         g_object_ref(stream->inputs_channel);
         pthread_mutex_unlock(&stream->send_mutex);
     } else if (SPICE_IS_MAIN_CHANNEL(channel)) {
         pthread_mutex_lock(&stream->send_mutex);
+
+        // Disconnect old clipboard handlers if reconnecting
+        if (stream->main_channel) {
+            if (stream->clipboard_grab_handler_id) {
+                g_signal_handler_disconnect(stream->main_channel, stream->clipboard_grab_handler_id);
+            }
+            if (stream->clipboard_data_handler_id) {
+                g_signal_handler_disconnect(stream->main_channel, stream->clipboard_data_handler_id);
+            }
+            if (stream->clipboard_request_handler_id) {
+                g_signal_handler_disconnect(stream->main_channel, stream->clipboard_request_handler_id);
+            }
+            if (stream->clipboard_release_handler_id) {
+                g_signal_handler_disconnect(stream->main_channel, stream->clipboard_release_handler_id);
+            }
+            g_object_unref(stream->main_channel);
+        }
+
         stream->main_channel = SPICE_MAIN_CHANNEL(channel);
         g_object_ref(stream->main_channel);
+
+        // Connect clipboard signal handlers
+        stream->clipboard_grab_handler_id = g_signal_connect(
+            stream->main_channel,
+            "main-clipboard-selection-grab",
+            G_CALLBACK(on_clipboard_grab),
+            stream
+        );
+        stream->clipboard_data_handler_id = g_signal_connect(
+            stream->main_channel,
+            "main-clipboard-selection",
+            G_CALLBACK(on_clipboard_data),
+            stream
+        );
+        stream->clipboard_request_handler_id = g_signal_connect(
+            stream->main_channel,
+            "main-clipboard-selection-request",
+            G_CALLBACK(on_clipboard_request),
+            stream
+        );
+        stream->clipboard_release_handler_id = g_signal_connect(
+            stream->main_channel,
+            "main-clipboard-selection-release",
+            G_CALLBACK(on_clipboard_release),
+            stream
+        );
+
         pthread_mutex_unlock(&stream->send_mutex);
     }
 }
@@ -82,6 +138,40 @@ static int winrun_button_to_mask(winrun_mouse_button button) {
         default: return 0;
     }
 }
+
+// Convert our clipboard format to Spice clipboard type
+static guint winrun_format_to_spice(winrun_clipboard_format format) {
+    switch (format) {
+        case WINRUN_CLIPBOARD_FORMAT_TEXT: return VD_AGENT_CLIPBOARD_UTF8_TEXT;
+        case WINRUN_CLIPBOARD_FORMAT_RTF:  return VD_AGENT_CLIPBOARD_UTF8_TEXT; // RTF sent as text
+        case WINRUN_CLIPBOARD_FORMAT_HTML: return VD_AGENT_CLIPBOARD_UTF8_TEXT; // HTML sent as text
+        case WINRUN_CLIPBOARD_FORMAT_PNG:  return VD_AGENT_CLIPBOARD_IMAGE_PNG;
+        case WINRUN_CLIPBOARD_FORMAT_TIFF: return VD_AGENT_CLIPBOARD_IMAGE_BMP; // TIFF -> BMP fallback
+        case WINRUN_CLIPBOARD_FORMAT_FILE_URL: return VD_AGENT_CLIPBOARD_UTF8_TEXT;
+        default: return VD_AGENT_CLIPBOARD_UTF8_TEXT;
+    }
+}
+
+// Convert Spice clipboard type to our format
+static winrun_clipboard_format spice_to_winrun_format(guint spice_type) {
+    switch (spice_type) {
+        case VD_AGENT_CLIPBOARD_UTF8_TEXT: return WINRUN_CLIPBOARD_FORMAT_TEXT;
+        case VD_AGENT_CLIPBOARD_IMAGE_PNG: return WINRUN_CLIPBOARD_FORMAT_PNG;
+        case VD_AGENT_CLIPBOARD_IMAGE_BMP: return WINRUN_CLIPBOARD_FORMAT_PNG; // Convert BMP to PNG
+        default: return WINRUN_CLIPBOARD_FORMAT_TEXT;
+    }
+}
+
+// Forward declaration for clipboard signal handlers
+static void on_clipboard_grab(SpiceMainChannel *channel, guint selection,
+                              guint32 *types, guint ntypes, gpointer user_data);
+static void on_clipboard_data(SpiceMainChannel *channel, guint selection,
+                              guint type, const guchar *data, guint size,
+                              gpointer user_data);
+static void on_clipboard_request(SpiceMainChannel *channel, guint selection,
+                                 guint type, gpointer user_data);
+static void on_clipboard_release(SpiceMainChannel *channel, guint selection,
+                                 gpointer user_data);
 #endif
 
 static void winrun_write_error(char *buffer, size_t length, const char *message) {
@@ -116,6 +206,7 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->clipboard_cb = NULL;
     stream->clipboard_user_data = NULL;
     stream->button_state = 0;
+    stream->clipboard_sequence = 0;
     pthread_mutex_init(&stream->send_mutex, NULL);
     atomic_store(&stream->worker_running, true);
 #if __APPLE__
@@ -123,6 +214,10 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->inputs_channel = NULL;
     stream->main_channel = NULL;
     stream->channel_new_handler_id = 0;
+    stream->clipboard_grab_handler_id = 0;
+    stream->clipboard_data_handler_id = 0;
+    stream->clipboard_request_handler_id = 0;
+    stream->clipboard_release_handler_id = 0;
 #endif
     return stream;
 }
@@ -138,6 +233,22 @@ static void winrun_spice_stream_free(winrun_spice_stream *stream) {
     // Disconnect signal handler before releasing session
     if (stream->session && stream->channel_new_handler_id != 0) {
         g_signal_handler_disconnect(stream->session, stream->channel_new_handler_id);
+    }
+
+    // Disconnect clipboard handlers from main channel
+    if (stream->main_channel) {
+        if (stream->clipboard_grab_handler_id) {
+            g_signal_handler_disconnect(stream->main_channel, stream->clipboard_grab_handler_id);
+        }
+        if (stream->clipboard_data_handler_id) {
+            g_signal_handler_disconnect(stream->main_channel, stream->clipboard_data_handler_id);
+        }
+        if (stream->clipboard_request_handler_id) {
+            g_signal_handler_disconnect(stream->main_channel, stream->clipboard_request_handler_id);
+        }
+        if (stream->clipboard_release_handler_id) {
+            g_signal_handler_disconnect(stream->main_channel, stream->clipboard_release_handler_id);
+        }
     }
 
     if (stream->inputs_channel) {
@@ -334,9 +445,15 @@ winrun_spice_stream_handle winrun_spice_stream_open_shared(
         g_object_set(stream->session, "password", ticket, NULL);
     }
 
-    g_object_set(stream->session, "host", "spice-shm", NULL);
-    spice_session_connect(stream->session);
+    // Use spice_session_open_fd for pre-connected shared memory descriptor
+    // This is used with Virtualization.framework's shared memory transport
+    if (!spice_session_open_fd(stream->session, shared_fd)) {
+        winrun_write_error(error_buffer, error_buffer_length, "Failed to open Spice session with shared-memory descriptor");
+        winrun_spice_stream_free(stream);
+        return NULL;
+    }
 #else
+    (void)shared_fd;
     (void)ticket;
 #endif
 
@@ -504,6 +621,92 @@ bool winrun_spice_send_keyboard_event(
 
 // MARK: - Clipboard
 
+#if __APPLE__
+// Called when guest grabs clipboard (guest has new clipboard content)
+static void on_clipboard_grab(SpiceMainChannel *channel, guint selection,
+                              guint32 *types, guint ntypes, gpointer user_data) {
+    (void)channel;
+    (void)selection;
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream || ntypes == 0) {
+        return;
+    }
+
+    // Request the first available type from the guest
+    // Prefer text, then images
+    guint preferred_type = types[0];
+    for (guint i = 0; i < ntypes; i++) {
+        if (types[i] == VD_AGENT_CLIPBOARD_UTF8_TEXT) {
+            preferred_type = types[i];
+            break;
+        }
+        if (types[i] == VD_AGENT_CLIPBOARD_IMAGE_PNG) {
+            preferred_type = types[i];
+            // Keep looking for text
+        }
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+    SpiceMainChannel *main = stream->main_channel;
+    if (main) {
+        // Request the clipboard data in the preferred format
+        spice_main_channel_clipboard_selection_request(main, selection, preferred_type);
+    }
+    pthread_mutex_unlock(&stream->send_mutex);
+}
+
+// Called when guest sends clipboard data (response to our request or push)
+static void on_clipboard_data(SpiceMainChannel *channel, guint selection,
+                              guint type, const guchar *data, guint size,
+                              gpointer user_data) {
+    (void)channel;
+    (void)selection;
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream || !data || size == 0) {
+        return;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+    winrun_clipboard_cb cb = stream->clipboard_cb;
+    void *cb_user_data = stream->clipboard_user_data;
+    uint64_t seq = ++stream->clipboard_sequence;
+    pthread_mutex_unlock(&stream->send_mutex);
+
+    if (cb) {
+        winrun_clipboard_data clipboard = {
+            .format = spice_to_winrun_format(type),
+            .data = data,
+            .data_length = size,
+            .sequence_number = seq
+        };
+        cb(&clipboard, cb_user_data);
+    }
+}
+
+// Called when guest requests clipboard data from host
+static void on_clipboard_request(SpiceMainChannel *channel, guint selection,
+                                 guint type, gpointer user_data) {
+    (void)channel;
+    (void)selection;
+    (void)type;
+    (void)user_data;
+    // This is called when guest wants clipboard data from the host.
+    // The host should respond by calling spice_main_channel_clipboard_selection_notify
+    // with the requested data. For now, we log and ignore - the Swift layer
+    // should handle this by monitoring NSPasteboard and pushing updates.
+    // TODO: Add a callback to notify Swift layer that guest wants clipboard data
+}
+
+// Called when guest releases clipboard
+static void on_clipboard_release(SpiceMainChannel *channel, guint selection,
+                                 gpointer user_data) {
+    (void)channel;
+    (void)selection;
+    (void)user_data;
+    // Guest released clipboard ownership - no action needed
+}
+#endif
+
 void winrun_spice_set_clipboard_callback(
     winrun_spice_stream_handle streamHandle,
     winrun_clipboard_cb clipboard_cb,
@@ -531,9 +734,35 @@ bool winrun_spice_send_clipboard(
 
     pthread_mutex_lock(&stream->send_mutex);
 
-    // TODO: Implement actual Spice clipboard send when libspice-gtk is fully integrated
-    // For now, clipboard data is queued for the mock worker to handle
+#if __APPLE__
+    SpiceMainChannel *main = stream->main_channel;
+    if (!main) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return false;
+    }
+
+    guint spice_type = winrun_format_to_spice(clipboard->format);
+
+    // First, grab the clipboard to notify guest we have new content
+    guint32 types[] = { spice_type };
+    spice_main_channel_clipboard_selection_grab(
+        main,
+        VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD,
+        types,
+        1
+    );
+
+    // Then send the actual data
+    spice_main_channel_clipboard_selection_notify(
+        main,
+        VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD,
+        spice_type,
+        clipboard->data,
+        clipboard->data_length
+    );
+#else
     (void)clipboard;
+#endif
 
     pthread_mutex_unlock(&stream->send_mutex);
     return true;
@@ -550,13 +779,48 @@ void winrun_spice_request_clipboard(
 
     pthread_mutex_lock(&stream->send_mutex);
 
-    // TODO: Implement actual Spice clipboard request when libspice-gtk is fully integrated
+#if __APPLE__
+    SpiceMainChannel *main = stream->main_channel;
+    if (main) {
+        guint spice_type = winrun_format_to_spice(format);
+        spice_main_channel_clipboard_selection_request(
+            main,
+            VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD,
+            spice_type
+        );
+    }
+#else
     (void)format;
+#endif
 
     pthread_mutex_unlock(&stream->send_mutex);
 }
 
 // MARK: - Drag and Drop
+
+#if __APPLE__
+// Progress callback for file transfer
+static void file_copy_progress_cb(goffset current, goffset total, gpointer user_data) {
+    (void)user_data;
+    // Progress reporting - could be extended to call back to Swift
+    // For now, just log progress internally
+    (void)current;
+    (void)total;
+}
+
+// Completion callback for file transfer
+static void file_copy_complete_cb(GObject *source, GAsyncResult *result, gpointer user_data) {
+    (void)user_data;
+    SpiceMainChannel *channel = SPICE_MAIN_CHANNEL(source);
+    GError *error = NULL;
+
+    gboolean success = spice_main_channel_file_copy_finish(channel, result, &error);
+    if (!success && error) {
+        // Log error - could be extended to call back to Swift with error info
+        g_error_free(error);
+    }
+}
+#endif
 
 bool winrun_spice_send_drag_event(
     winrun_spice_stream_handle streamHandle,
@@ -569,9 +833,65 @@ bool winrun_spice_send_drag_event(
 
     pthread_mutex_lock(&stream->send_mutex);
 
-    // TODO: Implement actual Spice file transfer when libspice-gtk is fully integrated
-    // For drop events, we will use spice_main_channel_file_copy_async
+#if __APPLE__
+    SpiceMainChannel *main = stream->main_channel;
+    if (!main) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return false;
+    }
+
+    // Only handle DROP events for file transfer
+    // Enter/Move/Leave are for visual feedback which Spice handles via cursor
+    if (event->event_type == WINRUN_DRAG_EVENT_DROP && event->files && event->file_count > 0) {
+        // Create array of GFile pointers (NULL-terminated)
+        GFile **sources = g_new0(GFile *, event->file_count + 1);
+        if (!sources) {
+            pthread_mutex_unlock(&stream->send_mutex);
+            return false;
+        }
+
+        bool all_valid = true;
+        for (size_t i = 0; i < event->file_count; i++) {
+            if (event->files[i].host_path) {
+                sources[i] = g_file_new_for_path(event->files[i].host_path);
+                if (!sources[i]) {
+                    all_valid = false;
+                    break;
+                }
+            } else {
+                all_valid = false;
+                break;
+            }
+        }
+
+        if (all_valid) {
+            // Initiate async file copy to guest
+            spice_main_channel_file_copy_async(
+                main,
+                sources,
+                G_FILE_COPY_NONE,
+                NULL,  // GCancellable
+                file_copy_progress_cb,
+                stream,
+                file_copy_complete_cb,
+                stream
+            );
+        }
+
+        // Clean up GFile objects (they're ref'd by the async operation)
+        for (size_t i = 0; i < event->file_count && sources[i]; i++) {
+            g_object_unref(sources[i]);
+        }
+        g_free(sources);
+
+        if (!all_valid) {
+            pthread_mutex_unlock(&stream->send_mutex);
+            return false;
+        }
+    }
+#else
     (void)event;
+#endif
 
     pthread_mutex_unlock(&stream->send_mutex);
     return true;
