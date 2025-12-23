@@ -94,7 +94,7 @@
     - [X] Display estimated time remaining when possible { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Provide cancel option with confirmation dialog { new:host/Sources/WinRunApp/Setup/InstallProgressViewController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] Setup complete + getting started view { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Show success message with disk usage summary { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Show success message with disk usage summary { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Display quick-start tips for running Windows apps { new:host/Sources/WinRunApp/Setup/SetupCompleteViewController.swift } <docs/decisions/windows-provisioning.md>
   - [ ] Error handling + recovery UI { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
     - [ ] Display actionable error messages with recovery options { new:host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
