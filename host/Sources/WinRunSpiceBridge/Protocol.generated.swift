@@ -167,9 +167,9 @@ public enum GeneratedClipboardFormat: String, Codable, CaseIterable {
 
 /// Provisioning phase identifiers - generated from shared/protocol.def
 public enum GeneratedProvisioningPhase: String, Codable, CaseIterable {
-    case drivers
-    case agent
-    case optimize
-    case finalize
-    case complete
+    case drivers = "drivers"
+    case agent = "agent"
+    case optimize = "optimize"
+    case finalize = "finalize"
+    case complete = "complete"
 }
