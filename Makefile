@@ -8,7 +8,9 @@ DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
 .PHONY: help bootstrap build build-host build-guest test test-host test-guest \
         test-guest-remote test-host-remote build-host-remote check-host-remote check-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
-        check-linux install-daemon uninstall-daemon
+        check-linux install-daemon uninstall-daemon \
+        generate-protocol generate-protocol-host generate-protocol-guest \
+        validate-protocol validate-protocol-host validate-protocol-guest
 
 # Default target
 help:
@@ -52,6 +54,12 @@ help:
 	@echo "  Remote targets accept GH_TOKEN for authentication:"
 	@echo "    make test-guest-remote GH_TOKEN=ghp_xxx"
 	@echo "  Token requires 'workflow' scope. Create at: https://github.com/settings/tokens/new"
+	@echo ""
+	@echo "Protocol targets:"
+	@echo "  generate-protocol      Regenerate protocol code from shared/protocol.def"
+	@echo "  generate-protocol-host Generate Swift protocol code (requires macOS)"
+	@echo "  generate-protocol-guest Generate C# protocol code (requires .NET)"
+	@echo "  validate-protocol      Validate generated files match source"
 	@echo ""
 	@echo "Setup targets:"
 	@echo "  bootstrap      Install dependencies and setup environment"
@@ -323,6 +331,99 @@ check-remote:
 	@$(MAKE) test-guest-remote
 	@echo ""
 	@echo "✅ All remote checks passed!"
+
+# ============================================================================
+# Protocol Generation
+# ============================================================================
+# Source of truth: shared/protocol.def
+# Generated files: host/Sources/WinRunSpiceBridge/Protocol.generated.swift
+#                  guest/WinRunAgent/Protocol.generated.cs
+
+generate-protocol: generate-protocol-host generate-protocol-guest
+	@echo "✅ Protocol code regenerated!"
+
+generate-protocol-host:
+	@echo "🔄 Generating Swift protocol code..."
+	@if command -v swift >/dev/null 2>&1; then \
+		swift $(REPO_ROOT)/host/Scripts/generate-protocol.swift; \
+	else \
+		echo "⚠️  Swift not found; skipping host protocol generation"; \
+	fi
+
+generate-protocol-guest:
+	@echo "🔄 Generating C# protocol code..."
+ifdef DOTNET_ROOT
+	cd $(REPO_ROOT)/guest/tools/GenerateProtocol && dotnet run
+else
+	@if command -v dotnet >/dev/null 2>&1; then \
+		cd $(REPO_ROOT)/guest/tools/GenerateProtocol && dotnet run; \
+	else \
+		echo "⚠️  dotnet CLI not found; skipping guest protocol generation"; \
+	fi
+endif
+
+# Validate that generated files match source (for CI)
+validate-protocol: validate-protocol-host validate-protocol-guest
+	@echo "✅ Protocol files are up to date!"
+
+validate-protocol-host:
+	@echo "🔍 Validating Swift protocol code..."
+	@if command -v swift >/dev/null 2>&1; then \
+		cp $(REPO_ROOT)/host/Sources/WinRunSpiceBridge/Protocol.generated.swift /tmp/Protocol.generated.swift.bak; \
+		swift $(REPO_ROOT)/host/Scripts/generate-protocol.swift; \
+		if ! diff -q $(REPO_ROOT)/host/Sources/WinRunSpiceBridge/Protocol.generated.swift /tmp/Protocol.generated.swift.bak >/dev/null 2>&1; then \
+			echo "❌ Protocol.generated.swift is out of date!"; \
+			echo "   Run 'make generate-protocol' and commit the changes."; \
+			echo ""; \
+			echo "=== DIFF (committed vs generated) ==="; \
+			diff -u /tmp/Protocol.generated.swift.bak $(REPO_ROOT)/host/Sources/WinRunSpiceBridge/Protocol.generated.swift || true; \
+			echo "=== END DIFF ==="; \
+			mv /tmp/Protocol.generated.swift.bak $(REPO_ROOT)/host/Sources/WinRunSpiceBridge/Protocol.generated.swift; \
+			exit 1; \
+		fi; \
+		rm /tmp/Protocol.generated.swift.bak; \
+		echo "✅ Swift protocol code is up to date"; \
+	else \
+		echo "⚠️  Swift not found; skipping host protocol validation"; \
+	fi
+
+validate-protocol-guest:
+	@echo "🔍 Validating C# protocol code..."
+ifdef DOTNET_ROOT
+	@cp $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs /tmp/Protocol.generated.cs.bak; \
+	cd $(REPO_ROOT)/guest/tools/GenerateProtocol && dotnet run; \
+	if ! diff -q $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs /tmp/Protocol.generated.cs.bak >/dev/null 2>&1; then \
+		echo "❌ Protocol.generated.cs is out of date!"; \
+		echo "   Run 'make generate-protocol' and commit the changes."; \
+		echo ""; \
+		echo "=== DIFF (committed vs generated) ==="; \
+		diff -u /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs || true; \
+		echo "=== END DIFF ==="; \
+		mv /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs; \
+		exit 1; \
+	fi; \
+	rm /tmp/Protocol.generated.cs.bak; \
+	echo "✅ C# protocol code is up to date"
+else
+	@if command -v dotnet >/dev/null 2>&1; then \
+		cp $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs /tmp/Protocol.generated.cs.bak; \
+		cd $(REPO_ROOT)/guest/tools/GenerateProtocol && dotnet run; \
+		if ! diff -q $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs /tmp/Protocol.generated.cs.bak >/dev/null 2>&1; then \
+			echo "❌ Protocol.generated.cs is out of date!"; \
+			echo "   Run 'make generate-protocol' and commit the changes."; \
+			echo ""; \
+			echo "=== DIFF (committed vs generated) ==="; \
+			diff -u /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs || true; \
+			echo "=== END DIFF ==="; \
+			mv /tmp/Protocol.generated.cs.bak $(REPO_ROOT)/guest/WinRunAgent/Protocol.generated.cs; \
+			exit 1; \
+		fi; \
+		rm /tmp/Protocol.generated.cs.bak; \
+		echo "✅ C# protocol code is up to date"; \
+	else \
+		echo "⚠️  dotnet CLI not found; skipping guest protocol validation"; \
+	fi
+endif
 
 # ============================================================================
 # Daemon management

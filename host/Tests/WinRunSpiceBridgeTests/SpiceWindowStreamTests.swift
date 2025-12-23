@@ -118,11 +118,8 @@ final class SpiceWindowStreamTests: XCTestCase {
 
     func testConnectionFailureTriggersReconnect() {
         transport.openBehavior = .fail(.connectionFailed("Test error"))
-        stream = makeStream(
-            reconnectPolicy: ReconnectPolicy(
-                initialDelay: 0.05,
-                maxAttempts: 2
-            ))
+        let policy = ReconnectPolicy(initialDelay: 0.05, maxAttempts: 2)
+        stream = makeStream(reconnectPolicy: policy)
 
         stream.connect(toWindowID: 1)
 

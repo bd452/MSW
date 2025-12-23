@@ -68,12 +68,20 @@ The guest agent advertises its capabilities during handshake using the `GuestCap
 
 ## Schema Management
 
-- Swift types in `WinRunSpiceBridge` and C# DTOs in `Messages.cs` must remain version compatible
-- All message types use JSON payloads with snake_case keys for cross-platform consistency
+- Protocol constants are defined in `shared/protocol.def` — the single source of truth
+- Platform-specific code is generated:
+  - Swift: `host/Sources/WinRunSpiceBridge/Protocol.generated.swift`
+  - C#: `guest/WinRunAgent/Protocol.generated.cs`
+- Run `make generate-protocol` after editing `protocol.def`, then commit all changed files
+- CI validates generated files match source — failing if you forget to regenerate
+- All message types use JSON payloads with camelCase keys for cross-platform consistency
 - Changes to message schemas require:
-  1. Increment minor version for additive changes (new optional fields)
-  2. Increment major version for breaking changes (removed/renamed fields, type changes)
-  3. Update both host and guest implementations atomically
+  1. Edit `shared/protocol.def`
+  2. Run `make generate-protocol`
+  3. Update message DTOs in both Swift and C# if fields changed
+  4. Increment minor version for additive changes (new optional fields)
+  5. Increment major version for breaking changes (removed/renamed fields, type changes)
+  6. Commit all changes atomically
 
 ## Security & Reliability
 - Authenticate XPC callers (CLI, app shells) via entitlement or group membership checks before allowing VM control.
