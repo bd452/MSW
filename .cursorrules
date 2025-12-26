@@ -258,6 +258,28 @@ GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`
 
 All four jobs run in parallel. The final **CI** gate job requires all to pass before merge. Run `make check` locally before pushing to catch issues early.
 
+#### Automated CI Error Workflow
+When iterating on code that requires CI validation, use the automated error-checking workflow:
+
+```bash
+# Recommended: Push and watch CI in one command
+make ci-push
+
+# Or watch an already-running CI
+make ci-watch
+
+# View last extracted errors
+make ci-errors
+```
+
+This workflow:
+1. Pushes your branch (if using `ci-push`)
+2. Watches the CI run in real-time
+3. On failure, extracts errors to `.ci-errors.md`
+4. Prints a summary to the console
+
+The `.ci-errors.md` file contains formatted error details that can be directly referenced for fixes.
+
 ## File Organization
 
 ```
