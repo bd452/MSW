@@ -63,6 +63,7 @@ After completing a task:
 4. **Run remote tests and iterate until they pass**:
    - For host changes: `make test-host-remote`
    - For guest changes: `make test-guest-remote`
+   - **Prefer remote builds over CI tailing**: Always use `make test-*-remote` scripts first — they trigger builds, wait for completion, and stream errors directly. Only fall back to `make ci-watch` if the remote scripts fail due to permission issues.
    - **Note**: The gh CLI uses its config file (`~/.config/gh/hosts.yml`) for auth.
      Cursor cloud agents authenticate gh via config file, not environment variables.
    - If permission denied (token lacks 'workflow' scope): `git push -u origin HEAD && make ci-watch`
@@ -74,12 +75,14 @@ After completing a task:
 8. Move to next incomplete task per the algorithm
 
 **Critical — Autonomous CI Iteration**: When remote tests fail, the agent MUST:
-1. Read the error output (printed directly to console)
+1. Read the error output (printed directly to console by the remote test scripts)
 2. Fix the issues
-3. Commit and re-run the remote tests
-4. Repeat until CI passes
+3. Commit and re-run `make test-host-remote` or `make test-guest-remote`
+4. Repeat until tests pass
 
-Do NOT ask the user to copy CI errors. The commands show errors directly.
+**Prefer `make test-*-remote` over `make ci-watch`**: The remote test scripts are the primary method — they trigger a fresh build, wait for it, and stream errors. Use `ci-watch` only as a fallback when remote scripts can't trigger workflows (e.g., missing workflow scope).
+
+Do NOT ask the user to copy CI errors. The remote test commands show errors directly.
 
 ## Branch Workflow
 
@@ -116,6 +119,7 @@ Stay on the current branch when:
 - The user says "next", "continue", or similar without explicitly requesting a new branch
 - Fixing issues or making follow-up changes to recent work
 - The current branch isn't `main` (you're already on a feature branch)
+- **The current branch is prefixed with `cursor/`** — These are Cursor-managed branches; stay on them unless the user explicitly requests a new branch
 
 ### When NOT to Create a Branch
 
@@ -124,6 +128,7 @@ Skip branch creation if:
 - Making quick fixes unrelated to TODO.md tasks
 - User explicitly requests working on an existing branch
 - The current branch already matches the work being done
+- **On a `cursor/` branch** — Cursor cloud agents create branches with this prefix; do NOT fork to a new branch unless the user explicitly requests it
 
 ### Branch Naming Convention
 
@@ -233,11 +238,13 @@ make test-host    # test only
 # Guest only (requires .NET 8 SDK or use remote)
 make check-guest        # lint + build + test (local)
 make test-guest         # test only (local)
-make test-guest-remote  # test on Windows via GitHub Actions
-make test-host-remote   # test on macOS via GitHub Actions
 
-# Watch existing CI run (after pushing)
-make ci-watch           # finds latest run for current branch, shows errors on failure
+# Remote tests (PREFERRED for CI validation)
+make test-host-remote   # triggers macOS build, waits, streams errors
+make test-guest-remote  # triggers Windows build, waits, streams errors
+
+# Fallback: watch existing CI run (only if remote scripts fail due to permissions)
+make ci-watch           # tails latest run for current branch, shows errors on failure
 ```
 
 > **Line Endings**: The `.gitattributes` file automatically handles line endings. New files created on macOS will be normalized to CRLF for C# files when committed.
