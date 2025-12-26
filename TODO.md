@@ -132,7 +132,7 @@
     - [X] Add MSI build step to Windows CI { .github/workflows/ci.yml, new:scripts/build-guest-installer.ps1 } <docs/decisions/operations.md>
     - [X] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
 
-- [ ] Frame Streaming Pipeline { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md, docs/architecture.md>
+- [X] Frame Streaming Pipeline { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md, docs/architecture.md>
   - [X] VM configuration for guest-host communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
     - [X] Add VZVirtioSocketDeviceConfiguration for vsock communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
     - [X] Configure shared memory region for frame buffer { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
@@ -152,10 +152,10 @@
     - [X] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
     - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
-  - [ ] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+  - [X] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
     - [X] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
-    - [ ] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+    - [X] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
