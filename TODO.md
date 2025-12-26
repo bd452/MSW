@@ -144,7 +144,7 @@
     - [X] Notarize with Apple for Gatekeeper approval { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
     - [X] Staple notarization ticket to app bundle { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
   - [ ] DMG creation { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
-    - [ ] Create DMG with drag-to-Applications layout { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
+    - [X] Create DMG with drag-to-Applications layout { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
     - [ ] Add background image and icon positioning { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
     - [ ] Sign and notarize final DMG { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
   - [ ] CI artifact publishing { .github/workflows/ci.yml } <docs/decisions/operations.md>
