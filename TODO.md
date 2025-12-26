@@ -170,7 +170,7 @@
         - Use VZVirtioFileSystemDeviceConfiguration or direct memory mapping
         - Expose shared region to both host process and guest VM
         - Size based on expected max windows × buffer size (e.g., 10 windows × 50MB = 500MB)
-      - [ ] Update guest PerWindowBufferManager to allocate from shared region { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+      - [X] Update guest PerWindowBufferManager to allocate from shared region { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
         - Replace Marshal.AllocHGlobal with allocation from shared region
         - Track allocations with offset-based addressing
         - WindowBufferAllocatedMessage.bufferPointer becomes offset into shared region

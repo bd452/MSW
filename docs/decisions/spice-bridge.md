@@ -130,7 +130,7 @@ All frame data transfers via VM shared memory (zero-copy):
 | WindowBufferAllocatedMessage protocol | ✅ Complete |
 | FrameReadyMessage routing (host) | ✅ Complete |
 | VM shared memory configuration | ✅ Complete |
-| Guest allocation from shared region | ❌ Not implemented |
+| Guest allocation from shared region | ✅ Complete |
 | Host mapping of guest buffer offsets | ❌ Not implemented |
 | Settings UI for mode selection | ❌ Not implemented |
 
