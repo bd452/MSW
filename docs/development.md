@@ -488,6 +488,152 @@ make test-host-remote     # Runs build + test on macOS via GitHub Actions
 
 The `.gitattributes` file automatically normalizes line endings, but remote testing is still required to validate Windows-specific behavior.
 
+## Code Signing & Notarization Setup
+
+For distributing WinRun.app outside the Mac App Store, you need to code sign and notarize the app. This section explains how to set up the required credentials.
+
+### Prerequisites
+
+1. **Apple Developer Program membership** ($99/year) - Required for Developer ID certificates
+2. **Developer ID Application certificate** - For code signing
+3. **Notarization credentials** - For Apple's malware scanning service
+
+### Step 1: Obtain a Developer ID Certificate
+
+1. Log in to [Apple Developer](https://developer.apple.com/account)
+2. Go to **Certificates, Identifiers & Profiles** → **Certificates**
+3. Click **+** to create a new certificate
+4. Select **Developer ID Application**
+5. Follow the prompts to create a Certificate Signing Request (CSR) using Keychain Access
+6. Download and install the certificate by double-clicking it
+
+Verify installation:
+```bash
+security find-identity -v -p codesigning
+# Should show: "Developer ID Application: Your Name (TEAM_ID)"
+```
+
+### Step 2: Configure Notarization Credentials
+
+Choose ONE of these methods:
+
+#### Method A: App Store Connect API Key (Recommended for CI)
+
+This method uses a reusable API key that doesn't require 2FA.
+
+1. Log in to [App Store Connect](https://appstoreconnect.apple.com)
+2. Go to **Users and Access** → **Keys** → **App Store Connect API**
+3. Click **+** to create a new key with **Developer** access
+4. Download the `.p8` file (you can only download it once!)
+5. Note the **Key ID** and **Issuer ID**
+
+Store the key securely:
+```bash
+mkdir -p ~/.appstoreconnect
+mv ~/Downloads/AuthKey_*.p8 ~/.appstoreconnect/
+chmod 600 ~/.appstoreconnect/AuthKey_*.p8
+```
+
+Set environment variables:
+```bash
+export NOTARIZE_KEY_ID="ABC123DEF4"           # Your Key ID
+export NOTARIZE_KEY_ISSUER="12345678-abcd-..."  # Your Issuer ID
+export NOTARIZE_KEY_PATH="$HOME/.appstoreconnect/AuthKey_ABC123DEF4.p8"
+```
+
+#### Method B: Apple ID with App-Specific Password
+
+This method uses your Apple ID with an app-specific password.
+
+1. Go to [appleid.apple.com](https://appleid.apple.com) → **Sign-In and Security** → **App-Specific Passwords**
+2. Generate a new password for "WinRun Notarization"
+3. Store it in your keychain:
+   ```bash
+   xcrun notarytool store-credentials "AC_PASSWORD" \
+       --apple-id "your@email.com" \
+       --team-id "ABC123XYZ" \
+       --password "your-app-specific-password"
+   ```
+
+Set environment variables:
+```bash
+export NOTARIZE_APPLE_ID="your@email.com"
+export NOTARIZE_PASSWORD="@keychain:AC_PASSWORD"
+export NOTARIZE_TEAM_ID="ABC123XYZ"
+```
+
+### Step 3: Set the Signing Identity
+
+```bash
+export DEVELOPER_ID="Developer ID Application: Your Name (ABC123XYZ)"
+```
+
+### Running the Signing Script
+
+```bash
+# Build the app bundle first
+./scripts/package-app.sh
+
+# Sign and notarize
+./scripts/sign-and-notarize.sh build/WinRun.app
+
+# Or sign only (skip notarization for testing)
+./scripts/sign-and-notarize.sh --skip-notarization build/WinRun.app
+
+# Dry run to see what would happen
+./scripts/sign-and-notarize.sh --dry-run build/WinRun.app
+```
+
+### CI/CD Configuration
+
+For GitHub Actions, add these secrets to your repository:
+
+| Secret | Description |
+|--------|-------------|
+| `DEVELOPER_ID` | Full certificate name |
+| `APPLE_CERTIFICATE_P12` | Base64-encoded .p12 certificate |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file |
+| `NOTARIZE_KEY_ID` | App Store Connect API Key ID |
+| `NOTARIZE_KEY_ISSUER` | App Store Connect API Issuer ID |
+| `NOTARIZE_KEY_P8` | Base64-encoded .p8 key file contents |
+
+Example workflow step:
+```yaml
+- name: Import signing certificate
+  env:
+    CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+    CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+  run: |
+    echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+    security create-keychain -p "" build.keychain
+    security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+    security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
+- name: Sign and notarize
+  env:
+    DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
+    NOTARIZE_KEY_ID: ${{ secrets.NOTARIZE_KEY_ID }}
+    NOTARIZE_KEY_ISSUER: ${{ secrets.NOTARIZE_KEY_ISSUER }}
+  run: |
+    echo "${{ secrets.NOTARIZE_KEY_P8 }}" | base64 --decode > /tmp/AuthKey.p8
+    export NOTARIZE_KEY_PATH=/tmp/AuthKey.p8
+    ./scripts/sign-and-notarize.sh build/WinRun.app
+```
+
+### Troubleshooting
+
+**"Certificate not found in keychain"**
+- Ensure the certificate is installed: `security find-identity -v -p codesigning`
+- Check the certificate name matches exactly (including Team ID)
+
+**"Notarization failed: Invalid"**
+- Check the rejection reason: `xcrun notarytool log <submission-id>`
+- Common issues: unsigned nested code, missing hardened runtime, forbidden entitlements
+
+**"The signature is invalid"**
+- Ensure all nested frameworks/dylibs are signed before the main bundle
+- Use `codesign --verify --deep --strict` to check
+
 ## Branch Protection
 
 To enforce CI checks before merge, configure branch protection in GitHub:

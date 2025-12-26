@@ -139,10 +139,10 @@
     - [X] Bundle provisioning assets (autounattend.xml, scripts, MSI) { new:scripts/package-app.sh } <docs/decisions/operations.md>
     - [X] Bundle or configure download of VirtIO drivers { new:scripts/package-app.sh } <docs/decisions/operations.md>
     - [X] Embed Spice libraries (libspice-glib and dependencies) { new:scripts/package-app.sh } <docs/decisions/operations.md>
-  - [ ] Code signing + notarization { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
-    - [ ] Sign app bundle with Developer ID certificate { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
-    - [ ] Notarize with Apple for Gatekeeper approval { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
-    - [ ] Staple notarization ticket to app bundle { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+  - [X] Code signing + notarization { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+    - [X] Sign app bundle with Developer ID certificate { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+    - [X] Notarize with Apple for Gatekeeper approval { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+    - [X] Staple notarization ticket to app bundle { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
   - [ ] DMG creation { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
     - [ ] Create DMG with drag-to-Applications layout { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
     - [ ] Add background image and icon positioning { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
@@ -160,3 +160,17 @@
     - [ ] Add end-user installation guide to README { README.md }
     - [ ] Document Windows ISO acquisition and recommendations { README.md, docs/decisions/windows-provisioning.md }
     - [ ] Reflect production architecture + workflows { docs/architecture.md, docs/development.md, docs/decisions/operations.md }
+
+- [ ] Credential Setup & Secrets Configuration { docs/development.md, .github/workflows/ci.yml }
+  - [ ] Configure Apple Developer credentials for code signing { docs/development.md }
+    - [ ] Obtain Developer ID Application certificate from Apple Developer portal
+    - [ ] Export certificate as .p12 and store securely
+    - [ ] Create App Store Connect API key for notarization
+  - [ ] Configure GitHub Actions secrets for CI signing { .github/workflows/ci.yml }
+    - [ ] Add DEVELOPER_ID secret
+    - [ ] Add APPLE_CERTIFICATE_P12 and APPLE_CERTIFICATE_PASSWORD secrets
+    - [ ] Add NOTARIZE_KEY_ID, NOTARIZE_KEY_ISSUER, NOTARIZE_KEY_P8 secrets
+  - [ ] Test full signing and notarization pipeline { scripts/sign-and-notarize.sh }
+    - [ ] Verify local signing works with credentials
+    - [ ] Verify CI signing works with secrets configured
+    - [ ] Verify notarized app passes Gatekeeper on fresh macOS install
