@@ -247,7 +247,7 @@ final class ProtocolValidationTests: XCTestCase {
     func testAllMessageTypesExist() {
         // Verify we have all expected message types
         let allCases = SpiceMessageType.allCases
-        XCTAssertEqual(allCases.count, 26, "Expected 26 message types")
+        XCTAssertEqual(allCases.count, 27, "Expected 27 message types (includes FrameReady)")
 
         // Verify no duplicate raw values
         let rawValues = allCases.map { $0.rawValue }
