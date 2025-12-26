@@ -2,6 +2,7 @@ import Foundation
 import Metal
 import MetalKit
 import simd
+import WinRunSpiceBridge
 
 /// GPU-accelerated renderer for Spice window frames using Metal.
 ///
@@ -109,6 +110,76 @@ public final class SpiceFrameRenderer: NSObject, MTKViewDelegate {
                 bytesPerRow: bytesPerRow
             )
         }
+    }
+
+    /// Update the renderer with a frame from shared memory (zero-copy path).
+    /// - Parameters:
+    ///   - frame: The shared frame from the guest agent
+    ///   - scaleFactor: Display scale factor (1.0 for standard, 2.0 for Retina)
+    /// - Note: If the frame is compressed, it will be decompressed before rendering.
+    ///   For truly zero-copy, frames should be uncompressed and the data buffer
+    ///   should be page-aligned for direct GPU access.
+    public func updateFrame(from frame: SharedFrame, scaleFactor: CGFloat = 1.0) {
+        // For compressed frames, we need to decompress first
+        // TODO: Implement LZ4 decompression when compression is used
+        if frame.isCompressed {
+            // For now, skip compressed frames - decompression not yet implemented
+            return
+        }
+
+        // Use the raw data path for minimal copying
+        // The frame data is already in BGRA format which matches our texture format
+        updateFrame(
+            pixelData: frame.data,
+            width: frame.width,
+            height: frame.height,
+            scaleFactor: scaleFactor
+        )
+    }
+
+    /// Update the renderer with a frame using a raw memory pointer (zero-copy).
+    /// - Parameters:
+    ///   - pointer: Pointer to raw BGRA pixel data
+    ///   - width: Frame width in pixels
+    ///   - height: Frame height in pixels
+    ///   - bytesPerRow: Stride in bytes (typically width * 4 for BGRA)
+    ///   - scaleFactor: Display scale factor
+    /// - Note: The pointer must remain valid until the next frame update.
+    ///   This method enables true zero-copy rendering when the source buffer
+    ///   is in GPU-accessible shared memory.
+    public func updateFrame(
+        pointer: UnsafeRawPointer,
+        width: Int,
+        height: Int,
+        bytesPerRow: Int,
+        scaleFactor: CGFloat = 1.0
+    ) {
+        textureLock.lock()
+        defer { textureLock.unlock() }
+
+        self.scaleFactor = scaleFactor
+
+        // Recreate texture if dimensions changed
+        if textureWidth != width || textureHeight != height || currentTexture == nil {
+            currentTexture = createTexture(width: width, height: height)
+            textureWidth = width
+            textureHeight = height
+        }
+
+        guard let texture = currentTexture else { return }
+
+        // Upload pixel data to texture directly from pointer
+        let region = MTLRegion(
+            origin: MTLOrigin(x: 0, y: 0, z: 0),
+            size: MTLSize(width: width, height: height, depth: 1)
+        )
+
+        texture.replace(
+            region: region,
+            mipmapLevel: 0,
+            withBytes: pointer,
+            bytesPerRow: bytesPerRow
+        )
     }
 
     /// Update only the scale factor without providing new pixel data

@@ -275,7 +275,9 @@ public final class SharedFrameBufferReader {
 
     /// Reads the buffer header.
     public func readHeader() -> SharedFrameBufferHeader {
-        memoryPointer.load(as: SharedFrameBufferHeader.self)
+        // Use assumingMemoryBound for proper alignment - header is always at offset 0
+        // which is guaranteed to be aligned by our allocation requirements
+        memoryPointer.assumingMemoryBound(to: SharedFrameBufferHeader.self).pointee
     }
 
     /// Updates the read index after consuming a frame.
@@ -316,9 +318,10 @@ public final class SharedFrameBufferReader {
             throw SharedFrameBufferError.slotIndexOutOfBounds
         }
 
-        // Read frame slot header
+        // Read frame slot header field-by-field to handle potentially unaligned access
+        // (slot offsets may not be 8-byte aligned due to slot size not being divisible by 8)
         let slotPtr = memoryPointer.advanced(by: slotOffset)
-        let slotHeader = slotPtr.load(as: FrameSlotHeader.self)
+        let slotHeader = loadFrameSlotHeader(from: slotPtr)
 
         // Read frame data
         let dataOffset = slotOffset + FrameSlotHeader.size
@@ -365,6 +368,56 @@ public final class SharedFrameBufferReader {
             flags.remove(.hostActive)
         }
         headerPtr.pointee.flags = flags.rawValue
+    }
+
+    /// Loads a FrameSlotHeader from a potentially unaligned pointer.
+    /// Reads fields individually to handle misalignment safely.
+    private func loadFrameSlotHeader(from ptr: UnsafeRawPointer) -> FrameSlotHeader {
+        var header = FrameSlotHeader()
+        var offset = 0
+
+        // Read UInt64 (windowId) - may be unaligned
+        withUnsafeMutableBytes(of: &header.windowId) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 8))
+        }
+        offset += 8
+
+        // Read remaining UInt32 fields
+        withUnsafeMutableBytes(of: &header.frameNumber) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 4))
+        }
+        offset += 4
+
+        withUnsafeMutableBytes(of: &header.width) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 4))
+        }
+        offset += 4
+
+        withUnsafeMutableBytes(of: &header.height) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 4))
+        }
+        offset += 4
+
+        withUnsafeMutableBytes(of: &header.stride) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 4))
+        }
+        offset += 4
+
+        withUnsafeMutableBytes(of: &header.format) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 4))
+        }
+        offset += 4
+
+        withUnsafeMutableBytes(of: &header.dataSize) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 4))
+        }
+        offset += 4
+
+        withUnsafeMutableBytes(of: &header.flags) { dest in
+            dest.copyBytes(from: UnsafeRawBufferPointer(start: ptr.advanced(by: offset), count: 4))
+        }
+
+        return header
     }
 }
 

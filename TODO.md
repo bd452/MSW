@@ -148,14 +148,66 @@
     - [X] Implement per-window frame extraction and streaming { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
     - [X] Add frame compression (LZ4 or similar) for bandwidth efficiency { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/spice-bridge.md>
     - [X] Integrate FrameStreamingService into WinRunAgentService startup { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+  - [X] Per-window buffer allocation with two strategies { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [X] FrameBufferMode configuration (Uncompressed/Compressed) { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+    - [X] Strategy 1: Uncompressed mode - exact allocation { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+      - Allocates exact size for frame dimensions (width × height × 4 bytes)
+      - Reallocates only when window dimensions change
+      - ~33MB per 4K window, lowest latency, best for modern machines
+    - [X] Strategy 2: Compressed mode - tranche allocation { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+      - Allocates from predefined size buckets: 3MB, 8MB, 20MB, 50MB
+      - Reallocates when compressed frame exceeds current tranche
+      - LZ4 compression applied to each frame
+      - Lower memory usage, adds compression/decompression latency
+    - [X] PerWindowBufferManager for multi-window buffer lifecycle { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+    - [X] WindowBufferAllocatedMessage to notify host of buffer allocation/reallocation { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift }
   - [ ] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
-    - [ ] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
-  - [ ] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+    - [X] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
+    - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
+    - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Wire VM shared memory for per-window frame buffers { host/Sources/WinRunVirtualMachine/, host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/ } <docs/decisions/spice-bridge.md>
+      - [ ] Configure VM shared memory region via Virtualization.framework { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+        - Use VZVirtioFileSystemDeviceConfiguration or direct memory mapping
+        - Expose shared region to both host process and guest VM
+        - Size based on expected max windows × buffer size (e.g., 10 windows × 50MB = 500MB)
+      - [ ] Update guest PerWindowBufferManager to allocate from shared region { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+        - Replace Marshal.AllocHGlobal with allocation from shared region
+        - Track allocations with offset-based addressing
+        - WindowBufferAllocatedMessage.bufferPointer becomes offset into shared region
+      - [ ] Map guest buffer offsets to host memory in SpiceFrameRouter { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+        - Receive base pointer to shared region from VM controller
+        - Convert offset from WindowBufferAllocatedMessage to host pointer
+        - Create SharedFrameBufferReader for each per-window buffer
+        - Attach reader to the registered SpiceWindowStream
+      - [ ] Enable skipped integration tests for per-window buffer frame delivery { host/Tests/WinRunSpiceBridgeTests/SpiceFrameRouterTests.swift, host/Tests/WinRunSpiceBridgeTests/FrameDeliveryIntegrationTests.swift }
+      - [ ] Remove deprecated setFrameBufferReader API { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+  - [X] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
-    - [ ] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
-    - [ ] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+    - [X] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+    - [X] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+
+- [ ] Settings UI (Preferences Window) { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
+  - [ ] Settings window infrastructure { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift } <docs/architecture.md>
+    - [ ] Create settings window with tab view for categories { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift }
+    - [ ] Wire Cmd+, keyboard shortcut and menu item { host/Sources/WinRunApp/AppMain.swift }
+    - [ ] Persist window position and selected tab { host/Sources/WinRunShared/ConfigStore.swift }
+  - [ ] Streaming settings tab { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Frame buffer mode picker (Uncompressed / Compressed) { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift }
+      - Uncompressed: exact allocation for frame dimensions, reallocates on window resize
+        - ~33MB per 4K window, lowest latency, best for modern machines
+      - Compressed: tranche-based allocation (3/8/20/50 MB buckets) with LZ4
+        - Reallocates when compressed frame exceeds current tranche
+        - Lower memory usage, adds compression/decompression latency
+    - [ ] Show current streaming stats (frames/sec, memory usage per window, total allocation)
+  - [ ] Apply settings changes { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift }
+    - [ ] Save FrameBufferMode to ConfigStore on change { host/Sources/WinRunShared/ConfigStore.swift }
+    - [ ] Send FrameBufferMode to guest agent via control channel { host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift }
+    - [ ] Guest applies mode change on next buffer allocation { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+      - Existing buffers continue with old mode until window resize triggers reallocation
+      - New windows use new mode immediately
+  - [ ] Settings UI tests { new:host/Tests/WinRunAppTests/SettingsTests.swift }
+    - [ ] Test settings persistence and restoration
+    - [ ] Test config change notification to guest
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>

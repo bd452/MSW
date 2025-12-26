@@ -9,6 +9,7 @@ import WinRunShared
 /// - Input forwarding (mouse, keyboard)
 /// - Clipboard synchronization
 /// - Drag and drop events
+/// - Frame routing from shared memory buffer
 public final class SpiceWindowStream {
     public weak var delegate: SpiceWindowStreamDelegate?
 
@@ -21,6 +22,9 @@ public final class SpiceWindowStream {
     private var reconnectPolicy: ReconnectPolicy
     private var reconnectWorkItem: DispatchWorkItem?
     private var metrics = SpiceStreamMetrics()
+
+    /// Shared frame buffer reader for zero-copy frame access
+    private var frameBufferReader: SharedFrameBufferReader?
 
     public convenience init(
         configuration: SpiceStreamConfiguration = SpiceStreamConfiguration.environmentDefault(),
@@ -178,6 +182,69 @@ public final class SpiceWindowStream {
 
     public func metricsSnapshot() -> SpiceStreamMetrics {
         stateQueue.sync { metrics }
+    }
+
+    /// The window ID this stream is connected to, if any.
+    public var windowID: UInt64? {
+        stateQueue.sync { state.windowID }
+    }
+
+    // MARK: - Shared Memory Frame Buffer
+
+    /// Sets the shared frame buffer reader for zero-copy frame access.
+    /// - Parameter reader: The shared memory buffer reader, or nil to disable shared memory frames
+    public func setFrameBufferReader(_ reader: SharedFrameBufferReader?) {
+        stateQueue.async {
+            self.frameBufferReader = reader
+            if reader != nil {
+                self.logger.debug("Frame buffer reader attached")
+            }
+        }
+    }
+
+    /// Handles a FrameReady notification from the control channel.
+    /// Reads the frame from shared memory and delivers it to the delegate.
+    /// - Parameter notification: The FrameReady message indicating a new frame is available
+    public func handleFrameReady(_ notification: FrameReadyMessage) {
+        stateQueue.async {
+            guard notification.windowId == self.state.windowID else {
+                // Not for this window - ignore (shouldn't happen if routing is correct)
+                return
+            }
+
+            guard self.state.lifecycle == .connected else {
+                self.logger.debug("Dropping FrameReady - stream not connected")
+                return
+            }
+
+            guard let reader = self.frameBufferReader else {
+                self.logger.debug("Dropping FrameReady - no frame buffer reader")
+                return
+            }
+
+            do {
+                if let frame = try reader.readNextFrame() {
+                    self.metrics.framesReceived += 1
+                    self.deliverFrame(frame)
+                } else {
+                    self.logger.debug("FrameReady but no frame available in buffer")
+                }
+            } catch {
+                self.logger.error("Failed to read frame from shared memory: \(error)")
+            }
+        }
+    }
+
+    /// Delivers a frame from shared memory to the delegate.
+    private func deliverFrame(_ frame: SharedFrame) {
+        guard let delegate else { return }
+
+        // Convert SharedFrame to the format expected by the delegate
+        // The delegate receives raw frame data; decompression happens at render time if needed
+        delegateQueue.async { [weak self] in
+            guard let self else { return }
+            delegate.windowStream(self, didReceiveSharedFrame: frame)
+        }
     }
 
     // MARK: - Input Forwarding

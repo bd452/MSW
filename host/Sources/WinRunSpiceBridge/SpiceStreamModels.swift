@@ -49,8 +49,12 @@ public enum SpiceConnectionState: Equatable, CustomStringConvertible {
 
 /// Delegate protocol for receiving Spice window stream events.
 public protocol SpiceWindowStreamDelegate: AnyObject {
-    /// Called when frame data is received from the guest.
+    /// Called when frame data is received from the guest (legacy transport path).
     func windowStream(_ stream: SpiceWindowStream, didUpdateFrame frame: Data)
+
+    /// Called when a frame is received from shared memory (zero-copy path).
+    /// This is the preferred path for high-performance frame delivery.
+    func windowStream(_ stream: SpiceWindowStream, didReceiveSharedFrame frame: SharedFrame)
 
     /// Called when window metadata is updated.
     func windowStream(_ stream: SpiceWindowStream, didUpdateMetadata metadata: WindowMetadata)
@@ -69,6 +73,7 @@ public extension SpiceWindowStreamDelegate {
     // Default empty implementations for optional delegate methods
     func windowStream(_ stream: SpiceWindowStream, didChangeState state: SpiceConnectionState) {}
     func windowStream(_ stream: SpiceWindowStream, didReceiveClipboard clipboard: ClipboardData) {}
+    func windowStream(_ stream: SpiceWindowStream, didReceiveSharedFrame frame: SharedFrame) {}
 }
 
 // MARK: - Window Metadata

@@ -199,6 +199,198 @@ final class SpiceControlChannelTests: XCTestCase {
     }
 }
 
+// MARK: - FrameReady Notification Tests
+
+final class SpiceControlChannelFrameReadyTests: XCTestCase {
+    func testFrameReadyNotificationDispatchesToDelegate() async throws {
+        let channel = SpiceControlChannel()
+        let delegate = MockControlChannelDelegate()
+        await channel.setDelegateForTest(delegate)
+        await channel.simulateConnected()
+
+        // Create a FrameReady message
+        let frameReady = FrameReadyMessage(
+            windowId: 12345,
+            slotIndex: 0,
+            frameNumber: 1,
+            isKeyFrame: true
+        )
+
+        let encoder = JSONEncoder()
+        let payload = try encoder.encode(frameReady)
+
+        var envelope = Data()
+        envelope.append(SpiceMessageType.frameReady.rawValue)
+        var length = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+        envelope.append(payload)
+
+        try await channel.simulateResponse(envelope)
+
+        // Verify the delegate was called with the FrameReady message
+        XCTAssertEqual(delegate.frameReadyNotifications.count, 1)
+        XCTAssertEqual(delegate.frameReadyNotifications[0].windowId, 12345)
+        XCTAssertEqual(delegate.frameReadyNotifications[0].slotIndex, 0)
+        XCTAssertEqual(delegate.frameReadyNotifications[0].frameNumber, 1)
+        XCTAssertTrue(delegate.frameReadyNotifications[0].isKeyFrame)
+    }
+
+    func testFrameReadyDoesNotDispatchToGenericMessageHandler() async throws {
+        let channel = SpiceControlChannel()
+        let delegate = MockControlChannelDelegate()
+        await channel.setDelegateForTest(delegate)
+        await channel.simulateConnected()
+
+        // Create a FrameReady message
+        let frameReady = FrameReadyMessage(
+            windowId: 12345,
+            slotIndex: 2,
+            frameNumber: 42,
+            isKeyFrame: false
+        )
+
+        let encoder = JSONEncoder()
+        let payload = try encoder.encode(frameReady)
+
+        var envelope = Data()
+        envelope.append(SpiceMessageType.frameReady.rawValue)
+        var length = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+        envelope.append(payload)
+
+        try await channel.simulateResponse(envelope)
+
+        // Verify the generic handler was NOT called (FrameReady uses dedicated path)
+        XCTAssertEqual(delegate.receivedMessages.count, 0)
+        // But the FrameReady handler was called
+        XCTAssertEqual(delegate.frameReadyNotifications.count, 1)
+    }
+
+    func testMultipleFrameReadyNotificationsDispatchSequentially() async throws {
+        let channel = SpiceControlChannel()
+        let delegate = MockControlChannelDelegate()
+        await channel.setDelegateForTest(delegate)
+        await channel.simulateConnected()
+
+        let encoder = JSONEncoder()
+
+        // Send multiple FrameReady notifications
+        for i in 0..<5 {
+            let frameReady = FrameReadyMessage(
+                windowId: UInt64(100 + i),
+                slotIndex: UInt32(i % 3),
+                frameNumber: UInt32(i),
+                isKeyFrame: i == 0
+            )
+
+            let payload = try encoder.encode(frameReady)
+
+            var envelope = Data()
+            envelope.append(SpiceMessageType.frameReady.rawValue)
+            var length = UInt32(payload.count).littleEndian
+            withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+            envelope.append(payload)
+
+            try await channel.simulateResponse(envelope)
+        }
+
+        // Verify all notifications were received
+        XCTAssertEqual(delegate.frameReadyNotifications.count, 5)
+
+        // Verify order and content
+        for i in 0..<5 {
+            XCTAssertEqual(delegate.frameReadyNotifications[i].windowId, UInt64(100 + i))
+            XCTAssertEqual(delegate.frameReadyNotifications[i].frameNumber, UInt32(i))
+        }
+    }
+
+    func testFrameReadyWithDifferentWindowIds() async throws {
+        let channel = SpiceControlChannel()
+        let delegate = MockControlChannelDelegate()
+        await channel.setDelegateForTest(delegate)
+        await channel.simulateConnected()
+
+        let encoder = JSONEncoder()
+        let windowIds: [UInt64] = [100, 200, 100, 300, 200]
+
+        for (index, windowId) in windowIds.enumerated() {
+            let frameReady = FrameReadyMessage(
+                windowId: windowId,
+                slotIndex: UInt32(index % 3),
+                frameNumber: UInt32(index),
+                isKeyFrame: true
+            )
+
+            let payload = try encoder.encode(frameReady)
+
+            var envelope = Data()
+            envelope.append(SpiceMessageType.frameReady.rawValue)
+            var length = UInt32(payload.count).littleEndian
+            withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+            envelope.append(payload)
+
+            try await channel.simulateResponse(envelope)
+        }
+
+        // Verify all notifications were received
+        XCTAssertEqual(delegate.frameReadyNotifications.count, 5)
+
+        // Verify we can filter by window ID
+        let window100Frames = delegate.frameReadyNotifications.filter { $0.windowId == 100 }
+        XCTAssertEqual(window100Frames.count, 2)
+
+        let window200Frames = delegate.frameReadyNotifications.filter { $0.windowId == 200 }
+        XCTAssertEqual(window200Frames.count, 2)
+
+        let window300Frames = delegate.frameReadyNotifications.filter { $0.windowId == 300 }
+        XCTAssertEqual(window300Frames.count, 1)
+    }
+}
+
+// MARK: - Mock Delegate for Testing
+
+final class MockControlChannelDelegate: SpiceControlChannelDelegate {
+    var didConnect = false
+    var didDisconnect = false
+    var receivedMessages: [(message: Any, type: SpiceMessageType)] = []
+    var frameReadyNotifications: [FrameReadyMessage] = []
+    var bufferAllocations: [WindowBufferAllocatedMessage] = []
+
+    func controlChannelDidConnect(_ channel: SpiceControlChannel) {
+        didConnect = true
+    }
+
+    func controlChannelDidDisconnect(_ channel: SpiceControlChannel) {
+        didDisconnect = true
+    }
+
+    func controlChannel(_ channel: SpiceControlChannel, didReceiveMessage message: Any, type: SpiceMessageType) {
+        receivedMessages.append((message: message, type: type))
+    }
+
+    func controlChannel(_ channel: SpiceControlChannel, didReceiveFrameReady notification: FrameReadyMessage) {
+        frameReadyNotifications.append(notification)
+    }
+
+    func controlChannel(
+        _ channel: SpiceControlChannel,
+        didReceiveBufferAllocation notification: WindowBufferAllocatedMessage
+    ) {
+        bufferAllocations.append(notification)
+    }
+}
+
+// MARK: - SpiceControlChannel Test Extension
+
+extension SpiceControlChannel {
+    /// Sets the delegate for testing purposes (avoids async/nonisolated getter complexity)
+    func setDelegateForTest(_ delegate: SpiceControlChannelDelegate?) async {
+        // Small delay to ensure the delegate is set before tests continue
+        delegate.map { self.delegate = $0 }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+}
+
 // MARK: - SpiceControlError Tests
 
 final class SpiceControlErrorTests: XCTestCase {

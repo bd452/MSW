@@ -188,6 +188,8 @@ public enum SpiceMessageSerializer {
             return try decoder.decode(ShortcutListMessage.self, from: payload)
         case .frameReady:
             return try decoder.decode(FrameReadyMessage.self, from: payload)
+        case .windowBufferAllocated:
+            return try decoder.decode(WindowBufferAllocatedMessage.self, from: payload)
         case .error:
             return try decoder.decode(GuestErrorMessage.self, from: payload)
         case .ack:

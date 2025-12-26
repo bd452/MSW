@@ -441,7 +441,6 @@ public sealed class WinRunAgentServiceTests : IDisposable
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
         using var dragDropService = new DragDropService(_logger);
         using var desktopDuplication = new DesktopDuplicationBridge(_logger);
-        using var frameBuffer = new SharedFrameBufferWriter(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -449,7 +448,6 @@ public sealed class WinRunAgentServiceTests : IDisposable
             _logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outbound);
 
         using var service = new WinRunAgentService(
@@ -480,7 +478,6 @@ public sealed class WinRunAgentServiceTests : IDisposable
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
         using var dragDropService = new DragDropService(_logger);
         using var desktopDuplication = new DesktopDuplicationBridge(_logger);
-        using var frameBuffer = new SharedFrameBufferWriter(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -488,7 +485,6 @@ public sealed class WinRunAgentServiceTests : IDisposable
             _logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outbound);
 
         using var service = new WinRunAgentService(

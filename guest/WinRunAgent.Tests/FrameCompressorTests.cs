@@ -231,9 +231,21 @@ public sealed class FrameCompressorTests
     }
 
     [Fact]
-    public void FrameStreamingConfigIncludesCompression()
+    public void FrameStreamingConfigCompressionDefaultsToNull()
     {
         var config = new FrameStreamingConfig();
+
+        // Compression is null by default (disabled)
+        Assert.Null(config.Compression);
+    }
+
+    [Fact]
+    public void FrameStreamingConfigCanEnableCompression()
+    {
+        var config = new FrameStreamingConfig
+        {
+            Compression = new FrameCompressionConfig { Enabled = true }
+        };
 
         Assert.NotNull(config.Compression);
         Assert.True(config.Compression!.Enabled);
