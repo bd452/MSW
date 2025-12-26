@@ -280,7 +280,10 @@ public sealed record WindowBufferAllocatedMessage : GuestMessage
     /// <summary>Window ID this buffer belongs to.</summary>
     public required ulong WindowId { get; init; }
 
-    /// <summary>Pointer to the buffer (for shared memory mapping).</summary>
+    /// <summary>
+    /// Buffer location. When UsesSharedMemory is true, this is an offset into the
+    /// shared memory region. Otherwise, it's a guest memory pointer (for diagnostics).
+    /// </summary>
     public required ulong BufferPointer { get; init; }
 
     /// <summary>Total buffer size in bytes.</summary>
@@ -297,6 +300,12 @@ public sealed record WindowBufferAllocatedMessage : GuestMessage
 
     /// <summary>Whether this is a reallocation (vs initial allocation).</summary>
     public bool IsReallocation { get; init; }
+
+    /// <summary>
+    /// Whether the buffer is in shared memory (true) or guest-local memory (false).
+    /// When true, BufferPointer is an offset into the shared memory region.
+    /// </summary>
+    public bool UsesSharedMemory { get; init; }
 }
 
 /// <summary>

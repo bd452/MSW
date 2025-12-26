@@ -433,6 +433,7 @@ public sealed class PerWindowFrameBufferTests
         Assert.Equal(3, message.SlotCount);
         Assert.False(message.IsCompressed);
         Assert.False(message.IsReallocation); // Default
+        Assert.False(message.UsesSharedMemory); // Default
     }
 
     [Fact]
@@ -451,5 +452,23 @@ public sealed class PerWindowFrameBufferTests
 
         Assert.True(message.IsReallocation);
         Assert.True(message.IsCompressed);
+    }
+
+    [Fact]
+    public void WindowBufferAllocatedMessageSupportsSharedMemory()
+    {
+        var message = new WindowBufferAllocatedMessage
+        {
+            WindowId = 1,
+            BufferPointer = 4096, // Offset into shared memory
+            BufferSize = 8 * 1024 * 1024,
+            SlotSize = 2 * 1024 * 1024,
+            SlotCount = 3,
+            IsCompressed = false,
+            UsesSharedMemory = true
+        };
+
+        Assert.True(message.UsesSharedMemory);
+        Assert.Equal(4096ul, message.BufferPointer);
     }
 }

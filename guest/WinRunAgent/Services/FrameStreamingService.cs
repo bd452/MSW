@@ -439,22 +439,30 @@ public sealed class FrameStreamingService : IDisposable
         bool isReallocation,
         CancellationToken token)
     {
+        // Use shared memory offset if available, otherwise use the raw pointer
+        // When using shared memory, the host maps the offset to its own pointer
+        var bufferPointer = buffer.UsesSharedMemory
+            ? (ulong)buffer.SharedMemoryOffset
+            : (ulong)buffer.GetBufferPointer();
+
         var notification = new WindowBufferAllocatedMessage
         {
             WindowId = windowId,
-            BufferPointer = (ulong)buffer.GetBufferPointer(),
+            BufferPointer = bufferPointer,
             BufferSize = buffer.BufferSize,
             SlotSize = buffer.SlotSize,
             SlotCount = buffer.SlotCount,
             IsCompressed = _config.BufferMode == FrameBufferMode.Compressed,
-            IsReallocation = isReallocation
+            IsReallocation = isReallocation,
+            UsesSharedMemory = buffer.UsesSharedMemory
         };
 
         try
         {
             await _outboundWriter.WriteAsync(notification, token);
             var action = isReallocation ? "reallocated" : "allocated";
-            _logger.Info($"Window {windowId}: Buffer {action} ({buffer.BufferSize / 1024} KB, {buffer.SlotCount} slots)");
+            var allocType = buffer.UsesSharedMemory ? "shared" : "local";
+            _logger.Info($"Window {windowId}: Buffer {action} ({buffer.BufferSize / 1024} KB, {buffer.SlotCount} slots, {allocType})");
         }
         catch (ChannelClosedException)
         {
