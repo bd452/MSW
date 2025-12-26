@@ -401,4 +401,122 @@ public sealed class FrameStreamingServiceTests
         var config120Fps = new FrameStreamingConfig { TargetFps = 120 };
         Assert.Equal(8, config120Fps.TargetFrameIntervalMs);
     }
+
+    [Fact]
+    public void FrameStreamingServiceWithoutSharedMemory()
+    {
+        var logger = new TestLogger();
+        var windowTracker = new WindowTracker(logger);
+        var desktopDuplication = new DesktopDuplicationBridge(logger);
+        var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
+
+        using var service = new FrameStreamingService(
+            logger,
+            windowTracker,
+            desktopDuplication,
+            outboundChannel,
+            sharedMemoryAllocator: null);
+
+        Assert.False(service.UsesSharedMemory);
+    }
+
+    [Fact]
+    public void FrameStreamingServiceWithSharedMemoryUncompressedMode()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"WinRunTests-{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+        var tempFile = Path.Combine(tempDir, "test.shm");
+
+        try
+        {
+            var allocatorConfig = new SharedMemoryAllocatorConfig
+            {
+                SharedFilePath = tempFile,
+                CreateIfNotExists = true,
+                CreateSizeBytes = 64 * 1024 * 1024,
+                MinimumSizeBytes = 1024
+            };
+
+            using var allocator = new SharedMemoryAllocator(allocatorConfig, new TestLogger());
+            allocator.Initialize();
+
+            var logger = new TestLogger();
+            var windowTracker = new WindowTracker(logger);
+            var desktopDuplication = new DesktopDuplicationBridge(logger);
+            var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
+
+            var config = new FrameStreamingConfig
+            {
+                BufferMode = FrameBufferMode.Uncompressed
+            };
+
+            using var service = new FrameStreamingService(
+                logger,
+                windowTracker,
+                desktopDuplication,
+                outboundChannel,
+                config,
+                allocator);
+
+            Assert.True(service.UsesSharedMemory);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { }
+            }
+        }
+    }
+
+    [Fact]
+    public void FrameStreamingServiceWithSharedMemoryCompressedMode()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"WinRunTests-{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+        var tempFile = Path.Combine(tempDir, "test.shm");
+
+        try
+        {
+            var allocatorConfig = new SharedMemoryAllocatorConfig
+            {
+                SharedFilePath = tempFile,
+                CreateIfNotExists = true,
+                CreateSizeBytes = 64 * 1024 * 1024,
+                MinimumSizeBytes = 1024
+            };
+
+            using var allocator = new SharedMemoryAllocator(allocatorConfig, new TestLogger());
+            allocator.Initialize();
+
+            var logger = new TestLogger();
+            var windowTracker = new WindowTracker(logger);
+            var desktopDuplication = new DesktopDuplicationBridge(logger);
+            var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
+
+            var config = new FrameStreamingConfig
+            {
+                BufferMode = FrameBufferMode.Compressed,
+                Compression = new FrameCompressionConfig { Enabled = true }
+            };
+
+            using var service = new FrameStreamingService(
+                logger,
+                windowTracker,
+                desktopDuplication,
+                outboundChannel,
+                config,
+                allocator);
+
+            Assert.True(service.UsesSharedMemory);
+            Assert.NotNull(service.CompressionStats);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { }
+            }
+        }
+    }
 }

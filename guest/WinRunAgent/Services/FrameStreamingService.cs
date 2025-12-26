@@ -70,12 +70,14 @@ public sealed class FrameStreamingService : IDisposable
     /// <param name="desktopDuplication">Desktop duplication bridge for frame capture.</param>
     /// <param name="outboundChannel">Channel for sending FrameReady notifications to host.</param>
     /// <param name="config">Optional configuration settings.</param>
+    /// <param name="sharedMemoryAllocator">Optional shared memory allocator for zero-copy frame transfer.</param>
     public FrameStreamingService(
         IAgentLogger logger,
         WindowTracker windowTracker,
         DesktopDuplicationBridge desktopDuplication,
         Channel<GuestMessage> outboundChannel,
-        FrameStreamingConfig? config = null)
+        FrameStreamingConfig? config = null,
+        SharedMemoryAllocator? sharedMemoryAllocator = null)
     {
         _logger = logger;
         _windowTracker = windowTracker;
@@ -89,7 +91,7 @@ public sealed class FrameStreamingService : IDisposable
             Mode = _config.BufferMode,
             SlotsPerWindow = 3
         };
-        _bufferManager = new PerWindowBufferManager(bufferConfig, logger);
+        _bufferManager = new PerWindowBufferManager(bufferConfig, logger, sharedMemoryAllocator);
 
         // Initialize compressor if compression is configured and mode is Compressed
         if (_config.BufferMode == FrameBufferMode.Compressed && _config.Compression is { Enabled: true })
@@ -122,6 +124,11 @@ public sealed class FrameStreamingService : IDisposable
     /// Gets compression statistics (null if compression is disabled).
     /// </summary>
     public CompressionStats? CompressionStats => _compressor?.Stats;
+
+    /// <summary>
+    /// Whether frame buffers use shared memory for zero-copy transfer.
+    /// </summary>
+    public bool UsesSharedMemory => _bufferManager.UsesSharedMemory;
 
     /// <summary>
     /// Starts the frame capture loop.
