@@ -244,7 +244,7 @@ public sealed class ProtocolValidationTests
     public void AllMessageTypesExist()
     {
         var allValues = Enum.GetValues<SpiceMessageType>();
-        Assert.Equal(26, allValues.Length);
+        Assert.Equal(27, allValues.Length); // Includes FrameReady (0x8E)
 
         // Verify no duplicate raw values
         var rawValues = allValues.Select(v => (byte)v).ToList();
