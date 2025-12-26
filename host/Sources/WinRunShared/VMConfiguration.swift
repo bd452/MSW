@@ -114,24 +114,133 @@ public extension VMNetworkConfiguration {
     }
 }
 
+// MARK: - Frame Streaming Configuration
+
+/// Configuration for guest-host frame streaming communication.
+public struct FrameStreamingConfiguration: Codable, Hashable {
+    /// Whether vsock is enabled for frame streaming.
+    /// Vsock provides a direct communication channel between host and guest.
+    public var vsockEnabled: Bool
+
+    /// The vsock context ID (CID) for the guest.
+    /// This is automatically assigned by Virtualization.framework when not specified.
+    public var vsockCID: UInt32?
+
+    /// Port number for the control channel on vsock.
+    public var controlPort: UInt32
+
+    /// Port number for frame data on vsock.
+    public var frameDataPort: UInt32
+
+    /// Whether to enable shared memory for zero-copy frame transfers.
+    /// Shared memory provides lowest latency for frame data.
+    public var sharedMemoryEnabled: Bool
+
+    /// Size of the shared memory region in megabytes.
+    /// Larger sizes can buffer more frames but use more memory.
+    public var sharedMemorySizeMB: Int
+
+    /// Whether to enable the Spice console port channel.
+    public var spiceConsoleEnabled: Bool
+
+    public init(
+        vsockEnabled: Bool = true,
+        vsockCID: UInt32? = nil,
+        controlPort: UInt32 = 5900,
+        frameDataPort: UInt32 = 5901,
+        sharedMemoryEnabled: Bool = true,
+        sharedMemorySizeMB: Int = 64,
+        spiceConsoleEnabled: Bool = true
+    ) {
+        self.vsockEnabled = vsockEnabled
+        self.vsockCID = vsockCID
+        self.controlPort = controlPort
+        self.frameDataPort = frameDataPort
+        self.sharedMemoryEnabled = sharedMemoryEnabled
+        self.sharedMemorySizeMB = sharedMemorySizeMB
+        self.spiceConsoleEnabled = spiceConsoleEnabled
+    }
+}
+
+public extension FrameStreamingConfiguration {
+    /// Minimum shared memory size in MB
+    static let minimumSharedMemorySizeMB = 16
+
+    /// Maximum shared memory size in MB (256 MB)
+    static let maximumSharedMemorySizeMB = 256
+
+    /// Valid port range for vsock
+    static let validPortRange: ClosedRange<UInt32> = 1...65535
+
+    func validate() throws {
+        if sharedMemoryEnabled {
+            if sharedMemorySizeMB < Self.minimumSharedMemorySizeMB {
+                throw VMConfigurationValidationError.sharedMemoryTooSmall(
+                    actual: sharedMemorySizeMB,
+                    minimum: Self.minimumSharedMemorySizeMB
+                )
+            }
+            if sharedMemorySizeMB > Self.maximumSharedMemorySizeMB {
+                throw VMConfigurationValidationError.sharedMemoryTooLarge(
+                    actual: sharedMemorySizeMB,
+                    maximum: Self.maximumSharedMemorySizeMB
+                )
+            }
+        }
+
+        if vsockEnabled {
+            if !Self.validPortRange.contains(controlPort) {
+                throw VMConfigurationValidationError.invalidVsockPort(controlPort)
+            }
+            if !Self.validPortRange.contains(frameDataPort) {
+                throw VMConfigurationValidationError.invalidVsockPort(frameDataPort)
+            }
+            if controlPort == frameDataPort {
+                throw VMConfigurationValidationError.duplicateVsockPort(controlPort)
+            }
+        }
+    }
+}
+
 // MARK: - VM Configuration
 
 public struct VMConfiguration: Codable, Hashable {
     public var resources: VMResources
     public var disk: VMDiskConfiguration
     public var network: VMNetworkConfiguration
+    public var frameStreaming: FrameStreamingConfiguration
     public var suspendOnIdleAfterSeconds: TimeInterval
 
     public init(
         resources: VMResources = VMResources(),
         disk: VMDiskConfiguration = VMDiskConfiguration(),
         network: VMNetworkConfiguration = VMNetworkConfiguration(),
+        frameStreaming: FrameStreamingConfiguration = FrameStreamingConfiguration(),
         suspendOnIdleAfterSeconds: TimeInterval = 300
     ) {
         self.resources = resources
         self.disk = disk
         self.network = network
+        self.frameStreaming = frameStreaming
         self.suspendOnIdleAfterSeconds = suspendOnIdleAfterSeconds
+    }
+
+    // Custom decoder to handle backward compatibility with configs that don't have frameStreaming
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.resources = try container.decode(VMResources.self, forKey: .resources)
+        self.disk = try container.decode(VMDiskConfiguration.self, forKey: .disk)
+        self.network = try container.decode(VMNetworkConfiguration.self, forKey: .network)
+        // Provide default if frameStreaming is missing (backward compatibility)
+        self.frameStreaming = try container.decodeIfPresent(
+            FrameStreamingConfiguration.self,
+            forKey: .frameStreaming
+        ) ?? FrameStreamingConfiguration()
+        self.suspendOnIdleAfterSeconds = try container.decode(TimeInterval.self, forKey: .suspendOnIdleAfterSeconds)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case resources, disk, network, frameStreaming, suspendOnIdleAfterSeconds
     }
 
     public var diskImagePath: URL {
@@ -145,6 +254,7 @@ public extension VMConfiguration {
         try resources.validate()
         try disk.validate(fileManager: fileManager)
         try network.validate()
+        try frameStreaming.validate()
     }
 }
 
@@ -159,6 +269,10 @@ public enum VMConfigurationValidationError: Error, CustomStringConvertible {
     case diskSizeTooSmall(actual: Int)
     case bridgedInterfaceNotSpecified
     case bridgedInterfaceUnavailable(String)
+    case sharedMemoryTooSmall(actual: Int, minimum: Int)
+    case sharedMemoryTooLarge(actual: Int, maximum: Int)
+    case invalidVsockPort(UInt32)
+    case duplicateVsockPort(UInt32)
 
     public var description: String {
         switch self {
@@ -178,6 +292,14 @@ public enum VMConfigurationValidationError: Error, CustomStringConvertible {
             return "Bridged networking requires an interface identifier."
         case .bridgedInterfaceUnavailable(let identifier):
             return "Bridged interface \(identifier) was not found on this host."
+        case .sharedMemoryTooSmall(let actual, let minimum):
+            return "Shared memory size \(actual)MB is below the minimum of \(minimum)MB."
+        case .sharedMemoryTooLarge(let actual, let maximum):
+            return "Shared memory size \(actual)MB exceeds the maximum of \(maximum)MB."
+        case .invalidVsockPort(let port):
+            return "Vsock port \(port) is outside the valid range (1-65535)."
+        case .duplicateVsockPort(let port):
+            return "Vsock port \(port) is used for both control and frame data channels."
         }
     }
 }

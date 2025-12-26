@@ -58,6 +58,7 @@ public enum SpiceMessageType : byte
     ProvisionComplete = 0x8B,
     SessionList = 0x8C,
     ShortcutList = 0x8D,
+    FrameReady = 0x8E,
     Error = 0xFE,
     Ack = 0xFF,
 }
@@ -274,6 +275,7 @@ public enum GeneratedMessageType : byte
     ProvisionComplete = 0x8B,
     SessionList = 0x8C,
     ShortcutList = 0x8D,
+    FrameReady = 0x8E,
     Error = 0xFE,
     Ack = 0xFF,
 }

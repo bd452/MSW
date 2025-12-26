@@ -112,6 +112,129 @@ final class WinRunSharedTests: XCTestCase {
         }
     }
 
+    // MARK: - Frame Streaming Configuration Tests
+
+    func testFrameStreamingConfigurationDefaults() {
+        let config = FrameStreamingConfiguration()
+        XCTAssertTrue(config.vsockEnabled)
+        XCTAssertNil(config.vsockCID)
+        XCTAssertEqual(config.controlPort, 5900)
+        XCTAssertEqual(config.frameDataPort, 5901)
+        XCTAssertTrue(config.sharedMemoryEnabled)
+        XCTAssertEqual(config.sharedMemorySizeMB, 64)
+        XCTAssertTrue(config.spiceConsoleEnabled)
+    }
+
+    func testFrameStreamingValidationSucceeds() throws {
+        let config = FrameStreamingConfiguration()
+        XCTAssertNoThrow(try config.validate())
+    }
+
+    func testFrameStreamingSharedMemoryTooSmall() {
+        let config = FrameStreamingConfiguration(sharedMemorySizeMB: 8)
+        XCTAssertThrowsError(try config.validate()) { error in
+            guard case VMConfigurationValidationError.sharedMemoryTooSmall(let actual, let minimum) = error else {
+                return XCTFail("Expected sharedMemoryTooSmall, got \(error)")
+            }
+            XCTAssertEqual(actual, 8)
+            XCTAssertEqual(minimum, FrameStreamingConfiguration.minimumSharedMemorySizeMB)
+        }
+    }
+
+    func testFrameStreamingSharedMemoryTooLarge() {
+        let config = FrameStreamingConfiguration(sharedMemorySizeMB: 512)
+        XCTAssertThrowsError(try config.validate()) { error in
+            guard case VMConfigurationValidationError.sharedMemoryTooLarge(let actual, let maximum) = error else {
+                return XCTFail("Expected sharedMemoryTooLarge, got \(error)")
+            }
+            XCTAssertEqual(actual, 512)
+            XCTAssertEqual(maximum, FrameStreamingConfiguration.maximumSharedMemorySizeMB)
+        }
+    }
+
+    func testFrameStreamingSharedMemoryDisabledSkipsValidation() {
+        // When shared memory is disabled, size validation should be skipped
+        let config = FrameStreamingConfiguration(sharedMemoryEnabled: false, sharedMemorySizeMB: 8)
+        XCTAssertNoThrow(try config.validate())
+    }
+
+    func testFrameStreamingInvalidVsockPort() {
+        let config = FrameStreamingConfiguration(controlPort: 0)
+        XCTAssertThrowsError(try config.validate()) { error in
+            guard case VMConfigurationValidationError.invalidVsockPort(let port) = error else {
+                return XCTFail("Expected invalidVsockPort, got \(error)")
+            }
+            XCTAssertEqual(port, 0)
+        }
+    }
+
+    func testFrameStreamingDuplicateVsockPort() {
+        let config = FrameStreamingConfiguration(controlPort: 5900, frameDataPort: 5900)
+        XCTAssertThrowsError(try config.validate()) { error in
+            guard case VMConfigurationValidationError.duplicateVsockPort(let port) = error else {
+                return XCTFail("Expected duplicateVsockPort, got \(error)")
+            }
+            XCTAssertEqual(port, 5900)
+        }
+    }
+
+    func testFrameStreamingVsockDisabledSkipsPortValidation() {
+        // When vsock is disabled, port validation should be skipped
+        let config = FrameStreamingConfiguration(vsockEnabled: false, controlPort: 0, frameDataPort: 0)
+        XCTAssertNoThrow(try config.validate())
+    }
+
+    func testVMConfigurationIncludesFrameStreaming() {
+        let config = VMConfiguration()
+        XCTAssertTrue(config.frameStreaming.vsockEnabled)
+        XCTAssertTrue(config.frameStreaming.sharedMemoryEnabled)
+        XCTAssertTrue(config.frameStreaming.spiceConsoleEnabled)
+    }
+
+    func testVMConfigurationFrameStreamingValidation() throws {
+        let (baseConfig, tempDir) = try provisionedConfig()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Create config with invalid frame streaming settings
+        let invalidConfig = VMConfiguration(
+            resources: baseConfig.resources,
+            disk: baseConfig.disk,
+            network: baseConfig.network,
+            frameStreaming: FrameStreamingConfiguration(sharedMemorySizeMB: 8)
+        )
+        XCTAssertThrowsError(try invalidConfig.validate()) { error in
+            guard case VMConfigurationValidationError.sharedMemoryTooSmall = error else {
+                return XCTFail("Expected sharedMemoryTooSmall, got \(error)")
+            }
+        }
+    }
+
+    func testFrameStreamingConfigurationCodable() throws {
+        let original = FrameStreamingConfiguration(
+            vsockEnabled: true,
+            vsockCID: 3,
+            controlPort: 6000,
+            frameDataPort: 6001,
+            sharedMemoryEnabled: true,
+            sharedMemorySizeMB: 128,
+            spiceConsoleEnabled: false
+        )
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(original)
+
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(FrameStreamingConfiguration.self, from: data)
+
+        XCTAssertEqual(decoded.vsockEnabled, true)
+        XCTAssertEqual(decoded.vsockCID, 3)
+        XCTAssertEqual(decoded.controlPort, 6000)
+        XCTAssertEqual(decoded.frameDataPort, 6001)
+        XCTAssertEqual(decoded.sharedMemoryEnabled, true)
+        XCTAssertEqual(decoded.sharedMemorySizeMB, 128)
+        XCTAssertEqual(decoded.spiceConsoleEnabled, false)
+    }
+
     // MARK: - Helpers
 
     private func provisionedConfig() throws -> (VMConfiguration, URL) {

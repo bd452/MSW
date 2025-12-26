@@ -159,4 +159,48 @@ final class VirtualMachineControllerBasicTests: XCTestCase {
             }
         }
     }
+
+    func testFrameStreamingConfigurationExposed() async {
+        let frameConfig = FrameStreamingConfiguration(
+            vsockEnabled: true,
+            controlPort: 7000,
+            frameDataPort: 7001,
+            sharedMemoryEnabled: true,
+            sharedMemorySizeMB: 128
+        )
+        let config = VMConfiguration(frameStreaming: frameConfig)
+        let controller = VirtualMachineController(configuration: config)
+
+        let exposed = await controller.frameStreamingConfiguration
+        XCTAssertEqual(exposed.controlPort, 7000)
+        XCTAssertEqual(exposed.frameDataPort, 7001)
+        XCTAssertEqual(exposed.sharedMemorySizeMB, 128)
+    }
+
+    func testConnectVsockRequiresRunningVM() async throws {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        do {
+            _ = try await controller.connectVsock(port: 5900)
+            XCTFail("Expected error")
+        } catch let error as VirtualMachineLifecycleError {
+            XCTAssertTrue(error.description.contains("running"))
+        }
+    }
+
+    #if canImport(Virtualization)
+    @available(macOS 13, *)
+    func testListenVsockRequiresRunningVM() async throws {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        do {
+            _ = try await controller.listenVsock(port: 5900) { _ in true }
+            XCTFail("Expected error")
+        } catch let error as VirtualMachineLifecycleError {
+            XCTAssertTrue(error.description.contains("running"))
+        }
+    }
+    #endif
 }
