@@ -329,6 +329,46 @@ public struct AckMessage: GuestMessage {
     }
 }
 
+/// Notification that a per-window frame buffer has been allocated or reallocated.
+/// Host should update its buffer mapping for this window.
+public struct WindowBufferAllocatedMessage: GuestMessage {
+    public let timestamp: Int64
+    /// Window ID this buffer belongs to
+    public let windowId: UInt64
+    /// Pointer to the buffer (for shared memory mapping)
+    public let bufferPointer: UInt64
+    /// Total buffer size in bytes
+    public let bufferSize: Int32
+    /// Size of each slot in bytes
+    public let slotSize: Int32
+    /// Number of slots in this buffer
+    public let slotCount: Int32
+    /// Whether frames in this buffer are compressed
+    public let isCompressed: Bool
+    /// Whether this is a reallocation (vs initial allocation)
+    public let isReallocation: Bool
+
+    public init(
+        timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
+        windowId: UInt64,
+        bufferPointer: UInt64,
+        bufferSize: Int32,
+        slotSize: Int32,
+        slotCount: Int32,
+        isCompressed: Bool,
+        isReallocation: Bool = false
+    ) {
+        self.timestamp = timestamp
+        self.windowId = windowId
+        self.bufferPointer = bufferPointer
+        self.bufferSize = bufferSize
+        self.slotSize = slotSize
+        self.slotCount = slotCount
+        self.isCompressed = isCompressed
+        self.isReallocation = isReallocation
+    }
+}
+
 // MARK: - Session Messages
 
 /// Session state in the guest agent.

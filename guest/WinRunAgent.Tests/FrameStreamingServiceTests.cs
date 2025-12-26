@@ -38,14 +38,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         Assert.False(service.IsRunning);
@@ -58,7 +56,6 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
         var config = new FrameStreamingConfig { TargetFps = 60 };
 
@@ -66,7 +63,6 @@ public sealed class FrameStreamingServiceTests
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel,
             config);
 
@@ -80,14 +76,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         Assert.False(service.IsRunning);
@@ -108,14 +102,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         // Should complete immediately when not running
@@ -128,14 +120,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         service.Start();
@@ -152,14 +142,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         service.Dispose();
@@ -172,14 +160,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         service.Dispose();
@@ -193,14 +179,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         service.Start();
@@ -267,14 +251,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         Assert.NotNull(service.Stats);
@@ -287,14 +269,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         // Should not throw when no windows are tracked
@@ -350,14 +330,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         service.Start();
@@ -372,14 +350,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         service.Dispose();
@@ -395,14 +371,12 @@ public sealed class FrameStreamingServiceTests
         var logger = new TestLogger();
         var windowTracker = new WindowTracker(logger);
         var desktopDuplication = new DesktopDuplicationBridge(logger);
-        var frameBuffer = new SharedFrameBufferWriter(logger);
         var outboundChannel = Channel.CreateUnbounded<GuestMessage>();
 
         using var service = new FrameStreamingService(
             logger,
             windowTracker,
             desktopDuplication,
-            frameBuffer,
             outboundChannel);
 
         // Service should handle per-window state without errors

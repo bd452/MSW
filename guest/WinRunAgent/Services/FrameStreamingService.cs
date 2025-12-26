@@ -26,7 +26,14 @@ public sealed record FrameStreamingConfig
     public int MinWindowFrameIntervalMs { get; init; } = 33; // ~30fps per window
 
     /// <summary>Configuration for frame compression. Null to disable compression.</summary>
-    public FrameCompressionConfig? Compression { get; init; } = new();
+    public FrameCompressionConfig? Compression { get; init; }
+
+    /// <summary>
+    /// Frame buffer allocation mode.
+    /// Uncompressed: Exact allocation, lower latency, higher memory.
+    /// Compressed: Tranche allocation, higher latency, lower memory.
+    /// </summary>
+    public FrameBufferMode BufferMode { get; init; } = FrameBufferMode.Uncompressed;
 
     /// <summary>Computed target frame interval in milliseconds.</summary>
     public int TargetFrameIntervalMs => 1000 / TargetFps;
@@ -34,14 +41,14 @@ public sealed record FrameStreamingConfig
 
 /// <summary>
 /// Service that orchestrates capturing desktop/window frames and streaming them
-/// to the host via shared memory with FrameReady notifications.
+/// to the host via per-window shared memory buffers with FrameReady notifications.
 /// </summary>
 public sealed class FrameStreamingService : IDisposable
 {
     private readonly IAgentLogger _logger;
     private readonly WindowTracker _windowTracker;
     private readonly DesktopDuplicationBridge _desktopDuplication;
-    private readonly SharedFrameBufferWriter _frameBufferWriter;
+    private readonly PerWindowBufferManager _bufferManager;
     private readonly ChannelWriter<GuestMessage> _outboundWriter;
     private readonly FrameStreamingConfig _config;
     private readonly FrameCompressor? _compressor;
@@ -61,29 +68,38 @@ public sealed class FrameStreamingService : IDisposable
     /// <param name="logger">Logger for diagnostics.</param>
     /// <param name="windowTracker">Window tracker for per-window capture.</param>
     /// <param name="desktopDuplication">Desktop duplication bridge for frame capture.</param>
-    /// <param name="frameBufferWriter">Shared memory writer for frame data.</param>
     /// <param name="outboundChannel">Channel for sending FrameReady notifications to host.</param>
     /// <param name="config">Optional configuration settings.</param>
     public FrameStreamingService(
         IAgentLogger logger,
         WindowTracker windowTracker,
         DesktopDuplicationBridge desktopDuplication,
-        SharedFrameBufferWriter frameBufferWriter,
         Channel<GuestMessage> outboundChannel,
         FrameStreamingConfig? config = null)
     {
         _logger = logger;
         _windowTracker = windowTracker;
         _desktopDuplication = desktopDuplication;
-        _frameBufferWriter = frameBufferWriter;
         _outboundWriter = outboundChannel.Writer;
         _config = config ?? new FrameStreamingConfig();
 
-        // Initialize compressor if compression is configured
-        if (_config.Compression is { Enabled: true })
+        // Create per-window buffer manager with appropriate settings
+        var bufferConfig = new PerWindowBufferConfig
+        {
+            Mode = _config.BufferMode,
+            SlotsPerWindow = 3
+        };
+        _bufferManager = new PerWindowBufferManager(bufferConfig, logger);
+
+        // Initialize compressor if compression is configured and mode is Compressed
+        if (_config.BufferMode == FrameBufferMode.Compressed && _config.Compression is { Enabled: true })
         {
             _compressor = new FrameCompressor(logger, _config.Compression);
             _logger.Info($"Frame compression enabled: level={_config.Compression.CompressionLevel}");
+        }
+        else if (_config.BufferMode == FrameBufferMode.Uncompressed)
+        {
+            _logger.Info("Frame buffer mode: Uncompressed (exact allocation, lowest latency)");
         }
     }
 
@@ -171,9 +187,6 @@ public sealed class FrameStreamingService : IDisposable
             return;
         }
 
-        // Set guest active flag
-        _frameBufferWriter.SetGuestActive(true);
-
         var targetInterval = TimeSpan.FromMilliseconds(_config.TargetFrameIntervalMs);
 
         try
@@ -216,7 +229,6 @@ public sealed class FrameStreamingService : IDisposable
         }
         finally
         {
-            _frameBufferWriter.SetGuestActive(false);
             _logger.Debug("Frame capture loop ended");
         }
     }
@@ -361,21 +373,38 @@ public sealed class FrameStreamingService : IDisposable
             dataToWrite = frame.Data;
         }
 
-        // Write frame to shared memory
-        var slotIndex = _frameBufferWriter.WriteFrame(
-            windowId,
-            frameNumber,
-            frame.Width,
-            frame.Height,
-            frame.Stride,
-            frame.Format,
-            dataToWrite,
-            isCompressed);
+        // Get or create per-window buffer
+        var buffer = _bufferManager.GetOrCreateBuffer(windowId);
+
+        // Ensure buffer is allocated for this frame size (may trigger reallocation)
+        var wasReallocated = buffer.EnsureAllocated(frame.Width, frame.Height, dataToWrite.Length);
+
+        // If buffer was (re)allocated, notify host
+        if (wasReallocated)
+        {
+            await NotifyBufferAllocationAsync(windowId, buffer, isReallocation: buffer.IsAllocated, token);
+        }
+
+        // Build frame slot header
+        var slotHeader = new FrameSlotHeader
+        {
+            WindowId = windowId,
+            FrameNumber = frameNumber,
+            Width = (uint)frame.Width,
+            Height = (uint)frame.Height,
+            Stride = (uint)frame.Stride,
+            Format = (uint)frame.Format,
+            DataSize = (uint)dataToWrite.Length,
+            Flags = isCompressed ? FrameSlotFlags.Compressed | FrameSlotFlags.KeyFrame : FrameSlotFlags.KeyFrame
+        };
+
+        // Write frame to per-window buffer
+        var slotIndex = buffer.WriteFrame(slotHeader, dataToWrite);
 
         if (slotIndex < 0)
         {
             Stats.RecordBufferFull();
-            _logger.Debug($"Shared buffer full, dropping frame {frameNumber} for window {windowId}");
+            _logger.Debug($"Buffer full for window {windowId}, dropping frame {frameNumber}");
             return;
         }
 
@@ -387,7 +416,7 @@ public sealed class FrameStreamingService : IDisposable
             WindowId = windowId,
             SlotIndex = (uint)slotIndex,
             FrameNumber = frameNumber,
-            IsKeyFrame = true // All frames are key frames until delta compression is implemented
+            IsKeyFrame = true
         };
 
         try
@@ -398,6 +427,35 @@ public sealed class FrameStreamingService : IDisposable
         catch (ChannelClosedException)
         {
             _logger.Warn("Outbound channel closed, cannot send frame notification");
+        }
+    }
+
+    private async Task NotifyBufferAllocationAsync(
+        ulong windowId,
+        WindowFrameBuffer buffer,
+        bool isReallocation,
+        CancellationToken token)
+    {
+        var notification = new WindowBufferAllocatedMessage
+        {
+            WindowId = windowId,
+            BufferPointer = (ulong)buffer.GetBufferPointer(),
+            BufferSize = buffer.BufferSize,
+            SlotSize = buffer.SlotSize,
+            SlotCount = buffer.SlotCount,
+            IsCompressed = _config.BufferMode == FrameBufferMode.Compressed,
+            IsReallocation = isReallocation
+        };
+
+        try
+        {
+            await _outboundWriter.WriteAsync(notification, token);
+            var action = isReallocation ? "reallocated" : "allocated";
+            _logger.Info($"Window {windowId}: Buffer {action} ({buffer.BufferSize / 1024} KB, {buffer.SlotCount} slots)");
+        }
+        catch (ChannelClosedException)
+        {
+            _logger.Warn("Outbound channel closed, cannot send buffer allocation notification");
         }
     }
 
@@ -426,7 +484,7 @@ public sealed class FrameStreamingService : IDisposable
     }
 
     /// <summary>
-    /// Cleans up tracking state for windows that no longer exist.
+    /// Cleans up tracking state and buffers for windows that no longer exist.
     /// Called periodically or when windows are destroyed.
     /// </summary>
     public void CleanupStaleWindowStates()
@@ -451,7 +509,15 @@ public sealed class FrameStreamingService : IDisposable
                 _logger.Debug($"Cleaned up {staleIds.Count} stale window frame states");
             }
         }
+
+        // Also cleanup stale buffers
+        _bufferManager.CleanupStaleBuffers(activeWindowIds);
     }
+
+    /// <summary>
+    /// Gets buffer allocation statistics.
+    /// </summary>
+    public BufferManagerStats BufferStats => _bufferManager.GetStats();
 
     public void Dispose()
     {
@@ -479,7 +545,9 @@ public sealed class FrameStreamingService : IDisposable
             _windowFrameStates.Clear();
         }
 
-        _logger.Info($"FrameStreamingService disposed. Stats: {Stats}");
+        _bufferManager.Dispose();
+
+        _logger.Info($"FrameStreamingService disposed. Stats: {Stats}, Buffers: {BufferStats}");
     }
 }
 

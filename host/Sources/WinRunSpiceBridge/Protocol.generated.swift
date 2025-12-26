@@ -49,6 +49,7 @@ public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
     case sessionList = 0x8C
     case shortcutList = 0x8D
     case frameReady = 0x8E
+    case windowBufferAllocated = 0x8F
     case error = 0xFE
     case ack = 0xFF
 

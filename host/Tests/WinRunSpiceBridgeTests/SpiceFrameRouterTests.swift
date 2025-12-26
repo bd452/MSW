@@ -227,6 +227,140 @@ final class SpiceFrameRouterTests: XCTestCase {
         XCTAssertEqual(delegate1.sharedFrames.first?.frameNumber, 42)
     }
 
+    // MARK: - Per-Window Buffer Allocation Tests
+
+    func testBufferAllocationStoresWindowBufferInfo() async {
+        let allocation = WindowBufferAllocatedMessage(
+            windowId: 100,
+            bufferPointer: 0x12345678,
+            bufferSize: 8 * 1024 * 1024,
+            slotSize: 2 * 1024 * 1024,
+            slotCount: 3,
+            isCompressed: false,
+            isReallocation: false
+        )
+
+        router.handleBufferAllocation(allocation)
+
+        // Wait for async handling
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let info = router.bufferInfo(forWindowID: 100)
+        XCTAssertNotNil(info)
+        XCTAssertEqual(info?.bufferPointer, 0x12345678)
+        XCTAssertEqual(info?.bufferSize, 8 * 1024 * 1024)
+        XCTAssertEqual(info?.slotSize, 2 * 1024 * 1024)
+        XCTAssertEqual(info?.slotCount, 3)
+        XCTAssertFalse(info?.isCompressed ?? true)
+    }
+
+    func testBufferReallocationUpdatesInfo() async {
+        // Initial allocation
+        let allocation1 = WindowBufferAllocatedMessage(
+            windowId: 100,
+            bufferPointer: 0x1000,
+            bufferSize: 1024,
+            slotSize: 256,
+            slotCount: 3,
+            isCompressed: false,
+            isReallocation: false
+        )
+        router.handleBufferAllocation(allocation1)
+
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // Reallocation
+        let allocation2 = WindowBufferAllocatedMessage(
+            windowId: 100,
+            bufferPointer: 0x2000,
+            bufferSize: 2048,
+            slotSize: 512,
+            slotCount: 3,
+            isCompressed: false,
+            isReallocation: true
+        )
+        router.handleBufferAllocation(allocation2)
+
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let info = router.bufferInfo(forWindowID: 100)
+        XCTAssertEqual(info?.bufferPointer, 0x2000)
+        XCTAssertEqual(info?.bufferSize, 2048)
+        XCTAssertEqual(info?.slotSize, 512)
+    }
+
+    func testControlChannelDelegateHandlesBufferAllocation() async {
+        let channel = SpiceControlChannel()
+        let allocation = WindowBufferAllocatedMessage(
+            windowId: 200,
+            bufferPointer: 0xABCD,
+            bufferSize: 4 * 1024 * 1024,
+            slotSize: 1 * 1024 * 1024,
+            slotCount: 3,
+            isCompressed: true,
+            isReallocation: false
+        )
+
+        router.controlChannel(channel, didReceiveBufferAllocation: allocation)
+
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let info = router.bufferInfo(forWindowID: 200)
+        XCTAssertNotNil(info)
+        XCTAssertTrue(info?.isCompressed ?? false)
+    }
+
+    func testAllocatedBufferCountTracksAllocations() async {
+        XCTAssertEqual(router.allocatedBufferCount, 0)
+
+        let allocation1 = WindowBufferAllocatedMessage(
+            windowId: 100,
+            bufferPointer: 0x1000,
+            bufferSize: 1024,
+            slotSize: 256,
+            slotCount: 3,
+            isCompressed: false,
+            isReallocation: false
+        )
+        router.handleBufferAllocation(allocation1)
+
+        let allocation2 = WindowBufferAllocatedMessage(
+            windowId: 200,
+            bufferPointer: 0x2000,
+            bufferSize: 1024,
+            slotSize: 256,
+            slotCount: 3,
+            isCompressed: false,
+            isReallocation: false
+        )
+        router.handleBufferAllocation(allocation2)
+
+        try? await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(router.allocatedBufferCount, 2)
+    }
+
+    func testUnregisterAllStreamsClearsBufferInfo() async {
+        let allocation = WindowBufferAllocatedMessage(
+            windowId: 100,
+            bufferPointer: 0x1000,
+            bufferSize: 1024,
+            slotSize: 256,
+            slotCount: 3,
+            isCompressed: false,
+            isReallocation: false
+        )
+        router.handleBufferAllocation(allocation)
+
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(router.allocatedBufferCount, 1)
+
+        router.unregisterAllStreams()
+
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(router.allocatedBufferCount, 0)
+    }
+
     // MARK: - Helper Methods
 
     /// Creates a test shared frame buffer with a single frame

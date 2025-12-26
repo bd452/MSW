@@ -354,6 +354,7 @@ final class MockControlChannelDelegate: SpiceControlChannelDelegate {
     var didDisconnect = false
     var receivedMessages: [(message: Any, type: SpiceMessageType)] = []
     var frameReadyNotifications: [FrameReadyMessage] = []
+    var bufferAllocations: [WindowBufferAllocatedMessage] = []
 
     func controlChannelDidConnect(_ channel: SpiceControlChannel) {
         didConnect = true
@@ -369,6 +370,13 @@ final class MockControlChannelDelegate: SpiceControlChannelDelegate {
 
     func controlChannel(_ channel: SpiceControlChannel, didReceiveFrameReady notification: FrameReadyMessage) {
         frameReadyNotifications.append(notification)
+    }
+
+    func controlChannel(
+        _ channel: SpiceControlChannel,
+        didReceiveBufferAllocation notification: WindowBufferAllocatedMessage
+    ) {
+        bufferAllocations.append(notification)
     }
 }
 

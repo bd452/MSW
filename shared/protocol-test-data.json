@@ -29,6 +29,7 @@
     "msgSessionList": 140,
     "msgShortcutList": 141,
     "msgFrameReady": 142,
+    "msgWindowBufferAllocated": 143,
     "msgError": 254,
     "msgAck": 255  },
   "capabilities": {

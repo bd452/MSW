@@ -272,6 +272,34 @@ public sealed record HeartbeatMessage : GuestMessage
 }
 
 /// <summary>
+/// Notification that a per-window frame buffer has been allocated or reallocated.
+/// Host should update its buffer mapping for this window.
+/// </summary>
+public sealed record WindowBufferAllocatedMessage : GuestMessage
+{
+    /// <summary>Window ID this buffer belongs to.</summary>
+    public required ulong WindowId { get; init; }
+
+    /// <summary>Pointer to the buffer (for shared memory mapping).</summary>
+    public required ulong BufferPointer { get; init; }
+
+    /// <summary>Total buffer size in bytes.</summary>
+    public required int BufferSize { get; init; }
+
+    /// <summary>Size of each slot in bytes.</summary>
+    public required int SlotSize { get; init; }
+
+    /// <summary>Number of slots in this buffer.</summary>
+    public required int SlotCount { get; init; }
+
+    /// <summary>Whether frames in this buffer are compressed.</summary>
+    public required bool IsCompressed { get; init; }
+
+    /// <summary>Whether this is a reallocation (vs initial allocation).</summary>
+    public bool IsReallocation { get; init; }
+}
+
+/// <summary>
 /// Error notification from guest.
 /// </summary>
 public sealed record ErrorMessage : GuestMessage
@@ -500,6 +528,7 @@ public static class SpiceMessageSerializer
             SessionListMessage => SpiceMessageType.SessionList,
             ShortcutListMessage => SpiceMessageType.ShortcutList,
             FrameReadyMessage => SpiceMessageType.FrameReady,
+            WindowBufferAllocatedMessage => SpiceMessageType.WindowBufferAllocated,
             ErrorMessage => SpiceMessageType.Error,
             AckMessage => SpiceMessageType.Ack,
             _ => throw new ArgumentException($"Unknown message type: {message.GetType()}")
@@ -569,6 +598,7 @@ public static class SpiceMessageSerializer
             SpiceMessageType.SessionList => null,
             SpiceMessageType.ShortcutList => null,
             SpiceMessageType.FrameReady => null,
+            SpiceMessageType.WindowBufferAllocated => null,
             SpiceMessageType.Error => null,
             SpiceMessageType.Ack => null,
 
