@@ -342,7 +342,7 @@ public sealed class FrameStreamingService : IDisposable
         var frameNumber = Interlocked.Increment(ref _frameCounter);
 
         // Compress frame data if compression is enabled
-        ReadOnlySpan<byte> dataToWrite;
+        byte[] dataToWrite;
         var isCompressed = false;
 
         if (_compressor != null)

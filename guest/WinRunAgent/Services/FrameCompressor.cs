@@ -77,7 +77,7 @@ public sealed class FrameCompressor
         _ = Interlocked.Add(ref _uncompressedBytes, data.Length);
 
         // Skip compression for small frames or if disabled
-        if (!_config.Enabled || data.Length < _config.MinSizeToCompress)
+        if (!Config.Enabled || data.Length < Config.MinSizeToCompress)
         {
             return new CompressionResult
             {
@@ -96,11 +96,11 @@ public sealed class FrameCompressor
         var compressedSize = LZ4Codec.Encode(
             data,
             compressedBuffer.AsSpan(),
-            _config.CompressionLevel);
+            Config.CompressionLevel);
 
         // Check if compression is beneficial
         var ratio = (float)compressedSize / data.Length;
-        if (ratio > _config.MaxCompressionRatio)
+        if (ratio > Config.MaxCompressionRatio)
         {
             // Compression didn't help enough, return original
             return new CompressionResult
