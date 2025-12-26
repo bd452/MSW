@@ -152,6 +152,7 @@ public actor VirtualMachineController {
 #endif
 
         clearNativeVM()
+        cleanupSharedMemory()
         uptimeStart = nil
         state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
         logMetrics(event: "vm_shutdown")
@@ -418,11 +419,14 @@ public actor VirtualMachineController {
             logger.debug("Configured Spice console port for control channel")
         }
 
-        // Note: Shared memory configuration is handled at the transport layer
-        // via VZVirtioFileSystemDeviceConfiguration or direct memory mapping
-        // when the stream is established. The VM just needs vsock + console.
+        // Add VirtioFS device for shared memory frame buffer
         if frameConfig.sharedMemoryEnabled {
-            logger.debug("Shared memory enabled (size: \(frameConfig.sharedMemorySizeMB)MB)")
+            let fsDevice = try createFrameBufferShareDevice()
+            vmConfig.directorySharingDevices = [fsDevice]
+            logger.debug(
+                "Configured VirtioFS device for shared frame buffer " +
+                "(size: \(frameConfig.sharedMemorySizeMB)MB, tag: \(SharedMemoryManager.virtioFSTag))"
+            )
         }
     }
 

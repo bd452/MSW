@@ -143,13 +143,22 @@ public struct FrameStreamingConfiguration: Codable, Hashable {
     /// Whether to enable the Spice console port channel.
     public var spiceConsoleEnabled: Bool
 
+    /// Creates a new frame streaming configuration.
+    /// - Parameters:
+    ///   - vsockEnabled: Whether vsock is enabled for frame streaming (default: true)
+    ///   - vsockCID: The vsock context ID (auto-assigned if nil)
+    ///   - controlPort: Port number for control channel (default: 5900)
+    ///   - frameDataPort: Port number for frame data (default: 5901)
+    ///   - sharedMemoryEnabled: Whether shared memory is enabled (default: true)
+    ///   - sharedMemorySizeMB: Size of shared memory in MB (default: 256, max: 512)
+    ///   - spiceConsoleEnabled: Whether Spice console port is enabled (default: true)
     public init(
         vsockEnabled: Bool = true,
         vsockCID: UInt32? = nil,
         controlPort: UInt32 = 5900,
         frameDataPort: UInt32 = 5901,
         sharedMemoryEnabled: Bool = true,
-        sharedMemorySizeMB: Int = 64,
+        sharedMemorySizeMB: Int = 256,
         spiceConsoleEnabled: Bool = true
     ) {
         self.vsockEnabled = vsockEnabled
@@ -166,8 +175,11 @@ public extension FrameStreamingConfiguration {
     /// Minimum shared memory size in MB
     static let minimumSharedMemorySizeMB = 16
 
-    /// Maximum shared memory size in MB (256 MB)
-    static let maximumSharedMemorySizeMB = 256
+    /// Maximum shared memory size in MB (512 MB - supports ~10 windows at 50MB each)
+    static let maximumSharedMemorySizeMB = 512
+
+    /// Default shared memory size in MB (sufficient for typical use cases)
+    static let defaultSharedMemorySizeMB = 256
 
     /// Valid port range for vsock
     static let validPortRange: ClosedRange<UInt32> = 1...65535
