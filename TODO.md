@@ -113,12 +113,12 @@
     - [X] Add unit tests for first-run detection logic { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
     - [X] Add view controller state transition tests { new:host/Tests/WinRunAppTests/SetupFlowControllerTests.swift } <docs/development.md>
 
-  - [ ] Setup UI integration + recovery wiring { host/Sources/WinRunApp/Setup/, host/Sources/WinRunSetup/ } <docs/decisions/windows-provisioning.md>
-    - [ ] Wire setup wizard screens into an actual flow coordinator { host/Sources/WinRunApp/Setup/SetupFlowController.swift, new:host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Enforce handler wiring for enabled recovery actions { host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Add structured setup failure context and render diagnostics { host/Sources/WinRunApp/Setup/SetupErrorViewController.swift, host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/SetupFailureContext.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Implement retry and choose-ISO transitions in the coordinator { host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift, host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
-    - [ ] Add unit tests for coordinator state transitions and recovery wiring { new:host/Tests/WinRunAppTests/SetupWizardCoordinatorTests.swift } <docs/development.md>
+  - [X] Setup UI integration + recovery wiring { host/Sources/WinRunApp/Setup/, host/Sources/WinRunSetup/ } <docs/decisions/windows-provisioning.md>
+    - [X] Wire setup wizard screens into an actual flow coordinator { host/Sources/WinRunApp/Setup/SetupFlowController.swift, new:host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Enforce handler wiring for enabled recovery actions { host/Sources/WinRunApp/Setup/SetupErrorViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Add structured setup failure context and render diagnostics { host/Sources/WinRunApp/Setup/SetupErrorViewController.swift, host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/SetupFailureContext.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Implement retry and choose-ISO transitions in the coordinator { host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift, host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Add unit tests for coordinator state transitions and recovery wiring { new:host/Tests/WinRunAppTests/SetupWizardCoordinatorTests.swift } <docs/development.md>
 
 - [ ] Guest Agent Installer { new:guest/WinRunAgent.Installer/, guest/WinRunAgent/WinRunAgent.csproj } <docs/decisions/windows-provisioning.md>
   - [ ] MSI installer project { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
