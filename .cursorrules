@@ -58,27 +58,26 @@ Before starting any task:
 After completing a task:
 1. Verify implementation matches documentation
 2. **Write tests** if the new code meets testing criteria (see [Testing](#testing) section)
-3. **Run `make check-linux`** to verify lint and tests pass locally (catches most issues)
+3. **Run `make check-linux`** to verify lint and tests pass locally
 4. **Commit your changes** with a descriptive message
-5. **Run `make ci-push`** to push and watch CI — this is the **standard workflow for agents**:
-   - Automatically pushes your branch to origin
-   - Watches CI in real-time, showing job status
-   - On failure, extracts errors to `.ci-errors.md` and prints a summary
-   - **If CI fails**: Read the errors, fix them, commit, and run `make ci-push` again
-   - **Repeat until CI passes** — do NOT wait for the user to report errors
+5. **Run remote tests and iterate until they pass**:
+   - For host changes: `make test-host-remote`
+   - For guest changes: `make test-guest-remote`
+   - If permission denied: `git push -u origin HEAD && make ci-watch`
+   - **If tests fail**: Read the error output, fix the issues, commit, and re-run
+   - **Repeat until CI passes** — do NOT wait for user to report errors
 6. Mark the task `[X]` in `TODO.md` only after CI passes
 7. Check if parent task is now complete
 8. If all children complete, mark parent `[X]`
 9. Move to next incomplete task per the algorithm
 
-**Critical — Autonomous CI Iteration**: When `make ci-push` reports failures, the agent MUST:
-1. Read `.ci-errors.md` for the full error report (or use `make ci-errors`)
-2. Fix the issues in the relevant files (listed in "Files to Fix" section)
-3. Commit the fixes
-4. Run `make ci-push` again
-5. Repeat until CI passes
+**Critical — Autonomous CI Iteration**: When remote tests fail, the agent MUST:
+1. Read the error output (it's printed directly to console)
+2. Fix the issues
+3. Commit and re-run the remote tests
+4. Repeat until CI passes
 
-Do NOT ask the user to copy CI errors or wait for user intervention. The workflow extracts errors automatically.
+Do NOT ask the user to copy CI errors. The commands show errors directly.
 
 ## Branch Workflow
 
@@ -243,11 +242,9 @@ make check-host-remote  # run full host CI on macOS remotely
 make check-remote       # run full CI remotely (host on macOS, guest on Windows)
 ```
 
-> **Preferred Workflow**: Use `make ci-push` instead of individual remote test commands. It handles pushing, watching, and error extraction automatically. See [Automated CI Error Workflow](#automated-ci-error-workflow-standard-for-agents).
-
 > **Line Endings**: The `.gitattributes` file automatically handles line endings. New files created on macOS will be normalized to CRLF for C# files when committed.
 
-> **Note (Cursor Cloud Agents)**: If `make ci-push` or remote test commands fail with permission errors (HTTP 403), the agent should push manually and use `make ci-watch`, or create a PR which triggers CI automatically.
+> **Note (Cloud Agents)**: If remote test commands fail with permission errors (HTTP 403), push manually with `git push -u origin HEAD` then use `make ci-watch` to watch the auto-triggered CI.
 
 > **Note (Cursor)**: Host tests (`swift test`) require write access to cache directories outside the workspace (e.g., `~/.cache/clang/ModuleCache`). When running tests via Cursor's shell tool, use `required_permissions: ["all"]` to disable sandboxing.
 #### CI Requirements
@@ -259,41 +256,26 @@ GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`
 
 All four jobs run in parallel. The final **CI** gate job requires all to pass before merge. Run `make check` locally before pushing to catch issues early.
 
-#### Automated CI Error Workflow (Standard for Agents)
-
-This is the **primary workflow for Cursor agents**. It eliminates manual error copying:
+#### Remote Testing Workflow for Agents
 
 ```bash
-# Standard workflow: push, watch, and get errors automatically
-make ci-push
+# Run host tests remotely (macOS CI)
+make test-host-remote
 
-# Watch an already-running CI (if you pushed manually)
+# Run guest tests remotely (Windows CI)  
+make test-guest-remote
+
+# If permission denied, push first then watch existing CI
+git push -u origin HEAD
 make ci-watch
-
-# View last extracted errors (if you need to re-read them)
-make ci-errors
 ```
-
-**How it works:**
-1. `make ci-push` pushes your branch and watches CI in real-time
-2. Shows job status updates as CI runs
-3. On failure, automatically extracts errors to `.ci-errors.md`
-4. Prints error summary to console with file:line references
 
 **Agent iteration loop:**
 ```
-make changes → commit → make ci-push → [CI fails] → read .ci-errors.md → fix → commit → make ci-push → [repeat until pass]
+make changes → commit → make test-*-remote → [fails] → read errors → fix → commit → retry
 ```
 
-The `.ci-errors.md` file contains:
-- List of failed jobs
-- Actual compiler/linter errors (cleaned of noise)
-- "Files to Fix" section with relative paths and line numbers
-
-**Note for Cloud Agents**: If `make ci-push` fails with permission errors, the agent should:
-1. Push the branch manually: `git push -u origin <branch>`
-2. Use `make ci-watch` to watch the CI run
-3. If that also fails, check if there's an existing PR and use `gh run list` to find runs
+Errors are printed directly to console. On failure, `make ci-watch` also saves errors to `.ci-errors`.
 
 ## File Organization
 

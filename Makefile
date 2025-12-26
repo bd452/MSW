@@ -11,7 +11,7 @@ DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
         check-linux install-daemon uninstall-daemon \
         generate-protocol generate-protocol-host generate-protocol-guest generate-test-data \
         validate-protocol validate-protocol-host validate-protocol-guest \
-        ci-watch ci-push ci-errors
+        ci-watch
 
 # Default target
 help:
@@ -56,10 +56,8 @@ help:
 	@echo "    make test-guest-remote GH_TOKEN=ghp_xxx"
 	@echo "  Token requires 'workflow' scope. Create at: https://github.com/settings/tokens/new"
 	@echo ""
-	@echo "CI watching (automated error extraction):"
-	@echo "  ci-watch           Watch latest CI run, extract errors on failure"
-	@echo "  ci-push            Push branch and watch CI (recommended workflow)"
-	@echo "  ci-errors          Show last extracted CI errors"
+	@echo "CI watching:"
+	@echo "  ci-watch           Watch latest CI run for current branch, show errors on failure"
 	@echo ""
 	@echo "Protocol targets:"
 	@echo "  generate-protocol      Regenerate protocol code from shared/protocol.def"
@@ -535,26 +533,12 @@ else
 endif
 
 # ============================================================================
-# CI Watching & Error Extraction
+# CI Watching
 # ============================================================================
-# Automated workflow: push → watch CI → extract errors on failure
-# Errors are written to .ci-errors.md for easy reference
 
-# Watch the latest CI run for your current branch
+# Watch the latest CI run for your current branch, show errors on failure
 ci-watch:
 	@$(REPO_ROOT)/scripts/ci-watch.sh
-
-# Push current branch and watch CI
-ci-push:
-	@$(REPO_ROOT)/scripts/ci-watch.sh --push
-
-# Just show the last CI errors (if any)
-ci-errors:
-	@if [ -f "$(REPO_ROOT)/.ci-errors.md" ]; then \
-		cat "$(REPO_ROOT)/.ci-errors.md"; \
-	else \
-		echo "No CI errors file found. Run 'make ci-watch' or 'make ci-push' first."; \
-	fi
 
 # ============================================================================
 # Daemon management
