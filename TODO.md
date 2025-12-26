@@ -149,7 +149,7 @@
     - [X] Add frame compression (LZ4 or similar) for bandwidth efficiency { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/spice-bridge.md>
     - [X] Integrate FrameStreamingService into WinRunAgentService startup { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
   - [ ] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
+    - [X] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
     - [ ] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [ ] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
   - [ ] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
