@@ -43,6 +43,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -53,6 +54,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             inputService,
             clipboardService,
             shortcutService,
+            dragDropService,
             inbound,
             outbound,
             _logger);
@@ -84,6 +86,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -94,6 +97,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             inputService,
             clipboardService,
             shortcutService,
+            dragDropService,
             inbound,
             outbound,
             _logger);
@@ -144,6 +148,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -154,6 +159,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             inputService,
             clipboardService,
             shortcutService,
+            dragDropService,
             inbound,
             outbound,
             _logger);
@@ -222,6 +228,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -232,6 +239,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             inputService,
             clipboardService,
             shortcutService,
+            dragDropService,
             inbound,
             outbound,
             _logger);
@@ -291,6 +299,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -301,6 +310,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             inputService,
             clipboardService,
             shortcutService,
+            dragDropService,
             inbound,
             outbound,
             _logger);
@@ -350,6 +360,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
         var inputService = new InputInjectionService(_logger);
         using var clipboardService = new ClipboardSyncService(_logger);
         using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
         var inbound = Channel.CreateUnbounded<HostMessage>();
         var outbound = Channel.CreateUnbounded<GuestMessage>();
 
@@ -360,6 +371,7 @@ public sealed class WinRunAgentServiceTests : IDisposable
             inputService,
             clipboardService,
             shortcutService,
+            dragDropService,
             inbound,
             outbound,
             _logger);

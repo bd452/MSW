@@ -1,4 +1,4 @@
-- [ ] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
+- [X] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
   - [X] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/, host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
     - [X] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift } <docs/decisions/spice-bridge.md>
     - [X] Add C shim + pkg-config wiring for libspice-glib { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
@@ -34,7 +34,7 @@
     - [X] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [X] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
 
-- [ ] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
+- [X] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
   - [X] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Implement Win32 hooks + Desktop Duplication feeds { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Serialize metadata + frames onto Spice channels { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
@@ -47,9 +47,9 @@
     - [X] Extract & cache high-res icons for host launchers { guest/WinRunAgent/Services/IconExtractionService.cs } <docs/decisions/protocols.md>
     - [X] Detect Windows shortcuts + notify host for launcher generation { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [X] Transfer icon blobs + metadata via Spice payloads { guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-  - [ ] Drag and drop file ingestion (host → guest) { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/Messages.cs } <docs/decisions/protocols.md>
-    - [ ] Implement Windows-side drop handling (OLE drag/drop) with safe file copy staging { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
-    - [ ] Add unit tests for drag/drop message parsing and validation { guest/WinRunAgent.Tests/MessagesTests.cs } <docs/development.md>
+  - [X] Drag and drop file ingestion (host → guest) { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/Messages.cs, guest/WinRunAgent/Services/DragDropService.cs } <docs/decisions/protocols.md>
+    - [X] Implement Windows-side drop handling (OLE drag/drop) with safe file copy staging { guest/WinRunAgent/Services/WinRunAgentService.cs, guest/WinRunAgent/Services/DragDropService.cs } <docs/decisions/protocols.md>
+    - [X] Add unit tests for drag/drop message parsing and validation { guest/WinRunAgent.Tests/MessagesTests.cs, guest/WinRunAgent.Tests/DragDropServiceTests.cs } <docs/development.md>
   - [X] Logging + diagnostics { guest/WinRunAgent/Services/Logging.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/development.md>
     - [X] Replace mock logger with structured sinks + ETW providers { guest/WinRunAgent/Services/Logging.cs } <docs/development.md>
     - [X] Add failure telemetry + retries for Spice channels { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>

@@ -13,6 +13,7 @@ public sealed class WinRunAgentService : IDisposable
     private readonly IconExtractionService _iconService;
     private readonly InputInjectionService _inputService;
     private readonly ClipboardSyncService _clipboardService;
+    private readonly DragDropService _dragDropService;
     private readonly Channel<HostMessage> _inboundChannel;
     private readonly Channel<GuestMessage> _outboundChannel;
     private readonly IAgentLogger _logger;
@@ -25,6 +26,7 @@ public sealed class WinRunAgentService : IDisposable
         InputInjectionService inputService,
         ClipboardSyncService clipboardService,
         ShortcutSyncService shortcutService,
+        DragDropService dragDropService,
         Channel<HostMessage> inboundChannel,
         Channel<GuestMessage> outboundChannel,
         IAgentLogger logger,
@@ -35,6 +37,7 @@ public sealed class WinRunAgentService : IDisposable
         _iconService = iconService;
         _inputService = inputService;
         _clipboardService = clipboardService;
+        _dragDropService = dragDropService;
         ShortcutService = shortcutService;
         _inboundChannel = inboundChannel;
         _outboundChannel = outboundChannel;
@@ -70,6 +73,7 @@ public sealed class WinRunAgentService : IDisposable
         _iconService = iconService;
         _inputService = new InputInjectionService(logger);
         _clipboardService = new ClipboardSyncService(logger);
+        _dragDropService = new DragDropService(logger);
         _inboundChannel = inboundChannel;
         _outboundChannel = outboundChannel;
         _logger = logger;
@@ -367,9 +371,17 @@ public sealed class WinRunAgentService : IDisposable
             SessionManager.RecordActivity(session.ProcessId);
         }
 
-        // TODO: Full drag/drop implementation requires Windows OLE drag-drop APIs
-        // For now, log the event
-        _logger.Debug($"DragDrop {dragDrop.EventType} for window {dragDrop.WindowId}, {dragDrop.Files.Length} files");
+        // Process drag/drop event
+        var result = _dragDropService.HandleDragDrop(dragDrop);
+
+        if (result.Success)
+        {
+            _logger.Debug($"DragDrop {dragDrop.EventType} for window {dragDrop.WindowId}: {result.StagedPaths.Length} files staged");
+        }
+        else
+        {
+            _logger.Warn($"DragDrop {dragDrop.EventType} failed for window {dragDrop.WindowId}: {result.ErrorMessage}");
+        }
     }
 
     private async Task HandleListSessionsAsync(ListSessionsMessage request)
@@ -437,6 +449,7 @@ public sealed class WinRunAgentService : IDisposable
             GuestCapabilities.WindowTracking |
             GuestCapabilities.IconExtraction |
             GuestCapabilities.ClipboardSync |
+            GuestCapabilities.DragDrop |
             GuestCapabilities.ShortcutDetection |
             GuestCapabilities.HighDpiSupport;
 
@@ -493,6 +506,7 @@ public sealed class WinRunAgentService : IDisposable
         ShortcutService.Dispose();
         SessionManager.Dispose();
         _clipboardService.Dispose();
+        _dragDropService.Dispose();
         _launcher.Dispose();
         _windowTracker.Dispose();
         _disposed = true;
