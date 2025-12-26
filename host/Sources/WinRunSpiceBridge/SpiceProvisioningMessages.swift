@@ -23,7 +23,7 @@ extension GuestProvisioningPhase {
 ///
 /// Sent by the guest during post-install provisioning to report progress
 /// on driver installation, agent setup, and Windows optimization.
-public struct ProvisionProgressMessage: GuestMessage {
+public struct ProvisionProgressMessage: GuestMessage, Sendable {
     public let timestamp: Int64
 
     /// Current provisioning phase.
@@ -57,7 +57,7 @@ public struct ProvisionProgressMessage: GuestMessage {
 ///
 /// Sent when a provisioning step fails. The host may choose to retry,
 /// continue with warnings, or abort provisioning.
-public struct ProvisionErrorMessage: GuestMessage {
+public struct ProvisionErrorMessage: GuestMessage, Sendable {
     public let timestamp: Int64
 
     /// Phase where the error occurred.
@@ -91,7 +91,7 @@ public struct ProvisionErrorMessage: GuestMessage {
 ///
 /// Sent when guest provisioning completes successfully or fails terminally.
 /// Contains final status information about the provisioned VM.
-public struct ProvisionCompleteMessage: GuestMessage {
+public struct ProvisionCompleteMessage: GuestMessage, Sendable {
     public let timestamp: Int64
 
     /// Whether provisioning completed successfully.

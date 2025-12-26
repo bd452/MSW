@@ -132,16 +132,6 @@ extension SetupFlowController: SetupWizardCoordinatorDelegate {
     }
 }
 
-// MARK: - SetupWizardCoordinator Extension
-
-@available(macOS 13, *)
-extension SetupWizardCoordinator {
-    /// Exposes the view controller factory for external use.
-    var viewControllerFactory: ViewControllerFactory {
-        Self.defaultViewControllerFactory
-    }
-}
-
 @available(macOS 13, *)
 private final class SetupPlaceholderViewController: NSViewController {
     private let diskImagePath: URL

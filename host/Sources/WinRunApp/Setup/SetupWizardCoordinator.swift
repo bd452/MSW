@@ -104,7 +104,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
     /// Proceeds from the welcome screen to ISO import.
     public func proceedFromWelcome() {
         guard currentStep == .welcome else {
-            logger.warning("proceedFromWelcome called from invalid step: \(currentStep.rawValue)")
+            logger.warn("proceedFromWelcome called from invalid step: \(currentStep.rawValue)")
             return
         }
         transitionTo(.importISO)
@@ -119,7 +119,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
     /// Starts the Windows installation process.
     public func startInstallation() {
         guard currentStep == .importISO else {
-            logger.warning("startInstallation called from invalid step: \(currentStep.rawValue)")
+            logger.warn("startInstallation called from invalid step: \(currentStep.rawValue)")
             return
         }
         guard let isoPath = selectedISOPath else {
@@ -155,7 +155,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
     /// Retries the installation after a failure.
     public func retry() {
         guard currentStep == .error else {
-            logger.warning("retry called from invalid step: \(currentStep.rawValue)")
+            logger.warn("retry called from invalid step: \(currentStep.rawValue)")
             return
         }
         guard let isoPath = selectedISOPath else {
@@ -172,7 +172,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
     /// Returns to ISO selection to choose a different ISO.
     public func chooseNewISO() {
         guard currentStep == .error || currentStep == .importISO else {
-            logger.warning("chooseNewISO called from invalid step: \(currentStep.rawValue)")
+            logger.warn("chooseNewISO called from invalid step: \(currentStep.rawValue)")
             return
         }
         selectedISOPath = nil
@@ -183,7 +183,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
     /// Performs rollback cleanup and then returns to ISO selection.
     public func rollbackAndChooseNewISO() {
         guard currentStep == .error else {
-            logger.warning("rollbackAndChooseNewISO called from invalid step: \(currentStep.rawValue)")
+            logger.warn("rollbackAndChooseNewISO called from invalid step: \(currentStep.rawValue)")
             return
         }
 
@@ -224,7 +224,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
     private func transitionTo(_ newStep: SetupWizardStep) {
         let oldStep = currentStep
         guard isValidTransition(from: oldStep, to: newStep) else {
-            logger.warning("Invalid transition from \(oldStep.rawValue) to \(newStep.rawValue)")
+            logger.warn("Invalid transition from \(oldStep.rawValue) to \(newStep.rawValue)")
             return
         }
 
