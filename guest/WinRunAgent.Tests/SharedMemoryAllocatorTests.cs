@@ -493,4 +493,137 @@ public sealed class WindowFrameBufferSharedMemoryTests : IDisposable
         // Free bytes should increase after disposing
         Assert.True(statsAfterDispose.FreeBytes >= statsAfterAlloc.FreeBytes);
     }
+
+    [Fact]
+    public void UncompressedModeWorksWithSharedMemory()
+    {
+        var logger = new TestLogger();
+        var config = new PerWindowBufferConfig
+        {
+            Mode = FrameBufferMode.Uncompressed,
+            SlotsPerWindow = 3
+        };
+
+        using var buffer = new WindowFrameBuffer(1, config, logger, _allocator);
+
+        // Uncompressed mode uses exact allocation based on frame dimensions
+        var wasReallocated = buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
+
+        Assert.True(wasReallocated);
+        Assert.True(buffer.IsAllocated);
+        Assert.True(buffer.UsesSharedMemory);
+        Assert.True(buffer.SharedMemoryOffset > 0);
+
+        // Verify slot size matches exact frame size + header
+        var expectedSlotSize = FrameSlotHeader.Size + (1920 * 1080 * 4);
+        Assert.Equal(expectedSlotSize, buffer.SlotSize);
+    }
+
+    [Fact]
+    public void CompressedModeWorksWithSharedMemory()
+    {
+        var logger = new TestLogger();
+        var config = new PerWindowBufferConfig
+        {
+            Mode = FrameBufferMode.Compressed,
+            SlotsPerWindow = 3,
+            CompressedTranches = [1024 * 1024, 5 * 1024 * 1024, 20 * 1024 * 1024]
+        };
+
+        using var buffer = new WindowFrameBuffer(1, config, logger, _allocator);
+
+        // Compressed mode uses tranche-based allocation
+        // Small compressed data should use smallest tranche
+        var wasReallocated = buffer.EnsureAllocated(1920, 1080, 500 * 1024); // 500KB compressed
+
+        Assert.True(wasReallocated);
+        Assert.True(buffer.IsAllocated);
+        Assert.True(buffer.UsesSharedMemory);
+        Assert.Equal(1024 * 1024, buffer.SlotSize); // Should use 1MB tranche
+    }
+
+    [Fact]
+    public void CompressedModeReallocatesToLargerTrancheWithSharedMemory()
+    {
+        var logger = new TestLogger();
+        var config = new PerWindowBufferConfig
+        {
+            Mode = FrameBufferMode.Compressed,
+            SlotsPerWindow = 3,
+            CompressedTranches = [1024 * 1024, 5 * 1024 * 1024, 20 * 1024 * 1024]
+        };
+
+        using var buffer = new WindowFrameBuffer(1, config, logger, _allocator);
+
+        // First allocation uses small tranche
+        _ = buffer.EnsureAllocated(1920, 1080, 500 * 1024);
+        var firstOffset = buffer.SharedMemoryOffset;
+        Assert.Equal(1024 * 1024, buffer.SlotSize);
+
+        // Larger compressed data should trigger reallocation to larger tranche
+        var wasReallocated = buffer.EnsureAllocated(1920, 1080, 2 * 1024 * 1024); // 2MB compressed
+
+        Assert.True(wasReallocated);
+        Assert.True(buffer.UsesSharedMemory);
+        Assert.Equal(5 * 1024 * 1024, buffer.SlotSize); // Should use 5MB tranche
+        // Offset should change due to reallocation
+        Assert.NotEqual(firstOffset, buffer.SharedMemoryOffset);
+    }
+
+    [Fact]
+    public void FallsBackToLocalWhenSharedMemoryFull()
+    {
+        var logger = new TestLogger();
+
+        // Create a small allocator that will run out of space
+        var smallTempFile = Path.Combine(
+            Path.GetDirectoryName(_tempFile)!,
+            "small.shm");
+
+        var smallConfig = new SharedMemoryAllocatorConfig
+        {
+            SharedFilePath = smallTempFile,
+            CreateIfNotExists = true,
+            CreateSizeBytes = 32 * 1024, // Only 32 KB
+            MinimumSizeBytes = 1024
+        };
+
+        using var smallAllocator = new SharedMemoryAllocator(smallConfig, logger);
+        smallAllocator.Initialize();
+
+        var bufferConfig = new PerWindowBufferConfig();
+
+        using var buffer = new WindowFrameBuffer(1, bufferConfig, logger, smallAllocator);
+
+        // Try to allocate more than available - should fall back to local
+        _ = buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4); // ~8MB needed
+
+        Assert.True(buffer.IsAllocated);
+        Assert.False(buffer.UsesSharedMemory); // Should have fallen back to local
+    }
+
+    [Fact]
+    public void FallsBackToLocalWhenAllocatorNotInitialized()
+    {
+        var logger = new TestLogger();
+
+        // Create allocator but don't initialize it
+        var uninitConfig = new SharedMemoryAllocatorConfig
+        {
+            SharedFilePath = "/nonexistent/path/file.shm",
+            CreateIfNotExists = false
+        };
+
+        using var uninitAllocator = new SharedMemoryAllocator(uninitConfig, logger);
+        // Don't call Initialize() - it would fail anyway
+
+        var bufferConfig = new PerWindowBufferConfig();
+
+        using var buffer = new WindowFrameBuffer(1, bufferConfig, logger, uninitAllocator);
+
+        _ = buffer.EnsureAllocated(100, 100, 100 * 100 * 4);
+
+        Assert.True(buffer.IsAllocated);
+        Assert.False(buffer.UsesSharedMemory); // Should use local allocation
+    }
 }
