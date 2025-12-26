@@ -499,6 +499,7 @@ public static class SpiceMessageSerializer
             ProvisionCompleteMessage => SpiceMessageType.ProvisionComplete,
             SessionListMessage => SpiceMessageType.SessionList,
             ShortcutListMessage => SpiceMessageType.ShortcutList,
+            FrameReadyMessage => SpiceMessageType.FrameReady,
             ErrorMessage => SpiceMessageType.Error,
             AckMessage => SpiceMessageType.Ack,
             _ => throw new ArgumentException($"Unknown message type: {message.GetType()}")
@@ -567,6 +568,7 @@ public static class SpiceMessageSerializer
             SpiceMessageType.ProvisionComplete => null,
             SpiceMessageType.SessionList => null,
             SpiceMessageType.ShortcutList => null,
+            SpiceMessageType.FrameReady => null,
             SpiceMessageType.Error => null,
             SpiceMessageType.Ack => null,
 

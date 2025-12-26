@@ -137,11 +137,11 @@
     - [X] Add VZVirtioSocketDeviceConfiguration for vsock communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
     - [X] Configure shared memory region for frame buffer { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
     - [X] Add VZVirtioConsoleDeviceConfiguration for Spice port channel { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/protocols.md>
-  - [ ] Shared memory frame buffer infrastructure { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
-    - [ ] Define shared memory ring buffer protocol for frames { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
-    - [ ] Implement host-side memory mapping and frame reading { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Implement guest-side memory mapping and frame writing { new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
-    - [ ] Add FrameReady notification message type (lightweight, points to shared memory) { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/protocols.md>
+  - [X] Shared memory frame buffer infrastructure { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [X] Define shared memory ring buffer protocol for frames { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [X] Implement host-side memory mapping and frame reading { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift } <docs/decisions/spice-bridge.md>
+    - [X] Implement guest-side memory mapping and frame writing { new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [X] Add FrameReady notification message type (lightweight, points to shared memory) { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/protocols.md>
   - [ ] Guest frame capture and streaming { guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
     - [ ] Create FrameStreamingService to orchestrate capture loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
     - [ ] Wire DesktopDuplicationBridge into frame streaming loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
