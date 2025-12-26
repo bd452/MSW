@@ -111,7 +111,9 @@ final class SetupFlowControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testRoute_needsSetup_diskImageIsDirectory_presentsPlaceholderViewController() {
+    func testRoute_needsSetup_diskImageIsDirectory_presentsWelcomeViewController() {
+        // When the disk image path is a directory (edge case), we still route to the full
+        // setup wizard starting with the welcome screen, not a placeholder
         let diskURL = URL(fileURLWithPath: "/tmp/winrun-directory.img")
         var presentedController: NSViewController?
         let sut = SetupFlowController(
@@ -132,12 +134,7 @@ final class SetupFlowControllerTests: XCTestCase {
         }
 
         XCTAssertNotNil(presentedController)
-        guard let unwrapped = presentedController else {
-            XCTFail("Expected a view controller to be presented")
-            return
-        }
-        let controllerTypeName = String(describing: type(of: unwrapped))
-        XCTAssertTrue(controllerTypeName.contains("SetupPlaceholderViewController"))
+        XCTAssertTrue(presentedController is WelcomeViewController)
     }
 
     // MARK: - Helpers

@@ -12,82 +12,90 @@ final class ISOImportViewController: NSViewController {
     private let validationStatusLabel = NSTextField(labelWithString: "")
     private let warningsLabel = NSTextField(wrappingLabelWithString: "")
     private let dropZoneView = ISODropZoneView()
+    private let continueButton = NSButton(title: "Continue", target: nil, action: nil)
 
     /// Called when a valid ISO file is selected via drag/drop.
     var onISOSelected: ((URL) -> Void)?
 
+    /// Called when the user taps the Continue button after selecting an ISO.
+    var onContinue: (() -> Void)?
+
     private var validationTask: Task<Void, Never>?
     private var lastSelectedISO: URL?
+    private var isISOUsable: Bool = false
 
     override func loadView() {
         view = NSView()
+        configureLabels()
+        configureButtons()
+        installSubviews()
+        activateConstraints()
+    }
 
+    private func configureLabels() {
         titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
         subtitleLabel.font = .systemFont(ofSize: 13)
         subtitleLabel.textColor = .secondaryLabelColor
-
         selectedFileLabel.font = .systemFont(ofSize: 12)
         selectedFileLabel.textColor = .secondaryLabelColor
-
-        chooseFileButton.target = self
-        chooseFileButton.action = #selector(chooseISOFile)
-        chooseFileButton.bezelStyle = .rounded
-
         validationStatusLabel.font = .systemFont(ofSize: 12, weight: .medium)
         validationStatusLabel.textColor = .secondaryLabelColor
         validationStatusLabel.stringValue = "No ISO selected"
-
         warningsLabel.font = .systemFont(ofSize: 12)
         warningsLabel.textColor = .secondaryLabelColor
         warningsLabel.lineBreakMode = .byWordWrapping
         warningsLabel.maximumNumberOfLines = 0
+    }
 
-        dropZoneView.onFileAccepted = { [weak self] url in
-            self?.handleISOSelected(url)
-        }
+    private func configureButtons() {
+        chooseFileButton.target = self
+        chooseFileButton.action = #selector(chooseISOFile)
+        chooseFileButton.bezelStyle = .rounded
+        dropZoneView.onFileAccepted = { [weak self] url in self?.handleISOSelected(url) }
+        continueButton.target = self
+        continueButton.action = #selector(continueToNextStep)
+        continueButton.bezelStyle = .rounded
+        continueButton.keyEquivalent = "\r"
+        continueButton.isEnabled = false
+    }
 
-        for subview in [
-            titleLabel,
-            subtitleLabel,
-            dropZoneView,
-            chooseFileButton,
-            selectedFileLabel,
-            validationStatusLabel,
-            warningsLabel,
-        ] {
+    private func installSubviews() {
+        let allSubviews: [NSView] = [
+            titleLabel, subtitleLabel, dropZoneView, chooseFileButton,
+            selectedFileLabel, validationStatusLabel, warningsLabel, continueButton,
+        ]
+        for subview in allSubviews {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
+    }
 
+    private func activateConstraints() {
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 28),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
-
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-
             dropZoneView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 18),
             dropZoneView.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             dropZoneView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             dropZoneView.heightAnchor.constraint(equalToConstant: 180),
-
             chooseFileButton.topAnchor.constraint(equalTo: dropZoneView.bottomAnchor, constant: 12),
             chooseFileButton.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-
             selectedFileLabel.topAnchor.constraint(equalTo: chooseFileButton.bottomAnchor, constant: 10),
             selectedFileLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             selectedFileLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-
             validationStatusLabel.topAnchor.constraint(equalTo: selectedFileLabel.bottomAnchor, constant: 8),
             validationStatusLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             validationStatusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-
             warningsLabel.topAnchor.constraint(equalTo: validationStatusLabel.bottomAnchor, constant: 8),
             warningsLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             warningsLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            warningsLabel.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
+            continueButton.topAnchor.constraint(greaterThanOrEqualTo: warningsLabel.bottomAnchor, constant: 20),
+            continueButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            continueButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
         ])
     }
 
@@ -132,6 +140,10 @@ final class ISOImportViewController: NSViewController {
             validationStatusLabel.textColor = .secondaryLabelColor
         }
 
+        // Enable continue button if the ISO is usable
+        isISOUsable = result.isUsable
+        continueButton.isEnabled = result.isUsable
+
         if result.warnings.isEmpty {
             warningsLabel.stringValue = result.isRecommended
                 ? "Looks good — this is the recommended Windows edition for WinRun."
@@ -152,6 +164,11 @@ final class ISOImportViewController: NSViewController {
                 return "\(prefix): \(warning.message)"
             }
             .joined(separator: "\n\n")
+    }
+
+    @objc private func continueToNextStep() {
+        guard lastSelectedISO != nil, isISOUsable else { return }
+        onContinue?()
     }
 
     @objc private func chooseISOFile() {

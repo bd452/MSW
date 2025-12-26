@@ -17,16 +17,16 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         let preflight = ProvisioningPreflight.evaluate()
         let setupFlowController = SetupFlowController(preflight: preflight)
         self.setupFlowController = setupFlowController
-        setupFlowController.routeToSetupOrNormalOperation {
+        setupFlowController.routeToSetupOrNormalOperation { [self] in
             Task {
                 do {
-                    _ = try await daemonClient.ensureVMRunning()
+                    _ = try await self.daemonClient.ensureVMRunning()
                     let executable = arguments.dropFirst().first ?? "C:/Windows/System32/notepad.exe"
                     let request = ProgramLaunchRequest(windowsPath: executable)
-                    try await daemonClient.executeProgram(request)
-                    windowController.presentWindow(title: executable)
+                    try await self.daemonClient.executeProgram(request)
+                    self.windowController.presentWindow(title: executable)
                 } catch {
-                    logger.error("Failed to start Windows program: \(error)")
+                    self.logger.error("Failed to start Windows program: \(error)")
                 }
             }
         }

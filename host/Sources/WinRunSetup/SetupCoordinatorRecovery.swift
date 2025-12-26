@@ -14,7 +14,7 @@ extension SetupCoordinator {
     /// - Returns: The result of the rollback operation.
     @discardableResult
     public func rollback() async -> RollbackResult {
-        guard canPerformRollback else {
+        guard canRetry else {
             return RollbackResult(
                 success: false,
                 freedBytes: 0,
@@ -41,7 +41,8 @@ extension SetupCoordinator {
         if FileManager.default.fileExists(atPath: diskPath.path) {
             do {
                 // Get size before deletion
-                freedBytes = (try? getDiskUsageForRollback(at: diskPath)) ?? 0
+                let attrs = try? FileManager.default.attributesOfItem(atPath: diskPath.path)
+                freedBytes = (attrs?[.size] as? UInt64) ?? 0
                 try deleteDiskImageForRollback(at: diskPath)
             } catch {
                 rollbackError = (error as? WinRunError) ?? WinRunError.wrap(error, context: "Rollback")

@@ -6,6 +6,11 @@ import Foundation
 final class WelcomeViewController: NSViewController {
     private static let microsoftWindowsDownloadURL = URL(string: "https://www.microsoft.com/software-download/windows11")!
 
+    /// Called when the user taps the Continue button.
+    var onContinue: (() -> Void)?
+
+    private let continueButton = NSButton(title: "Continue", target: nil, action: nil)
+
     override func loadView() {
         view = NSView()
 
@@ -18,7 +23,7 @@ final class WelcomeViewController: NSViewController {
         )
         subtitle.font = .systemFont(ofSize: 14)
 
-        let requirementsTitle = NSTextField(labelWithString: "What you’ll need")
+        let requirementsTitle = NSTextField(labelWithString: "What you'll need")
         requirementsTitle.font = .systemFont(ofSize: 15, weight: .semibold)
 
         let requirementsBody = NSTextField(wrappingLabelWithString: """
@@ -39,7 +44,12 @@ final class WelcomeViewController: NSViewController {
         let downloadButton = NSButton(title: "Get Windows from Microsoft…", target: self, action: #selector(openMicrosoftDownload))
         downloadButton.bezelStyle = .rounded
 
-        for subview in [title, subtitle, requirementsTitle, requirementsBody, recommendation, downloadButton] {
+        continueButton.target = self
+        continueButton.action = #selector(continueToNextStep)
+        continueButton.bezelStyle = .rounded
+        continueButton.keyEquivalent = "\r"
+
+        for subview in [title, subtitle, requirementsTitle, requirementsBody, recommendation, downloadButton, continueButton] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -67,11 +77,18 @@ final class WelcomeViewController: NSViewController {
 
             downloadButton.topAnchor.constraint(equalTo: recommendation.bottomAnchor, constant: 16),
             downloadButton.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            downloadButton.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
+
+            continueButton.topAnchor.constraint(greaterThanOrEqualTo: downloadButton.bottomAnchor, constant: 20),
+            continueButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            continueButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
         ])
     }
 
     @objc private func openMicrosoftDownload() {
         NSWorkspace.shared.open(Self.microsoftWindowsDownloadURL)
+    }
+
+    @objc private func continueToNextStep() {
+        onContinue?()
     }
 }

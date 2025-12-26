@@ -191,18 +191,28 @@ public struct ProvisioningProgress: Sendable, Equatable {
     public let message: String
     public let estimatedSecondsRemaining: Int?
 
+    /// The current sub-phase within `installingWindows` phase (nil for other phases).
+    public let installationSubPhase: InstallationPhase?
+
+    /// Progress within the current sub-phase (0.0 to 1.0).
+    public let subPhaseProgress: Double?
+
     public init(
         phase: ProvisioningPhase,
         phaseProgress: Double = 0.0,
         overallProgress: Double = 0.0,
         message: String = "",
-        estimatedSecondsRemaining: Int? = nil
+        estimatedSecondsRemaining: Int? = nil,
+        installationSubPhase: InstallationPhase? = nil,
+        subPhaseProgress: Double? = nil
     ) {
         self.phase = phase
         self.phaseProgress = min(1.0, max(0.0, phaseProgress))
         self.overallProgress = min(1.0, max(0.0, overallProgress))
         self.message = message.isEmpty ? phase.displayName : message
         self.estimatedSecondsRemaining = estimatedSecondsRemaining
+        self.installationSubPhase = installationSubPhase
+        self.subPhaseProgress = subPhaseProgress
     }
 
     public init(from state: ProvisioningState, estimatedSecondsRemaining: Int? = nil) {
@@ -211,6 +221,28 @@ public struct ProvisioningProgress: Sendable, Equatable {
         self.overallProgress = state.overallProgress
         self.message = state.message
         self.estimatedSecondsRemaining = estimatedSecondsRemaining
+        self.installationSubPhase = nil
+        self.subPhaseProgress = nil
+    }
+
+    /// Creates a progress update with installation sub-phase information.
+    public static func withInstallationSubPhase(
+        phase: ProvisioningPhase,
+        phaseProgress: Double,
+        overallProgress: Double,
+        message: String,
+        installationPhase: InstallationPhase,
+        subPhaseProgress: Double
+    ) -> ProvisioningProgress {
+        ProvisioningProgress(
+            phase: phase,
+            phaseProgress: phaseProgress,
+            overallProgress: overallProgress,
+            message: message,
+            estimatedSecondsRemaining: nil,
+            installationSubPhase: installationPhase,
+            subPhaseProgress: subPhaseProgress
+        )
     }
 }
 

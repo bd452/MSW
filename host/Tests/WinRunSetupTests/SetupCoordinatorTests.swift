@@ -224,6 +224,39 @@ final class SetupCoordinatorTests: XCTestCase {
         // Should have received a completion notification
         XCTAssertTrue(delegateMock.didComplete)
     }
+
+    // MARK: - Sub-Phase Progress Tests
+
+    func testProvisioningProgress_subPhaseInfo_includedWhenPresent() async throws {
+        // Create a progress update with sub-phase information
+        let progress = ProvisioningProgress.withInstallationSubPhase(
+            phase: .installingWindows,
+            phaseProgress: 0.5,
+            overallProgress: 0.3,
+            message: "Copying files...",
+            installationPhase: .copyingFiles,
+            subPhaseProgress: 0.5
+        )
+
+        // Verify sub-phase fields
+        XCTAssertEqual(progress.installationSubPhase, .copyingFiles)
+        XCTAssertEqual(progress.subPhaseProgress, 0.5)
+        XCTAssertEqual(progress.phase, .installingWindows)
+    }
+
+    func testProvisioningProgress_subPhaseInfo_nilWhenNotInInstallingPhase() async throws {
+        // Create a progress update without sub-phase information
+        let progress = ProvisioningProgress(
+            phase: .creatingDisk,
+            phaseProgress: 0.8,
+            overallProgress: 0.2,
+            message: "Creating disk..."
+        )
+
+        // Verify sub-phase fields are nil
+        XCTAssertNil(progress.installationSubPhase)
+        XCTAssertNil(progress.subPhaseProgress)
+    }
 }
 
 // MARK: - Test Helpers

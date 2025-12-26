@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import WinRunSetup
 import WinRunShared
 
 /// Setup wizard screen for displaying an actionable provisioning error.
@@ -19,18 +20,39 @@ final class SetupErrorViewController: NSViewController {
         let isPrimary: Bool
         let handler: (() -> Void)?
 
+        /// Whether this action should be shown as enabled even without a handler.
+        ///
+        /// Use this for informational actions (e.g., "Review error details") that don't
+        /// have a callback but should still be visible.
+        let isInformational: Bool
+
         init(
             id: RecoveryActionID,
             title: String,
             help: String? = nil,
             isPrimary: Bool = false,
-            handler: (() -> Void)? = nil
+            handler: (() -> Void)? = nil,
+            isInformational: Bool = false
         ) {
             self.id = id
             self.title = title
             self.help = help
             self.isPrimary = isPrimary
             self.handler = handler
+            self.isInformational = isInformational
+
+            // Enforce that primary actions have handlers
+            if isPrimary && handler == nil {
+                assertionFailure(
+                    "Primary recovery action '\(id.rawValue)' must have a handler wired. "
+                    + "This is likely a coordinator bug."
+                )
+            }
+        }
+
+        /// Whether this action's button should be enabled.
+        var isEnabled: Bool {
+            handler != nil || isInformational
         }
     }
 
@@ -46,10 +68,12 @@ final class SetupErrorViewController: NSViewController {
     // MARK: - State
 
     private let error: Error
+    private let failureContext: SetupFailureContext?
     private let recoveryActions: [RecoveryAction]
 
     private static let supportURL = URL(string: "https://github.com/winrun/winrun/issues")!
 
+    /// Creates an error view controller with a basic error.
     init(
         error: Error,
         onRetrySetup: (() -> Void)? = nil,
@@ -58,6 +82,7 @@ final class SetupErrorViewController: NSViewController {
         recoveryActions: [RecoveryAction] = []
     ) {
         self.error = error
+        self.failureContext = nil
         self.recoveryActions = recoveryActions.isEmpty
             ? Self.defaultRecoveryActions(
                 onRetrySetup: onRetrySetup,
@@ -65,6 +90,26 @@ final class SetupErrorViewController: NSViewController {
                 onContactSupport: onContactSupport
             )
             : recoveryActions
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    /// Creates an error view controller with rich failure context.
+    init(
+        failureContext: SetupFailureContext,
+        onRetrySetup: (() -> Void)? = nil,
+        onChooseDifferentISO: (() -> Void)? = nil,
+        onRollback: (() -> Void)? = nil,
+        onContactSupport: (() -> Void)? = nil
+    ) {
+        self.error = failureContext.error
+        self.failureContext = failureContext
+        self.recoveryActions = Self.recoveryActionsFromContext(
+            failureContext,
+            onRetrySetup: onRetrySetup,
+            onChooseDifferentISO: onChooseDifferentISO,
+            onRollback: onRollback,
+            onContactSupport: onContactSupport
+        )
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -149,7 +194,7 @@ final class SetupErrorViewController: NSViewController {
                 button.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
             }
             button.identifier = NSUserInterfaceItemIdentifier(action.id.rawValue)
-            button.isEnabled = action.handler != nil
+            button.isEnabled = action.isEnabled
 
             row.addArrangedSubview(button)
 
@@ -201,12 +246,18 @@ final class SetupErrorViewController: NSViewController {
                 title: "Review error details",
                 help: "Copy the error above into your support request. Also ensure you have enough free disk space.",
                 isPrimary: false,
-                handler: nil
+                handler: nil,
+                isInformational: true
             ),
         ]
     }
 
     private func formatDetails(error: Error) -> String {
+        // Use failure context for richer details if available
+        if let context = failureContext {
+            return formatContextDetails(context)
+        }
+
         if let winRunError = error as? WinRunError {
             return winRunError.localizedDescription
         }
@@ -217,6 +268,111 @@ final class SetupErrorViewController: NSViewController {
         }
 
         return String(describing: error)
+    }
+
+    private func formatContextDetails(_ context: SetupFailureContext) -> String {
+        var parts: [String] = []
+
+        // Summary
+        parts.append(context.summary)
+
+        // Phase info
+        parts.append("Failed during: \(context.failedPhase.displayName)")
+
+        // Disk space info if relevant
+        if let freeSpace = context.freeDiskSpaceBytes {
+            let formatter = ByteCountFormatter()
+            formatter.countStyle = .file
+            parts.append("Free disk space: \(formatter.string(fromByteCount: Int64(freeSpace)))")
+        }
+
+        // ISO info if available
+        if let isoPath = context.isoPath {
+            parts.append("ISO: \(isoPath.lastPathComponent)")
+        }
+
+        // Technical details
+        parts.append("")
+        parts.append("Technical details:")
+        parts.append(context.technicalDetails)
+
+        return parts.joined(separator: "\n")
+    }
+
+    private static func recoveryActionsFromContext(
+        _ context: SetupFailureContext,
+        onRetrySetup: (() -> Void)?,
+        onChooseDifferentISO: (() -> Void)?,
+        onRollback: (() -> Void)?,
+        onContactSupport: (() -> Void)?
+    ) -> [RecoveryAction] {
+        var actions: [RecoveryAction] = []
+
+        for suggestedAction in context.suggestedActions {
+            switch suggestedAction {
+            case .retry:
+                actions.append(RecoveryAction(
+                    id: .retrySetup,
+                    title: suggestedAction.displayName,
+                    help: suggestedAction.helpText,
+                    isPrimary: actions.isEmpty,  // First action is primary
+                    handler: onRetrySetup
+                ))
+
+            case .chooseDifferentISO:
+                actions.append(RecoveryAction(
+                    id: .chooseDifferentISO,
+                    title: suggestedAction.displayName,
+                    help: suggestedAction.helpText,
+                    isPrimary: actions.isEmpty,
+                    handler: onChooseDifferentISO
+                ))
+
+            case .rollback:
+                if context.cleanupRecommended {
+                    actions.append(RecoveryAction(
+                        id: .retrySetup,
+                        title: suggestedAction.displayName,
+                        help: suggestedAction.helpText,
+                        isPrimary: false,
+                        handler: onRollback
+                    ))
+                }
+
+            case .contactSupport:
+                let handler = onContactSupport ?? { NSWorkspace.shared.open(supportURL) }
+                actions.append(RecoveryAction(
+                    id: .contactSupport,
+                    title: suggestedAction.displayName,
+                    help: suggestedAction.helpText,
+                    isPrimary: false,
+                    handler: handler
+                ))
+
+            default:
+                // Informational actions without handlers
+                actions.append(RecoveryAction(
+                    id: .reviewDetails,
+                    title: suggestedAction.displayName,
+                    help: suggestedAction.helpText,
+                    isPrimary: false,
+                    handler: nil,
+                    isInformational: true
+                ))
+            }
+        }
+
+        // Always add review details at the end
+        actions.append(RecoveryAction(
+            id: .reviewDetails,
+            title: "Review error details",
+            help: "Copy the error above into your support request.",
+            isPrimary: false,
+            handler: nil,
+            isInformational: true
+        ))
+
+        return actions
     }
 
     @objc private func runRecoveryAction(_ sender: NSButton) {

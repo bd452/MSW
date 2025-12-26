@@ -53,8 +53,11 @@ jobs:
           key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build') }}
           restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
+        timeout-minutes: 15
         run: |
-          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          echo "Installing dependencies from Brewfile..."
+          brew bundle install --file=.github/Brewfile.host-build --no-upgrade --verbose
+          echo "Verifying spice-gtk installation..."
           pkg-config --modversion spice-client-glib-2.0
       - name: Validate protocol
         run: make validate-protocol-host
@@ -79,8 +82,9 @@ jobs:
           key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-lint') }}
           restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
       - name: Install SwiftLint
+        timeout-minutes: 10
         run: |
-          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
+          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade --verbose
           swiftlint version
       - name: Run SwiftLint
         working-directory: host

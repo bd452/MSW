@@ -1,53 +1,81 @@
 import AppKit
 import Foundation
+import WinRunSetup
 import WinRunShared
 
 /// Routes WinRun.app startup into either the setup wizard or normal operation.
 ///
-/// The real setup wizard UI is implemented incrementally. Until then, we present a
-/// simple placeholder window that makes the required next step obvious.
+/// When setup is needed, this controller creates a SetupWizardCoordinator to manage
+/// the full setup flow from welcome through to completion or error recovery.
 @available(macOS 13, *)
 final class SetupFlowController {
     typealias SetupWindowPresenter = (_ controller: NSViewController) -> NSWindow
+    typealias NormalOperationBlock = () -> Void
 
     private let logger: Logger
     private let preflight: ProvisioningPreflightResult
     private let presentSetupWindow: SetupWindowPresenter
+    private let setupCoordinatorFactory: () -> SetupCoordinator
 
     private var window: NSWindow?
+    private var wizardCoordinator: SetupWizardCoordinator?
+    private var normalOperationBlock: NormalOperationBlock?
 
     init(
         preflight: ProvisioningPreflightResult,
         logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupFlowController"),
-        presentSetupWindow: @escaping SetupWindowPresenter = SetupFlowController.defaultSetupWindowPresenter
+        presentSetupWindow: @escaping SetupWindowPresenter = SetupFlowController.defaultSetupWindowPresenter,
+        setupCoordinatorFactory: @escaping () -> SetupCoordinator = { SetupCoordinator() }
     ) {
         self.preflight = preflight
         self.logger = logger
         self.presentSetupWindow = presentSetupWindow
+        self.setupCoordinatorFactory = setupCoordinatorFactory
     }
 
-    func routeToSetupOrNormalOperation(normalOperation: () -> Void) {
+    func routeToSetupOrNormalOperation(normalOperation: @escaping NormalOperationBlock) {
         switch preflight {
         case .ready:
             normalOperation()
 
         case .needsSetup(let diskImagePath, let reason):
             logger.info("Routing to setup UI. diskImagePath=\(diskImagePath.path) reason=\(reason.rawValue)")
-            presentSetupPlaceholder(diskImagePath: diskImagePath, reason: reason)
+            normalOperationBlock = normalOperation
+            presentSetupWizard(diskImagePath: diskImagePath, reason: reason)
         }
     }
 
-    private func presentSetupPlaceholder(diskImagePath: URL, reason: ProvisioningPreflightResult.Reason) {
-        let controller: NSViewController
-        switch reason {
-        case .diskImageMissing:
-            controller = WelcomeViewController()
-        case .diskImageIsDirectory:
-            controller = SetupPlaceholderViewController(
-                diskImagePath: diskImagePath,
-                reason: reason
-            )
+    private func presentSetupWizard(diskImagePath: URL, reason: ProvisioningPreflightResult.Reason) {
+        let setupCoordinator = setupCoordinatorFactory()
+        let wizard = SetupWizardCoordinator(
+            setupCoordinator: setupCoordinator,
+            delegate: self,
+            logger: logger
+        )
+
+        // Configure the SetupCoordinator to report progress to the wizard
+        Task {
+            await setupCoordinator.setDelegate(wizard)
         }
+
+        wizardCoordinator = wizard
+
+        // Present the initial view
+        let initialController = wizard.createViewController(for: .welcome)
+        let window = presentSetupWindow(initialController)
+        window.title = "WinRun Setup"
+        self.window = window
+
+        wizard.setWindow(window)
+        wizard.start()
+    }
+
+    /// Presents a legacy placeholder for edge cases (e.g., disk path is a directory).
+    private func presentSetupPlaceholder(diskImagePath: URL, reason: ProvisioningPreflightResult.Reason) {
+        let controller = SetupPlaceholderViewController(
+            diskImagePath: diskImagePath,
+            reason: reason
+        )
         self.window = presentSetupWindow(controller)
     }
 
@@ -55,7 +83,7 @@ final class SetupFlowController {
         NSApplication.shared.activate(ignoringOtherApps: true)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -65,6 +93,42 @@ final class SetupFlowController {
         window.center()
         window.makeKeyAndOrderFront(nil)
         return window
+    }
+}
+
+// MARK: - SetupWizardCoordinatorDelegate
+
+@available(macOS 13, *)
+extension SetupFlowController: SetupWizardCoordinatorDelegate {
+    func coordinatorDidChangeStep(
+        _ coordinator: SetupWizardCoordinator,
+        from oldStep: SetupWizardStep,
+        to newStep: SetupWizardStep
+    ) {
+        logger.debug("Setup wizard step: \(oldStep.rawValue) → \(newStep.rawValue)")
+    }
+
+    func coordinatorDidRequestViewController(
+        _ coordinator: SetupWizardCoordinator,
+        for step: SetupWizardStep
+    ) -> NSViewController {
+        // Use the coordinator's view controller factory
+        return coordinator.createViewController(for: step)
+    }
+
+    func coordinatorDidFinish(_ coordinator: SetupWizardCoordinator, success: Bool) {
+        logger.info("Setup wizard finished. success=\(success)")
+
+        if success {
+            // Close setup window and proceed to normal operation
+            window?.close()
+            window = nil
+            wizardCoordinator = nil
+            normalOperationBlock?()
+        } else {
+            // User cancelled or gave up - quit the app
+            NSApplication.shared.terminate(nil)
+        }
     }
 }
 
