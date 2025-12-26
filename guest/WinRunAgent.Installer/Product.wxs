@@ -62,44 +62,11 @@
         <!-- Agent executable and service registration -->
         <ComponentGroup Id="AgentComponents" Directory="INSTALLFOLDER">
             <Component Id="AgentExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+                <!-- Main executable -->
                 <File
                     Id="WinRunAgentExe"
                     Source="$(var.WinRunAgent.TargetDir)WinRunAgent.exe"
-                    KeyPath="yes">
-                    <!--
-                        Service registration using the ServiceInstall element.
-                        The service runs as LocalSystem for full access to window
-                        tracking, input injection, and desktop duplication APIs.
-                    -->
-                    <ServiceInstall
-                        Id="WinRunAgentService"
-                        Name="WinRunAgent"
-                        DisplayName="WinRun Agent"
-                        Description="WinRun guest agent for host-guest communication. Provides window tracking, program launching, and clipboard sync between macOS host and Windows guest."
-                        Type="ownProcess"
-                        Start="auto"
-                        ErrorControl="normal"
-                        Account="LocalSystem">
-                        <!-- Service configuration for recovery -->
-                        <ServiceConfig
-                            DelayedAutoStart="no"
-                            OnInstall="yes"
-                            OnReinstall="yes" />
-                    </ServiceInstall>
-                    <!--
-                        Control service during install/uninstall:
-                        - Start after install completes
-                        - Stop before upgrade and uninstall
-                        - Remove on uninstall
-                    -->
-                    <ServiceControl
-                        Id="WinRunAgentServiceControl"
-                        Name="WinRunAgent"
-                        Start="install"
-                        Stop="both"
-                        Remove="uninstall"
-                        Wait="yes" />
-                </File>
+                    KeyPath="yes" />
 
                 <!--
                     Framework-dependent deployment files.
@@ -111,6 +78,35 @@
                 <File
                     Id="WinRunAgentRuntimeConfigJson"
                     Source="$(var.WinRunAgent.TargetDir)WinRunAgent.runtimeconfig.json" />
+
+                <!--
+                    Service registration using the ServiceInstall element.
+                    The service runs as LocalSystem for full access to window
+                    tracking, input injection, and desktop duplication APIs.
+                -->
+                <ServiceInstall
+                    Id="WinRunAgentService"
+                    Name="WinRunAgent"
+                    DisplayName="WinRun Agent"
+                    Description="WinRun guest agent for host-guest communication. Provides window tracking, program launching, and clipboard sync between macOS host and Windows guest."
+                    Type="ownProcess"
+                    Start="auto"
+                    ErrorControl="normal"
+                    Account="LocalSystem" />
+
+                <!--
+                    Control service during install/uninstall:
+                    - Start after install completes
+                    - Stop before upgrade and uninstall
+                    - Remove on uninstall
+                -->
+                <ServiceControl
+                    Id="WinRunAgentServiceControl"
+                    Name="WinRunAgent"
+                    Start="install"
+                    Stop="both"
+                    Remove="uninstall"
+                    Wait="yes" />
             </Component>
 
             <!--
