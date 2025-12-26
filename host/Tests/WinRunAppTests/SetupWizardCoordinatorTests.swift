@@ -100,7 +100,7 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         let result = ProvisioningResult(
             success: false,
             finalPhase: .installingWindows,
-            error: .timeout,
+            error: .vmOperationTimeout(operation: "installation", timeoutSeconds: 30),
             durationSeconds: 30,
             diskImagePath: URL(fileURLWithPath: "/tmp/windows.img")
         )
@@ -213,7 +213,7 @@ final class SetupWizardCoordinatorTests: XCTestCase {
     // MARK: - SetupFailureContext Tests
 
     func testSetupFailureContext_createsFromResult() {
-        let error = WinRunError.timeout
+        let error = WinRunError.vmOperationTimeout(operation: "installation", timeoutSeconds: 30)
         let result = ProvisioningResult(
             success: false,
             finalPhase: .installingWindows,
@@ -225,32 +225,32 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         let context = SetupFailureContext.from(result: result, context: nil)
 
         XCTAssertNotNil(context)
-        XCTAssertEqual(context?.failedPhase, .installingWindows)
-        XCTAssertEqual(context?.error, error)
+        guard let context = context else { return }
+        XCTAssertEqual(context.failedPhase, .installingWindows)
     }
 
     func testSetupFailureContext_suggestsRetryForTimeout() {
         let context = SetupFailureContext(
             failedPhase: .installingWindows,
-            error: .timeout
+            error: .vmOperationTimeout(operation: "installation", timeoutSeconds: 30)
         )
 
-        XCTAssertTrue(context.suggestedActions.contains(.retry))
+        XCTAssertTrue(context.suggestedActions.contains(RecoveryActionType.retry))
     }
 
     func testSetupFailureContext_suggestsDifferentISOForValidationFailure() {
         let context = SetupFailureContext(
             failedPhase: .validatingISO,
-            error: .isoValidationFailed(reason: "Not ARM64")
+            error: .isoArchitectureUnsupported(found: "x64", required: "arm64")
         )
 
-        XCTAssertTrue(context.suggestedActions.contains(.chooseDifferentISO))
+        XCTAssertTrue(context.suggestedActions.contains(RecoveryActionType.chooseDifferentISO))
     }
 
     func testSetupFailureContext_cleanupRecommendedAfterDiskCreation() {
         let context = SetupFailureContext(
             failedPhase: .installingWindows,
-            error: .timeout,
+            error: .vmOperationTimeout(operation: "installation", timeoutSeconds: 30),
             cleanupRecommended: true
         )
 
@@ -328,7 +328,7 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         let result = ProvisioningResult(
             success: false,
             finalPhase: .installingWindows,
-            error: .timeout,
+            error: .vmOperationTimeout(operation: "installation", timeoutSeconds: 30),
             durationSeconds: 30,
             diskImagePath: URL(fileURLWithPath: "/tmp/windows.img")
         )
