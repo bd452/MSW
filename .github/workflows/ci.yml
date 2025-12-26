@@ -131,7 +131,10 @@ jobs:
         run: dotnet --version
       - name: Check formatting
         working-directory: guest
-        run: dotnet format WinRunAgent.sln --verify-no-changes --verbosity diagnostic
+        # Format only C# projects (not WiX installer which has different file types)
+        run: |
+          dotnet format WinRunAgent/WinRunAgent.csproj --verify-no-changes --verbosity diagnostic
+          dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj --verify-no-changes --verbosity diagnostic
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Final gate - require this single check in branch protection

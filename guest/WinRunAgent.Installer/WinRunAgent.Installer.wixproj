@@ -6,9 +6,7 @@
     Build this project on Windows only:
       dotnet build WinRunAgent.Installer.wixproj -c Release
     
-    For cross-platform solution builds, exclude this project:
-      dotnet build WinRunAgent.sln --ignore-failed-sources
-    Or build specific projects:
+    For cross-platform solution builds, build specific projects instead:
       dotnet build WinRunAgent/WinRunAgent.csproj
       dotnet build WinRunAgent.Tests/WinRunAgent.Tests.csproj
   -->
