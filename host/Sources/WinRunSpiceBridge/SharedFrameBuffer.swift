@@ -317,7 +317,7 @@ public final class SharedFrameBufferReader {
         let data = Data(bytes: dataPtr, count: dataSize)
 
         let flags = SharedFrameBufferFlags(rawValue: header.flags)
-        let format = SpicePixelFormat(rawValue: slotHeader.format) ?? .bgra32
+        let format = SpicePixelFormat(rawValue: UInt8(truncatingIfNeeded: slotHeader.format)) ?? .bgra32
 
         let frame = SharedFrame(
             windowId: slotHeader.windowId,
