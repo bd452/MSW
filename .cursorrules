@@ -58,21 +58,21 @@ Before starting any task:
 After completing a task:
 1. Verify implementation matches documentation
 2. **Write tests** if the new code meets testing criteria (see [Testing](#testing) section)
+   2.a. If the new code makes changes to areas with existing test coverage, update the relevant tests if necessary.
 3. **Run `make check-linux`** to verify lint and tests pass locally
-4. **Commit your changes** with a descriptive message
-5. **Run remote tests and iterate until they pass**:
+4. **Run remote tests and iterate until they pass**:
    - For host changes: `make test-host-remote`
    - For guest changes: `make test-guest-remote`
    - If permission denied: `git push -u origin HEAD && make ci-watch`
    - **If tests fail**: Read the error output, fix the issues, commit, and re-run
    - **Repeat until CI passes** — do NOT wait for user to report errors
-6. Mark the task `[X]` in `TODO.md` only after CI passes
-7. Check if parent task is now complete
-8. If all children complete, mark parent `[X]`
-9. Move to next incomplete task per the algorithm
+5. Mark the task `[X]` in `TODO.md` only after CI passes
+6. Check if parent task is now complete
+7. If all children complete, mark parent `[X]`
+8. Move to next incomplete task per the algorithm
 
 **Critical — Autonomous CI Iteration**: When remote tests fail, the agent MUST:
-1. Read the error output (it's printed directly to console)
+1. Read the error output (printed directly to console)
 2. Fix the issues
 3. Commit and re-run the remote tests
 4. Repeat until CI passes
@@ -83,7 +83,7 @@ Do NOT ask the user to copy CI errors. The commands show errors directly.
 
 ### Scope: One Second-Level Task Per Branch
 
-Each branch/PR corresponds to **one second-level task** in TODO.md. A chat session should complete all third-level subtasks under that second-level task before the branch is merged.
+Each branch/PR corresponds to **one second-level task** in TODO.md. A chat session should complete all third-level subtasks under that second-level task before the branch is merged. Before starting a task check the current branch.
 
 **Example TODO.md structure:**
 ```
@@ -98,7 +98,7 @@ For the above, you would create branch `program-launch-session-management` and c
 
 ### When to Create a New Branch
 
-Create a new feature branch **only** at the **start of a new chat session** when beginning TODO.md work:
+Create a new feature branch **only** at the **start of a new chat session** when beginning TODO.md work, and when we are not already on a fresh branch:
 
 ```bash
 git checkout main
@@ -218,35 +218,28 @@ Tests are not optional for qualifying code — CI will enforce this by requiring
 
 #### Running Tests & Checks
 ```bash
-# Full CI check (lint + build + test) — run before pushing (requires macOS for host)
+# Full CI check (lint + build + test) — run before pushing
 make check
-
-# Linux-friendly check (lint both + guest build/test only)
-make check-linux
 
 # All tests only
 make test
 
-# Host only (requires macOS)
+# Host only
 make check-host   # lint + build + test
 make test-host    # test only
 
-# Guest only (requires .NET SDK)
-make check-guest        # lint + build + test (local) - NOTE: doesn't catch CRLF issues on macOS
+# Guest only (requires .NET 8 SDK or use remote)
+make check-guest        # lint + build + test (local)
 make test-guest         # test only (local)
-make test-guest-remote  # test on Windows via GitHub Actions (REQUIRED for guest code changes)
+make test-guest-remote  # test on Windows via GitHub Actions
+make test-host-remote   # test on macOS via GitHub Actions
 
-# Remote execution (opt-in, via GitHub Actions)
-make test-host-remote   # run host tests on macOS remotely
-make check-host-remote  # run full host CI on macOS remotely
-make check-remote       # run full CI remotely (host on macOS, guest on Windows)
+# Watch existing CI run (after pushing)
+make ci-watch           # finds latest run for current branch, shows errors on failure
 ```
 
 > **Line Endings**: The `.gitattributes` file automatically handles line endings. New files created on macOS will be normalized to CRLF for C# files when committed.
 
-> **Note (Cloud Agents)**: If remote test commands fail with permission errors (HTTP 403), push manually with `git push -u origin HEAD` then use `make ci-watch` to watch the auto-triggered CI.
-
-> **Note (Cursor)**: Host tests (`swift test`) require write access to cache directories outside the workspace (e.g., `~/.cache/clang/ModuleCache`). When running tests via Cursor's shell tool, use `required_permissions: ["all"]` to disable sandboxing.
 #### CI Requirements
 GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`:
 - **Host Build & Test** — `swift build` + `swift test` on macOS
@@ -255,27 +248,6 @@ GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`
 - **Guest Lint** — `dotnet format --verify-no-changes` on Windows
 
 All four jobs run in parallel. The final **CI** gate job requires all to pass before merge. Run `make check` locally before pushing to catch issues early.
-
-#### Remote Testing Workflow for Agents
-
-```bash
-# Run host tests remotely (macOS CI)
-make test-host-remote
-
-# Run guest tests remotely (Windows CI)  
-make test-guest-remote
-
-# If permission denied, push first then watch existing CI
-git push -u origin HEAD
-make ci-watch
-```
-
-**Agent iteration loop:**
-```
-make changes → commit → make test-*-remote → [fails] → read errors → fix → commit → retry
-```
-
-Errors are printed directly to console. On failure, `make ci-watch` also saves errors to `.ci-errors`.
 
 ## File Organization
 
@@ -354,5 +326,3 @@ C# uses namespaces and partial classes:
 - `MetalContentView.swift` - GPU rendering and input handling
 - `SpiceFrameRenderer.swift` - Metal frame rendering
 - `ClipboardManager.swift` - Clipboard synchronization
-
-
