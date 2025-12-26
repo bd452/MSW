@@ -63,7 +63,7 @@ After completing a task:
 4. **Run remote tests and iterate until they pass**:
    - For host changes: `make test-host-remote`
    - For guest changes: `make test-guest-remote`
-   - **Note**: The Makefile auto-detects `gh auth token` from the gh CLI config.
+   - **Note**: The gh CLI uses its config file (`~/.config/gh/hosts.yml`) for auth.
      Cursor cloud agents authenticate gh via config file, not environment variables.
    - If permission denied (token lacks 'workflow' scope): `git push -u origin HEAD && make ci-watch`
    - **If tests fail**: Read the error output, fix the issues, commit, and re-run

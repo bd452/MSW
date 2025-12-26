@@ -142,13 +142,12 @@ build-host-remote:
 check-host-remote: test-host-remote
 	@echo "✅ Remote host checks passed!"
 
-# GitHub token for remote workflows
-# Priority: 1) GH_TOKEN env/make variable, 2) gh auth token (from gh CLI config)
+# GitHub token for remote workflows (optional override)
+# The gh CLI automatically uses its config file (~/.config/gh/hosts.yml) when
+# GH_TOKEN is not set. This works in most environments including Cursor cloud agents.
+# Only set GH_TOKEN explicitly if you need to override the default gh auth.
 # Token requires 'workflow' scope (and 'repo' for private repos)
-#
-# Note: Some environments (e.g., Cursor cloud agent) authenticate gh via its config
-# file (~/.config/gh/hosts.yml) rather than setting GH_TOKEN. We auto-detect this.
-GH_TOKEN ?= $(shell gh auth token 2>/dev/null || echo "")
+GH_TOKEN ?=
 export GH_TOKEN
 
 # Remote log streaming (best-effort)
@@ -180,9 +179,9 @@ define run-remote-workflow
 		exit 1; \
 	fi; \
 	if [ -n "$$GH_TOKEN" ]; then \
-		echo "🔑 Using GitHub token for authentication"; \
+		echo "🔑 Using explicit GH_TOKEN for authentication"; \
 	else \
-		echo "⚠️  No GitHub token found (gh auth token returned empty)"; \
+		echo "🔑 Using gh CLI authentication (from ~/.config/gh/hosts.yml)"; \
 	fi; \
 	BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
 	REPO=$$(gh repo view --json nameWithOwner --jq '.nameWithOwner'); \
