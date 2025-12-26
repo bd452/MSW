@@ -318,6 +318,8 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         coordinator.proceedFromWelcome()
         coordinator.selectISO(URL(fileURLWithPath: "/tmp/test.iso"))
         coordinator.startInstallation()
+        // Cancel the async provisioning task to prevent race conditions with manual test calls
+        coordinator.cancel()
     }
 
     private func goToError(_ coordinator: SetupWizardCoordinator, clearISO: Bool = false) {

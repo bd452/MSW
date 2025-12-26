@@ -148,7 +148,11 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
     /// Handles completion of the installation process.
     public func handleInstallationComplete(result: ProvisioningResult) {
         guard currentStep == .installing else {
-            logger.warn("handleInstallationComplete called from invalid step: \(currentStep.rawValue)")
+            // Silently ignore calls from terminal states (async task racing with manual test completion)
+            // Only warn for truly invalid states where the flow is broken
+            if currentStep != .complete && currentStep != .error {
+                logger.warn("handleInstallationComplete called from invalid step: \(currentStep.rawValue)")
+            }
             return
         }
         lastResult = result
