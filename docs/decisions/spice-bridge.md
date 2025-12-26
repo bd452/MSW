@@ -80,57 +80,58 @@ FrameReadyMessage {
 2. Receiving `FrameReadyMessage` → routes to correct `SpiceWindowStream`
 3. Managing `SharedFrameBufferReader` instances per window
 
-### Frame Transfer Strategies
+### Frame Buffer Modes
 
-Two transfer strategies are supported, selectable via Settings UI:
+Two buffer allocation modes are supported, selectable via Settings UI:
 
-#### Strategy A: Shared Memory (Zero-Copy)
-**Default for production** - Lowest latency, no data copying.
+#### Uncompressed Mode (Default)
+**Lowest latency, higher memory** - Best for modern machines.
+
+- Exact allocation based on frame dimensions (width × height × 4 bytes)
+- Reallocates only when window is resized
+- ~33MB per 4K window (3840 × 2160 × 4 = 33.2MB)
+- No compression overhead
+
+**Use when**: Machine has ample RAM, latency is priority.
+
+#### Compressed Mode
+**Lower memory, higher latency** - For memory-constrained scenarios.
+
+- Tranche-based allocation with predefined size buckets:
+  - 3 MB: small windows, typical desktop apps
+  - 8 MB: 1080p compressed
+  - 20 MB: 1440p/4K compressed typical
+  - 50 MB: 4K compressed worst case
+- LZ4 compression applied to each frame
+- Reallocates when compressed frame exceeds current tranche
+
+**Use when**: Running many windows, memory is constrained.
+
+### Shared Memory Transfer
+
+All frame data transfers via VM shared memory (zero-copy):
 
 1. VM configures shared memory region via Virtualization.framework
 2. Guest allocates per-window buffers from shared region
 3. Guest sends `WindowBufferAllocatedMessage` with offset into shared region
 4. Host maps offset to host pointer, creates `SharedFrameBufferReader`
-5. Guest sends `FrameReadyMessage` (lightweight notification)
-6. Host reads frame data directly from mapped memory
-
-**Requirements**: VM shared memory configuration (VZVirtioFileSystemDeviceConfiguration or similar)
-
-#### Strategy B: Socket Transfer (Fallback)
-**For development/fallback** - Works without shared memory, higher latency.
-
-1. Guest captures frame and optionally compresses it
-2. Guest sends frame data embedded in message over control channel
-3. Host receives message, extracts frame bytes
-4. Host creates `SharedFrame` directly from message payload
-
-**Tradeoffs**: Copies data over socket, but works immediately without VM memory setup.
-
-#### FrameTransferMode Configuration
-
-```swift
-enum FrameTransferMode {
-    case sharedMemory  // Zero-copy via VM shared memory
-    case socket        // Send frame data over control channel  
-    case auto          // Try shared memory, fall back to socket
-}
-```
-
-User selects mode in Settings UI. Default is `auto` which:
-1. Attempts shared memory on startup
-2. Falls back to socket if shared memory unavailable
-3. Logs which mode is active
+5. Guest writes frame (raw or compressed based on mode) to buffer
+6. Guest sends `FrameReadyMessage` (lightweight notification)
+7. Host reads frame data directly from mapped memory
 
 ### Current Implementation Status
 
 | Component | Status |
 |-----------|--------|
 | Per-window buffer allocation (guest) | ✅ Complete |
+| FrameBufferMode enum (Uncompressed/Compressed) | ✅ Complete |
+| Uncompressed mode: exact allocation | ✅ Complete |
+| Compressed mode: tranche allocation + LZ4 | ✅ Complete |
 | WindowBufferAllocatedMessage protocol | ✅ Complete |
 | FrameReadyMessage routing (host) | ✅ Complete |
-| Strategy A: VM shared memory mapping | ❌ Not implemented |
-| Strategy B: Socket frame transfer | ❌ Not implemented |
-| FrameTransferMode configuration | ❌ Not implemented |
+| VM shared memory configuration | ❌ Not implemented |
+| Guest allocation from shared region | ❌ Not implemented |
+| Host mapping of guest buffer offsets | ❌ Not implemented |
 | Settings UI for mode selection | ❌ Not implemented |
 
 ### Deprecated: Single Shared Buffer
