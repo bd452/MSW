@@ -153,9 +153,21 @@
     - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
     - [ ] Wire per-window buffer allocation to host memory mapping { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
-      - [ ] Map guest buffer pointers from WindowBufferAllocatedMessage to host-accessible memory via Virtualization.framework shared memory { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
-      - [ ] Create SharedFrameBufferReader instances for each per-window buffer when allocation messages arrive { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
-      - [ ] Add integration tests for per-window buffer frame delivery { host/Tests/WinRunSpiceBridgeTests/SpiceFrameRouterTests.swift }
+      - [ ] Configure VM shared memory region accessible to both host and guest { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+        - Option A: VZVirtioFileSystemDeviceConfiguration with memory-mapped directory
+        - Option B: Pre-allocated shared memory region guest allocates from
+        - Must allow host to read arbitrary offsets within the region
+      - [ ] Update guest PerWindowBufferManager to allocate from shared region instead of Marshal.AllocHGlobal { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+        - Guest buffer pointers must be offsets into the shared region
+        - WindowBufferAllocatedMessage.bufferPointer becomes offset, not raw pointer
+      - [ ] Map guest buffer offsets to host memory in SpiceFrameRouter.handleBufferAllocation { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+        - Convert offset from WindowBufferAllocatedMessage to host pointer
+        - Create SharedFrameBufferReader for each per-window buffer
+        - Attach reader to the registered SpiceWindowStream
+      - [ ] Enable skipped integration tests for per-window buffer frame delivery { host/Tests/WinRunSpiceBridgeTests/SpiceFrameRouterTests.swift, host/Tests/WinRunSpiceBridgeTests/FrameDeliveryIntegrationTests.swift }
+        - testFrameReadyRoutedToCorrectStream, testControlChannelDelegateRoutesFrameReady
+        - testEndToEndFrameDeliveryPipeline, testMultiWindowFrameRouting, testFrameDeliveryUpdatesMetrics
+      - [ ] Remove deprecated setFrameBufferReader API after per-window buffers are wired { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
   - [X] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
     - [X] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
