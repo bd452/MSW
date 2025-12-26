@@ -142,13 +142,13 @@ public sealed class WindowFrameBuffer : IDisposable
         }
 
         // Check if frame fits
-        if (data.Length > _slotSize - FrameSlotHeader.Size)
+        if (data.Length > SlotSize - FrameSlotHeader.Size)
         {
-            _logger.Error($"Frame too large for slot: {data.Length} > {_slotSize - FrameSlotHeader.Size}");
+            _logger.Error($"Frame too large for slot: {data.Length} > {SlotSize - FrameSlotHeader.Size}");
             return -1;
         }
 
-        var slotOffset = _writeIndex * _slotSize;
+        var slotOffset = _writeIndex * SlotSize;
 
         // Write header
         Marshal.StructureToPtr(header, _bufferPointer + slotOffset, false);
@@ -199,7 +199,7 @@ public sealed class WindowFrameBuffer : IDisposable
         Reallocate(requiredSlotSize);
         _expectedFrameSize = rawFrameSize;
 
-        _logger.Debug($"Window {_windowId}: Exact allocation for {rawFrameSize} bytes ({_bufferSize / 1024} KB total)");
+        _logger.Debug($"Window {WindowId}: Exact allocation for {rawFrameSize} bytes ({BufferSize / 1024} KB total)");
         return true;
     }
 
@@ -219,7 +219,7 @@ public sealed class WindowFrameBuffer : IDisposable
         Reallocate(trancheSize);
         _currentTrancheIndex = trancheIndex;
 
-        _logger.Debug($"Window {_windowId}: Tranche {trancheIndex} allocation ({trancheSize / 1024} KB/slot, {_bufferSize / 1024} KB total)");
+        _logger.Debug($"Window {WindowId}: Tranche {trancheIndex} allocation ({trancheSize / 1024} KB/slot, {BufferSize / 1024} KB total)");
         return true;
     }
 
