@@ -419,23 +419,9 @@ public sealed class FrameStreamingService : IDisposable
     {
         lock (_stateLock)
         {
-            if (_windowFrameStates.TryGetValue(windowId, out var existing))
-            {
-                _windowFrameStates[windowId] = existing with
-                {
-                    LastCaptureTime = captureTime,
-                    FrameCount = existing.FrameCount + 1
-                };
-            }
-            else
-            {
-                _windowFrameStates[windowId] = new WindowFrameState
-                {
-                    WindowId = windowId,
-                    LastCaptureTime = captureTime,
-                    FrameCount = 1
-                };
-            }
+            _windowFrameStates[windowId] = _windowFrameStates.TryGetValue(windowId, out var existing)
+                ? existing with { LastCaptureTime = captureTime, FrameCount = existing.FrameCount + 1 }
+                : new WindowFrameState { WindowId = windowId, LastCaptureTime = captureTime, FrameCount = 1 };
         }
     }
 
@@ -457,7 +443,7 @@ public sealed class FrameStreamingService : IDisposable
 
             foreach (var id in staleIds)
             {
-                _windowFrameStates.Remove(id);
+                _ = _windowFrameStates.Remove(id);
             }
 
             if (staleIds.Count > 0)
@@ -479,7 +465,7 @@ public sealed class FrameStreamingService : IDisposable
         _cts?.Cancel();
         try
         {
-            _captureTask?.Wait(TimeSpan.FromSeconds(2));
+            _ = _captureTask?.Wait(TimeSpan.FromSeconds(2));
         }
         catch
         {
@@ -539,8 +525,8 @@ public sealed class FrameStreamingStats
 
     internal void RecordFrameCompressed(int bytesSaved)
     {
-        Interlocked.Increment(ref _framesCompressed);
-        Interlocked.Add(ref _bytesSavedByCompression, bytesSaved);
+        _ = Interlocked.Increment(ref _framesCompressed);
+        _ = Interlocked.Add(ref _bytesSavedByCompression, bytesSaved);
     }
 
     public override string ToString() =>

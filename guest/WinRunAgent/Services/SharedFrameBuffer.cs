@@ -61,14 +61,11 @@ public struct SharedFrameBufferHeader
     /// <summary>
     /// Creates a new header with default values.
     /// </summary>
-    public static SharedFrameBufferHeader Create()
+    public static SharedFrameBufferHeader Create() => new()
     {
-        return new SharedFrameBufferHeader
-        {
-            Magic = SharedFrameBufferConstants.Magic,
-            Version = SharedFrameBufferConstants.Version
-        };
-    }
+        Magic = SharedFrameBufferConstants.Magic,
+        Version = SharedFrameBufferConstants.Version
+    };
 
     /// <summary>
     /// Whether this header is valid.
@@ -80,18 +77,9 @@ public struct SharedFrameBufferHeader
     /// <summary>
     /// Number of frames available to read.
     /// </summary>
-    public readonly uint AvailableFrames
-    {
-        get
-        {
-            if (WriteIndex >= ReadIndex)
-            {
-                return WriteIndex - ReadIndex;
-            }
-
-            return SlotCount - ReadIndex + WriteIndex;
-        }
-    }
+    public readonly uint AvailableFrames => WriteIndex >= ReadIndex
+        ? WriteIndex - ReadIndex
+        : SlotCount - ReadIndex + WriteIndex;
 
     /// <summary>
     /// Whether the buffer has frames available.
@@ -184,22 +172,19 @@ public sealed record SharedFrameBufferConfig
     /// <summary>
     /// Creates a header initialized with this configuration.
     /// </summary>
-    public SharedFrameBufferHeader CreateHeader()
+    public SharedFrameBufferHeader CreateHeader() => new()
     {
-        return new SharedFrameBufferHeader
-        {
-            Magic = SharedFrameBufferConstants.Magic,
-            Version = SharedFrameBufferConstants.Version,
-            TotalSize = (uint)TotalSize,
-            SlotCount = (uint)SlotCount,
-            SlotSize = (uint)SlotSize,
-            MaxWidth = (uint)MaxWidth,
-            MaxHeight = (uint)MaxHeight,
-            WriteIndex = 0,
-            ReadIndex = 0,
-            Flags = 0
-        };
-    }
+        Magic = SharedFrameBufferConstants.Magic,
+        Version = SharedFrameBufferConstants.Version,
+        TotalSize = (uint)TotalSize,
+        SlotCount = (uint)SlotCount,
+        SlotSize = (uint)SlotSize,
+        MaxWidth = (uint)MaxWidth,
+        MaxHeight = (uint)MaxHeight,
+        WriteIndex = 0,
+        ReadIndex = 0,
+        Flags = 0
+    };
 }
 
 /// <summary>

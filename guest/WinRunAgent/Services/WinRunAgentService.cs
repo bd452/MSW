@@ -14,7 +14,6 @@ public sealed class WinRunAgentService : IDisposable
     private readonly InputInjectionService _inputService;
     private readonly ClipboardSyncService _clipboardService;
     private readonly DragDropService _dragDropService;
-    private readonly FrameStreamingService? _frameStreamingService;
     private readonly Channel<HostMessage> _inboundChannel;
     private readonly Channel<GuestMessage> _outboundChannel;
     private readonly IAgentLogger _logger;
@@ -40,7 +39,7 @@ public sealed class WinRunAgentService : IDisposable
         _inputService = inputService;
         _clipboardService = clipboardService;
         _dragDropService = dragDropService;
-        _frameStreamingService = frameStreamingService;
+        FrameStreaming = frameStreamingService;
         ShortcutService = shortcutService;
         _inboundChannel = inboundChannel;
         _outboundChannel = outboundChannel;
@@ -132,7 +131,7 @@ public sealed class WinRunAgentService : IDisposable
     /// <summary>
     /// Gets the frame streaming service (null if not configured).
     /// </summary>
-    public FrameStreamingService? FrameStreaming => _frameStreamingService;
+    public FrameStreamingService? FrameStreaming { get; }
 
     /// <summary>
     /// Runs the agent service, processing messages until cancelled.
@@ -154,7 +153,7 @@ public sealed class WinRunAgentService : IDisposable
         ShortcutService.Start();
 
         // Start frame streaming if configured
-        _frameStreamingService?.Start();
+        FrameStreaming?.Start();
 
         try
         {
@@ -164,10 +163,10 @@ public sealed class WinRunAgentService : IDisposable
         finally
         {
             // Stop frame streaming
-            if (_frameStreamingService != null)
+            if (FrameStreaming != null)
             {
-                await _frameStreamingService.StopAsync();
-                _logger.Info($"Frame streaming stopped. Stats: {_frameStreamingService.Stats}");
+                await FrameStreaming.StopAsync();
+                _logger.Info($"Frame streaming stopped. Stats: {FrameStreaming.Stats}");
             }
 
             ShortcutService.Stop();
@@ -472,7 +471,7 @@ public sealed class WinRunAgentService : IDisposable
             GuestCapabilities.HighDpiSupport;
 
         // Add DesktopDuplication capability if frame streaming is enabled
-        if (_frameStreamingService != null)
+        if (FrameStreaming != null)
         {
             capabilities |= GuestCapabilities.DesktopDuplication;
         }
@@ -526,7 +525,7 @@ public sealed class WinRunAgentService : IDisposable
             return;
         }
 
-        _frameStreamingService?.Dispose();
+        FrameStreaming?.Dispose();
         Telemetry.Dispose();
         ShortcutService.Dispose();
         SessionManager.Dispose();

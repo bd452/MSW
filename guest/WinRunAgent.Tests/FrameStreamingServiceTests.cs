@@ -184,7 +184,7 @@ public sealed class FrameStreamingServiceTests
 
         service.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => service.Start());
+        _ = Assert.Throws<ObjectDisposedException>(service.Start);
     }
 
     [Fact]

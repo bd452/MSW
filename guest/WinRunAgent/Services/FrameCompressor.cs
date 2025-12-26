@@ -37,7 +37,6 @@ public sealed record FrameCompressionConfig
 public sealed class FrameCompressor
 {
     private readonly IAgentLogger _logger;
-    private readonly FrameCompressionConfig _config;
 
     // Statistics
     private long _totalFrames;
@@ -48,13 +47,13 @@ public sealed class FrameCompressor
     public FrameCompressor(IAgentLogger logger, FrameCompressionConfig? config = null)
     {
         _logger = logger;
-        _config = config ?? new FrameCompressionConfig();
+        Config = config ?? new FrameCompressionConfig();
     }
 
     /// <summary>
     /// Gets the compression configuration.
     /// </summary>
-    public FrameCompressionConfig Config => _config;
+    public FrameCompressionConfig Config { get; }
 
     /// <summary>
     /// Gets compression statistics.
@@ -74,8 +73,8 @@ public sealed class FrameCompressor
     /// <returns>Compression result with compressed data (or original if compression not beneficial).</returns>
     public CompressionResult Compress(ReadOnlySpan<byte> data)
     {
-        Interlocked.Increment(ref _totalFrames);
-        Interlocked.Add(ref _uncompressedBytes, data.Length);
+        _ = Interlocked.Increment(ref _totalFrames);
+        _ = Interlocked.Add(ref _uncompressedBytes, data.Length);
 
         // Skip compression for small frames or if disabled
         if (!_config.Enabled || data.Length < _config.MinSizeToCompress)
@@ -117,8 +116,8 @@ public sealed class FrameCompressor
         var result = new byte[compressedSize];
         Array.Copy(compressedBuffer, result, compressedSize);
 
-        Interlocked.Increment(ref _compressedFrames);
-        Interlocked.Add(ref _compressedBytes, compressedSize);
+        _ = Interlocked.Increment(ref _compressedFrames);
+        _ = Interlocked.Add(ref _compressedBytes, compressedSize);
 
         _logger.Debug($"Frame compressed: {data.Length} -> {compressedSize} ({ratio:P1})");
 
