@@ -391,7 +391,8 @@ final class VirtualMachineControllerSharedMemoryTests: XCTestCase {
         let region = try await controller.initializeSharedMemory()
 
         XCTAssertEqual(region.size, 32 * 1024 * 1024)
-        XCTAssertNotNil(await controller.getSharedMemoryRegion())
+        let currentRegion = await controller.getSharedMemoryRegion()
+        XCTAssertNotNil(currentRegion)
 
         // Clean up
         await controller.cleanupSharedMemory()
@@ -403,10 +404,12 @@ final class VirtualMachineControllerSharedMemoryTests: XCTestCase {
         let controller = VirtualMachineController(configuration: config)
 
         _ = try await controller.initializeSharedMemory()
-        XCTAssertNotNil(await controller.getSharedMemoryRegion())
+        let regionBeforeCleanup = await controller.getSharedMemoryRegion()
+        XCTAssertNotNil(regionBeforeCleanup)
 
         await controller.cleanupSharedMemory()
 
-        XCTAssertNil(await controller.getSharedMemoryRegion())
+        let regionAfterCleanup = await controller.getSharedMemoryRegion()
+        XCTAssertNil(regionAfterCleanup)
     }
 }

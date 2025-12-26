@@ -11,7 +11,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
     public SharedMemoryAllocatorTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), $"WinRunTests-{Guid.NewGuid()}");
-        Directory.CreateDirectory(_tempDir);
+        _ = Directory.CreateDirectory(_tempDir);
         _tempFile = Path.Combine(_tempDir, "test.shm");
     }
 
@@ -105,7 +105,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         var allocation = allocator.Allocate(1024);
 
@@ -128,7 +128,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         var alloc1 = allocator.Allocate(1024);
         var alloc2 = allocator.Allocate(1024);
@@ -152,7 +152,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         // Get initial free space
         var statsBefore = allocator.GetStats();
@@ -184,7 +184,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         // Try to allocate more than available (accounting for header)
         var allocation = allocator.Allocate(64 * 1024); // 64 KB
@@ -205,7 +205,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         var allocation = allocator.Allocate(1024);
         var pointer = allocator.OffsetToPointer(allocation.Offset);
@@ -226,7 +226,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         var allocation = allocator.Allocate(1024);
         var offset = allocator.PointerToOffset(allocation.Pointer);
@@ -247,7 +247,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         var stats = allocator.GetStats();
 
@@ -294,7 +294,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
 
         var allocation = allocator.Allocate(256);
         Assert.True(allocation.IsValid);
@@ -334,7 +334,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         };
 
         var allocator = new SharedMemoryAllocator(config, logger);
-        allocator.Initialize();
+        _ = allocator.Initialize();
         Assert.True(allocator.IsInitialized);
 
         allocator.Dispose();
@@ -355,7 +355,7 @@ public sealed class WindowFrameBufferSharedMemoryTests : IDisposable
     public WindowFrameBufferSharedMemoryTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), $"WinRunTests-{Guid.NewGuid()}");
-        Directory.CreateDirectory(_tempDir);
+        _ = Directory.CreateDirectory(_tempDir);
         _tempFile = Path.Combine(_tempDir, "test.shm");
 
         var config = new SharedMemoryAllocatorConfig
@@ -367,7 +367,7 @@ public sealed class WindowFrameBufferSharedMemoryTests : IDisposable
         };
 
         _allocator = new SharedMemoryAllocator(config, new TestLogger());
-        _allocator.Initialize();
+        _ = _allocator.Initialize();
     }
 
     public void Dispose()

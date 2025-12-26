@@ -434,10 +434,7 @@ public sealed class PerWindowBufferManager : IDisposable
     /// <summary>
     /// Gets shared memory statistics if available.
     /// </summary>
-    public SharedMemoryStats? GetSharedMemoryStats()
-    {
-        return _sharedAllocator?.GetStats();
-    }
+    public SharedMemoryStats? GetSharedMemoryStats() => _sharedAllocator?.GetStats();
 
     /// <summary>
     /// Cleans up buffers for windows that no longer exist.

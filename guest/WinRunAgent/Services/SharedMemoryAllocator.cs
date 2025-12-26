@@ -1,5 +1,4 @@
 using System.IO.MemoryMappedFiles;
-using System.Runtime.InteropServices;
 
 namespace WinRun.Agent.Services;
 
@@ -73,11 +72,9 @@ internal sealed class SharedMemoryFreeList
 {
     private readonly List<(long Offset, int Size)> _freeBlocks = [];
     private readonly object _lock = new();
-    private readonly long _totalSize;
 
     public SharedMemoryFreeList(long totalSize)
     {
-        _totalSize = totalSize;
         // Start with one big free block (reserve header space)
         const int headerSize = 4096; // Reserve first 4KB for metadata
         _freeBlocks.Add((headerSize, (int)(totalSize - headerSize)));
@@ -155,8 +152,6 @@ public sealed class SharedMemoryAllocator : IDisposable
     private readonly SharedMemoryAllocatorConfig _config;
     private MemoryMappedFile? _mappedFile;
     private MemoryMappedViewAccessor? _accessor;
-    private nint _basePointer;
-    private long _regionSize;
     private SharedMemoryFreeList? _freeList;
     private bool _disposed;
     private readonly object _initLock = new();
@@ -172,17 +167,17 @@ public sealed class SharedMemoryAllocator : IDisposable
     /// <summary>
     /// Whether the allocator is initialized and ready.
     /// </summary>
-    public bool IsInitialized => _mappedFile != null && _basePointer != IntPtr.Zero;
+    public bool IsInitialized => _mappedFile != null && BasePointer != IntPtr.Zero;
 
     /// <summary>
     /// Total size of the shared memory region.
     /// </summary>
-    public long RegionSize => _regionSize;
+    public long RegionSize { get; private set; }
 
     /// <summary>
     /// Base pointer to the mapped memory (for offset calculations).
     /// </summary>
-    public nint BasePointer => _basePointer;
+    public nint BasePointer { get; private set; }
 
     /// <summary>
     /// Initializes the allocator by mapping the shared memory file.
@@ -248,11 +243,11 @@ public sealed class SharedMemoryAllocator : IDisposable
 
         // Get file size
         var fileInfo = new FileInfo(filePath);
-        _regionSize = fileInfo.Length;
+        RegionSize = fileInfo.Length;
 
-        if (_regionSize < _config.MinimumSizeBytes)
+        if (RegionSize < _config.MinimumSizeBytes)
         {
-            _logger.Error($"Shared memory file too small: {_regionSize} bytes (minimum: {_config.MinimumSizeBytes})");
+            _logger.Error($"Shared memory file too small: {RegionSize} bytes (minimum: {_config.MinimumSizeBytes})");
             return false;
         }
 
@@ -266,19 +261,19 @@ public sealed class SharedMemoryAllocator : IDisposable
                 0,
                 MemoryMappedFileAccess.ReadWrite);
 
-            _accessor = _mappedFile.CreateViewAccessor(0, _regionSize, MemoryMappedFileAccess.ReadWrite);
+            _accessor = _mappedFile.CreateViewAccessor(0, RegionSize, MemoryMappedFileAccess.ReadWrite);
 
             // Get the base pointer
             unsafe
             {
                 byte* ptr = null;
                 _accessor.SafeMemoryMappedViewHandle.AcquirePointer(ref ptr);
-                _basePointer = (nint)ptr;
+                BasePointer = (nint)ptr;
             }
 
-            _freeList = new SharedMemoryFreeList(_regionSize);
+            _freeList = new SharedMemoryFreeList(RegionSize);
 
-            _logger.Info($"Shared memory allocator initialized: {_regionSize / (1024 * 1024)} MB at 0x{_basePointer:X}");
+            _logger.Info($"Shared memory allocator initialized: {RegionSize / (1024 * 1024)} MB at 0x{BasePointer:X}");
             return true;
         }
         catch (Exception ex)
@@ -310,7 +305,7 @@ public sealed class SharedMemoryAllocator : IDisposable
             return default;
         }
 
-        var pointer = _basePointer + (nint)offset;
+        var pointer = BasePointer + (nint)offset;
 
         // Zero the allocated memory
         unsafe
@@ -350,28 +345,23 @@ public sealed class SharedMemoryAllocator : IDisposable
     /// <summary>
     /// Converts an offset to a pointer.
     /// </summary>
-    public nint OffsetToPointer(long offset)
-    {
-        if (!IsInitialized || offset < 0 || offset >= _regionSize)
-        {
-            return IntPtr.Zero;
-        }
-
-        return _basePointer + (nint)offset;
-    }
+    public nint OffsetToPointer(long offset) =>
+        !IsInitialized || offset < 0 || offset >= RegionSize
+            ? IntPtr.Zero
+            : BasePointer + (nint)offset;
 
     /// <summary>
     /// Converts a pointer to an offset.
     /// </summary>
     public long PointerToOffset(nint pointer)
     {
-        if (!IsInitialized || pointer < _basePointer)
+        if (!IsInitialized || pointer < BasePointer)
         {
             return -1;
         }
 
-        var offset = pointer - _basePointer;
-        return offset < _regionSize ? offset : -1;
+        var offset = pointer - BasePointer;
+        return offset < RegionSize ? offset : -1;
     }
 
     /// <summary>
@@ -387,9 +377,9 @@ public sealed class SharedMemoryAllocator : IDisposable
         var (totalFree, freeBlockCount) = _freeList.GetStats();
         return new SharedMemoryStats
         {
-            TotalSizeBytes = _regionSize,
+            TotalSizeBytes = RegionSize,
             FreeBytes = totalFree,
-            UsedBytes = _regionSize - totalFree,
+            UsedBytes = RegionSize - totalFree,
             FreeBlockCount = freeBlockCount,
             IsInitialized = IsInitialized
         };
@@ -399,10 +389,10 @@ public sealed class SharedMemoryAllocator : IDisposable
     {
         if (_accessor != null)
         {
-            if (_basePointer != IntPtr.Zero)
+            if (BasePointer != IntPtr.Zero)
             {
                 _accessor.SafeMemoryMappedViewHandle.ReleasePointer();
-                _basePointer = IntPtr.Zero;
+                BasePointer = IntPtr.Zero;
             }
             _accessor.Dispose();
             _accessor = null;

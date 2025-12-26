@@ -424,7 +424,7 @@ public sealed class FrameStreamingServiceTests
     public void FrameStreamingServiceWithSharedMemoryUncompressedMode()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"WinRunTests-{Guid.NewGuid()}");
-        Directory.CreateDirectory(tempDir);
+        _ = Directory.CreateDirectory(tempDir);
         var tempFile = Path.Combine(tempDir, "test.shm");
 
         try
@@ -473,7 +473,7 @@ public sealed class FrameStreamingServiceTests
     public void FrameStreamingServiceWithSharedMemoryCompressedMode()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"WinRunTests-{Guid.NewGuid()}");
-        Directory.CreateDirectory(tempDir);
+        _ = Directory.CreateDirectory(tempDir);
         var tempFile = Path.Combine(tempDir, "test.shm");
 
         try
