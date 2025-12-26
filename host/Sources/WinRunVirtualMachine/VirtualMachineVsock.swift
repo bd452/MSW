@@ -8,23 +8,20 @@ import Virtualization
 
 /// Wrapper for a vsock connection providing bidirectional communication.
 public struct VsockConnection {
-    /// File handle for reading from the connection
-    public let readHandle: FileHandle
-    /// File handle for writing to the connection
-    public let writeHandle: FileHandle
+    /// File handle for the connection (duplex - can read and write)
+    public let fileHandle: FileHandle
 
     #if canImport(Virtualization)
-    @available(macOS 13, *)
+    @available(macOS 12, *)
     init(connection: VZVirtioSocketConnection) {
-        self.readHandle = connection.fileHandleForReading
-        self.writeHandle = connection.fileHandleForWriting
+        // VZVirtioSocketConnection provides a single file descriptor for bidirectional I/O
+        self.fileHandle = FileHandle(fileDescriptor: connection.fileDescriptor, closeOnDealloc: false)
     }
     #endif
 
-    /// Initialize with explicit file handles (for testing)
-    public init(readHandle: FileHandle, writeHandle: FileHandle) {
-        self.readHandle = readHandle
-        self.writeHandle = writeHandle
+    /// Initialize with explicit file handle (for testing)
+    public init(fileHandle: FileHandle) {
+        self.fileHandle = fileHandle
     }
 }
 
@@ -120,10 +117,8 @@ extension VirtualMachineController {
         let listener = VZVirtioSocketListener()
         listener.delegate = vsockListener
 
-        let success = device.setSocketListener(listener, forPort: port)
-        if !success {
-            throw VirtualMachineLifecycleError.virtualizationUnavailable("Failed to set vsock listener on port \(port)")
-        }
+        // setSocketListener doesn't return a value - it always succeeds if the device is valid
+        device.setSocketListener(listener, forPort: port)
 
         return vsockListener
     }

@@ -409,11 +409,10 @@ public actor VirtualMachineController {
         if frameConfig.spiceConsoleEnabled {
             let consoleDevice = VZVirtioConsoleDeviceConfiguration()
             // VZVirtioConsoleDeviceConfiguration has a default port at index 0
-            // Configure it for our Spice control channel
-            if let port = consoleDevice.ports.first {
-                port.name = "com.winrun.spice"
-                port.isConsole = false
-            }
+            // Configure it for our Spice control channel using index access
+            let port = consoleDevice.ports[0]
+            port.name = "com.winrun.spice"
+            port.isConsole = false
             vmConfig.consoleDevices = [consoleDevice]
             logger.debug("Configured Spice console port for control channel")
         }
