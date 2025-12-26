@@ -10,7 +10,8 @@ DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
         check-linux install-daemon uninstall-daemon \
         generate-protocol generate-protocol-host generate-protocol-guest generate-test-data \
-        validate-protocol validate-protocol-host validate-protocol-guest
+        validate-protocol validate-protocol-host validate-protocol-guest \
+        ci-watch
 
 # Default target
 help:
@@ -54,6 +55,9 @@ help:
 	@echo "  Remote targets accept GH_TOKEN for authentication:"
 	@echo "    make test-guest-remote GH_TOKEN=ghp_xxx"
 	@echo "  Token requires 'workflow' scope. Create at: https://github.com/settings/tokens/new"
+	@echo ""
+	@echo "CI watching:"
+	@echo "  ci-watch           Watch latest CI run for current branch, show errors on failure"
 	@echo ""
 	@echo "Protocol targets:"
 	@echo "  generate-protocol      Regenerate protocol code from shared/protocol.def"
@@ -527,6 +531,14 @@ else
 		echo "⚠️  dotnet CLI not found; skipping guest protocol validation"; \
 	fi
 endif
+
+# ============================================================================
+# CI Watching
+# ============================================================================
+
+# Watch the latest CI run for your current branch, show errors on failure
+ci-watch:
+	@$(REPO_ROOT)/scripts/ci-watch.sh
 
 # ============================================================================
 # Daemon management
