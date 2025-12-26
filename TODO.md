@@ -68,13 +68,13 @@
     - [X] Configure VM with ISO as boot CD-ROM + autounattend injection { new:host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
     - [X] Drive unattended Windows installation lifecycle { new:host/Sources/WinRunSetup/VMProvisioner.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for disk creation and provisioning state machine { new:host/Tests/WinRunSetupTests/DiskImageCreatorTests.swift, new:host/Tests/WinRunSetupTests/VMProvisionerTests.swift } <docs/development.md>
-  - [ ] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
+  - [X] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [X] Define provisioning phases and state transitions { new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [X] Orchestrate full setup flow from ISO to ready state { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Handle host↔guest progress signaling via Spice channel { new:host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/windows-provisioning.md>
     - [X] Implement error recovery and rollback for failed provisioning { new:host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for state machine transitions and error handling { new:host/Tests/WinRunSetupTests/SetupCoordinatorTests.swift, new:host/Tests/WinRunSetupTests/ProvisioningStateTests.swift } <docs/development.md>
-    - [ ] Wire post-install provisioning to real guest Spice messages (remove simulation) { host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift, host/Sources/WinRunSpiceBridge/SpiceMessageSerializer.swift } <docs/decisions/windows-provisioning.md, docs/decisions/protocols.md>
+    - [X] Wire post-install provisioning to real guest Spice messages (remove simulation) { host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift, host/Sources/WinRunSpiceBridge/SpiceMessageSerializer.swift } <docs/decisions/windows-provisioning.md, docs/decisions/protocols.md>
   - [X] Windows unattended installation assets { new:infrastructure/windows/autounattend.xml, new:infrastructure/windows/provision/ } <docs/decisions/windows-provisioning.md>
     - [X] Create autounattend.xml for silent Windows install { new:infrastructure/windows/autounattend.xml } <docs/decisions/windows-provisioning.md>
     - [X] Implement autounattend injection (FAT12 floppy image or ISO embedding) { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
