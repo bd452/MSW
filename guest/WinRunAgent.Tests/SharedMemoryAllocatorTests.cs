@@ -341,7 +341,7 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         allocator.Dispose();
 
         // After dispose, trying to allocate should throw ObjectDisposedException
-        Assert.Throws<ObjectDisposedException>(() => allocator.Allocate(1024));
+        _ = Assert.Throws<ObjectDisposedException>(() => allocator.Allocate(1024));
     }
 }
 
