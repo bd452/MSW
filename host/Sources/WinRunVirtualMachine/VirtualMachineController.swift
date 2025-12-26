@@ -41,7 +41,18 @@ public actor VirtualMachineController {
     private var nativeVM: VZVirtualMachine?
     @available(macOS 13, *)
     private var cachedConfiguration: VZVirtualMachineConfiguration?
+
+    /// The vsock device for guest-host communication, available after VM starts.
+    @available(macOS 13, *)
+    private var vsockDevice: VZVirtioSocketDevice? {
+        nativeVM?.socketDevices.first as? VZVirtioSocketDevice
+    }
 #endif
+
+    /// The frame streaming configuration for this VM.
+    public var frameStreamingConfiguration: FrameStreamingConfiguration {
+        configuration.frameStreaming
+    }
 
     public init(configuration: VMConfiguration, logger: Logger = StandardLogger(subsystem: "VirtualMachine")) {
         self.configuration = configuration
@@ -316,6 +327,14 @@ public actor VirtualMachineController {
         logger.info("VM metrics: \(snapshot.description)")
     }
 
+    #if canImport(Virtualization)
+    /// Returns the vsock device if available. Used by VirtualMachineVsock extension.
+    @available(macOS 13, *)
+    func getVsockDevice() -> VZVirtioSocketDevice? {
+        vsockDevice
+    }
+    #endif
+
 #if canImport(Virtualization)
     @available(macOS 13, *)
     private func bootNativeVirtualMachine(resumeFromSnapshot: Bool) async throws {
@@ -367,8 +386,42 @@ public actor VirtualMachineController {
         vmConfig.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
         vmConfig.memoryBalloonDevices = [VZVirtioTraditionalMemoryBalloonDeviceConfiguration()]
 
+        // Configure frame streaming devices
+        try configureFrameStreamingDevices(vmConfig)
+
         try vmConfig.validate()
         return vmConfig
+    }
+
+    /// Configures vsock, shared memory, and console devices for frame streaming.
+    @available(macOS 13, *)
+    private func configureFrameStreamingDevices(_ vmConfig: VZVirtualMachineConfiguration) throws {
+        let frameConfig = configuration.frameStreaming
+
+        // Add VirtIO socket device for vsock communication
+        if frameConfig.vsockEnabled {
+            let vsockDevice = VZVirtioSocketDeviceConfiguration()
+            vmConfig.socketDevices = [vsockDevice]
+            logger.debug("Configured vsock device for frame streaming")
+        }
+
+        // Add VirtIO console device for Spice port channel
+        if frameConfig.spiceConsoleEnabled {
+            let consoleDevice = VZVirtioConsoleDeviceConfiguration()
+            let serialPort = VZVirtioConsolePortConfiguration()
+            serialPort.name = "com.winrun.spice"
+            serialPort.isConsole = false
+            consoleDevice.ports = [serialPort]
+            vmConfig.consoleDevices = [consoleDevice]
+            logger.debug("Configured Spice console port for control channel")
+        }
+
+        // Note: Shared memory configuration is handled at the transport layer
+        // via VZVirtioFileSystemDeviceConfiguration or direct memory mapping
+        // when the stream is established. The VM just needs vsock + console.
+        if frameConfig.sharedMemoryEnabled {
+            logger.debug("Shared memory enabled (size: \(frameConfig.sharedMemorySizeMB)MB)")
+        }
     }
 
     @available(macOS 13, *)
