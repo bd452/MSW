@@ -96,6 +96,11 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     // MARK: - Public API
 
+    /// Creates a view controller for the specified wizard step.
+    public func createViewController(for step: SetupWizardStep) -> NSViewController {
+        viewControllerFactory(step, self)
+    }
+
     /// Starts the wizard by presenting the welcome screen.
     public func start() {
         transitionTo(.welcome)

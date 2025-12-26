@@ -61,7 +61,7 @@ final class SetupFlowController {
         wizardCoordinator = wizard
 
         // Present the initial view
-        let initialController = wizard.viewControllerFactory(.welcome, wizard)
+        let initialController = wizard.createViewController(for: .welcome)
         let window = presentSetupWindow(initialController)
         window.title = "WinRun Setup"
         self.window = window
@@ -112,8 +112,8 @@ extension SetupFlowController: SetupWizardCoordinatorDelegate {
         _ coordinator: SetupWizardCoordinator,
         for step: SetupWizardStep
     ) -> NSViewController {
-        // Use the coordinator's default factory
-        return coordinator.viewControllerFactory(step, coordinator)
+        // Use the coordinator's view controller factory
+        return coordinator.createViewController(for: step)
     }
 
     func coordinatorDidFinish(_ coordinator: SetupWizardCoordinator, success: Bool) {
