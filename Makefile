@@ -52,8 +52,9 @@ help:
 	@echo "  check-host-remote  Run host checks on macOS via GitHub Actions"
 	@echo "  build-host-remote  Build host on macOS via GitHub Actions"
 	@echo ""
-	@echo "  Remote targets accept GH_TOKEN for authentication:"
-	@echo "    make test-guest-remote GH_TOKEN=ghp_xxx"
+	@echo "  Remote targets auto-detect gh CLI auth, or accept explicit GH_TOKEN:"
+	@echo "    make test-guest-remote              # uses gh auth token"
+	@echo "    make test-guest-remote GH_TOKEN=ghp_xxx  # explicit token"
 	@echo "  Token requires 'workflow' scope. Create at: https://github.com/settings/tokens/new"
 	@echo ""
 	@echo "CI watching:"
@@ -141,8 +142,10 @@ build-host-remote:
 check-host-remote: test-host-remote
 	@echo "✅ Remote host checks passed!"
 
-# GitHub token for remote workflows (can be passed via environment or make variable)
-# Usage: make test-guest-remote GH_TOKEN=ghp_xxx
+# GitHub token for remote workflows (optional override)
+# The gh CLI automatically uses its config file (~/.config/gh/hosts.yml) when
+# GH_TOKEN is not set. This works in most environments including Cursor cloud agents.
+# Only set GH_TOKEN explicitly if you need to override the default gh auth.
 # Token requires 'workflow' scope (and 'repo' for private repos)
 GH_TOKEN ?=
 export GH_TOKEN
@@ -176,7 +179,9 @@ define run-remote-workflow
 		exit 1; \
 	fi; \
 	if [ -n "$$GH_TOKEN" ]; then \
-		echo "🔑 Using provided GH_TOKEN for authentication"; \
+		echo "🔑 Using explicit GH_TOKEN for authentication"; \
+	else \
+		echo "🔑 Using gh CLI authentication (from ~/.config/gh/hosts.yml)"; \
 	fi; \
 	BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
 	REPO=$$(gh repo view --json nameWithOwner --jq '.nameWithOwner'); \
@@ -202,23 +207,22 @@ define run-remote-workflow
 			cat /tmp/gh-error.txt; \
 			echo ""; \
 			echo "   The GitHub token doesn't have permission to trigger workflows."; \
-			echo "   This can happen when:"; \
-			echo "   • Running in an automated environment (CI, Cursor cloud agent, etc.)"; \
-			echo "   • The gh CLI is authenticated with a token missing 'workflow' scope"; \
+			echo "   This happens when the token is missing 'workflow' scope."; \
+			echo ""; \
+			echo "   Common causes:"; \
+			echo "   • Cursor cloud agent's default gh auth lacks 'workflow' scope"; \
+			echo "   • gh CLI authenticated with limited scopes"; \
 			echo "   • Repository settings restrict workflow dispatch"; \
 			echo ""; \
-			echo "   Solutions:"; \
-			echo "   1. Provide a token with 'workflow' scope:"; \
+			echo "   Solutions (in order of preference):"; \
+			echo ""; \
+			echo "   1. Push your branch and let CI run automatically:"; \
+			echo "      git push -u origin $$BRANCH && make ci-watch"; \
+			echo ""; \
+			echo "   2. Provide a token with 'workflow' scope:"; \
 			echo "      make $@ GH_TOKEN=ghp_your_token_here"; \
-			echo ""; \
-			echo "   2. Push your branch and create a PR - CI runs automatically on PRs"; \
-			echo "      git push -u origin $$BRANCH && gh pr create"; \
-			echo ""; \
-			echo "   3. Re-authenticate gh with workflow scope:"; \
-			echo "      gh auth login --scopes workflow"; \
-			echo ""; \
-			echo "   To create a token: https://github.com/settings/tokens/new"; \
-			echo "   Required scopes: 'workflow' (and 'repo' for private repositories)"; \
+			echo "      Create at: https://github.com/settings/tokens/new"; \
+			echo "      Required scopes: 'workflow' (and 'repo' for private repos)"; \
 			echo ""; \
 			exit 1; \
 		else \
