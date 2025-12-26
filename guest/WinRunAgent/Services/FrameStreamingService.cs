@@ -376,13 +376,16 @@ public sealed class FrameStreamingService : IDisposable
         // Get or create per-window buffer
         var buffer = _bufferManager.GetOrCreateBuffer(windowId);
 
+        // Track if buffer was already allocated before this call
+        var wasAlreadyAllocated = buffer.IsAllocated;
+
         // Ensure buffer is allocated for this frame size (may trigger reallocation)
-        var wasReallocated = buffer.EnsureAllocated(frame.Width, frame.Height, dataToWrite.Length);
+        var allocationChanged = buffer.EnsureAllocated(frame.Width, frame.Height, dataToWrite.Length);
 
         // If buffer was (re)allocated, notify host
-        if (wasReallocated)
+        if (allocationChanged)
         {
-            await NotifyBufferAllocationAsync(windowId, buffer, isReallocation: buffer.IsAllocated, token);
+            await NotifyBufferAllocationAsync(windowId, buffer, isReallocation: wasAlreadyAllocated, token);
         }
 
         // Build frame slot header
