@@ -297,7 +297,7 @@ public sealed class PerWindowFrameBufferTests
         using var manager = new PerWindowBufferManager(config, logger);
 
         var buffer1 = manager.GetOrCreateBuffer(1);
-        buffer1.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
+        _ = buffer1.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
 
         manager.RemoveBuffer(1);
 
