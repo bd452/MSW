@@ -1,0 +1,33 @@
+<Project Sdk="WixToolset.Sdk/5.0.0">
+  <!--
+    WiX Installer for WinRunAgent
+    
+    IMPORTANT: WiX only supports Windows. This project will NOT build on macOS or Linux.
+    Build this project on Windows only:
+      dotnet build WinRunAgent.Installer.wixproj -c Release
+    
+    For cross-platform solution builds, exclude this project:
+      dotnet build WinRunAgent.sln --ignore-failed-sources
+    Or build specific projects:
+      dotnet build WinRunAgent/WinRunAgent.csproj
+      dotnet build WinRunAgent.Tests/WinRunAgent.Tests.csproj
+  -->
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <!--
+      Target ARM64 for Apple Silicon Macs running Windows ARM64 VMs.
+      The installer must match the guest OS architecture.
+    -->
+    <InstallerPlatform>arm64</InstallerPlatform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Reference the WinRunAgent project.
+      The WiX SDK will define $(var.WinRunAgent.TargetDir) pointing to build output.
+      Framework-dependent by default - requires .NET 8 runtime on guest.
+      The provisioning scripts install .NET runtime before the agent.
+    -->
+    <ProjectReference Include="..\WinRunAgent\WinRunAgent.csproj" />
+  </ItemGroup>
+</Project>

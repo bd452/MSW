@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    WinRunAgent MSI Installer
+    
+    This installer package:
+    - Installs WinRunAgent.exe to C:\Program Files\WinRun\
+    - Registers WinRunAgent as a Windows service
+    - Configures automatic startup on Windows boot
+    - Supports silent installation for provisioning automation
+    - Handles upgrades and clean uninstallation
+    
+    Build: dotnet build -c Release (on Windows)
+    Silent install: msiexec /i WinRunAgent.Installer.msi /qn
+-->
+
+<!-- Version and UpgradeCode constants -->
+<?define ProductVersion = "1.0.0" ?>
+<?define UpgradeCode = "E8F0D742-3B9A-4C2E-8F1D-6A5B7C8D9E0F" ?>
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <Package
+        Name="WinRun Agent"
+        Manufacturer="WinRun"
+        Version="$(ProductVersion)"
+        UpgradeCode="$(UpgradeCode)"
+        Compressed="yes">
+
+        <SummaryInformation
+            Description="WinRun guest agent for host-guest communication"
+            Manufacturer="WinRun" />
+
+        <!-- Use the highest available UI level, but support fully silent installs -->
+        <MediaTemplate EmbedCab="yes" />
+
+        <!-- Major upgrade support - removes previous versions before installing -->
+        <MajorUpgrade
+            DowngradeErrorMessage="A newer version of [ProductName] is already installed."
+            Schedule="afterInstallInitialize" />
+
+        <!-- Installation directory structure -->
+        <StandardDirectory Id="ProgramFiles64Folder">
+            <Directory Id="INSTALLFOLDER" Name="WinRun">
+                <Directory Id="LogsFolder" Name="Logs" />
+            </Directory>
+        </StandardDirectory>
+
+        <!-- ProgramData directory for logs and configuration -->
+        <StandardDirectory Id="CommonAppDataFolder">
+            <Directory Id="WinRunDataFolder" Name="WinRun">
+                <Directory Id="WinRunLogsFolder" Name="Logs" />
+            </Directory>
+        </StandardDirectory>
+
+        <!-- Main feature containing the agent -->
+        <Feature Id="ProductFeature" Title="WinRun Agent" Level="1">
+            <ComponentGroupRef Id="AgentComponents" />
+            <ComponentRef Id="DataFolderComponent" />
+            <ComponentRef Id="RegistryComponent" />
+        </Feature>
+
+        <!-- Agent executable and service registration -->
+        <ComponentGroup Id="AgentComponents" Directory="INSTALLFOLDER">
+            <Component Id="AgentExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+                <File
+                    Id="WinRunAgentExe"
+                    Source="$(var.WinRunAgent.TargetDir)WinRunAgent.exe"
+                    KeyPath="yes">
+                    <!--
+                        Service registration using the ServiceInstall element.
+                        The service runs as LocalSystem for full access to window
+                        tracking, input injection, and desktop duplication APIs.
+                    -->
+                    <ServiceInstall
+                        Id="WinRunAgentService"
+                        Name="WinRunAgent"
+                        DisplayName="WinRun Agent"
+                        Description="WinRun guest agent for host-guest communication. Provides window tracking, program launching, and clipboard sync between macOS host and Windows guest."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem">
+                        <!-- Service configuration for recovery -->
+                        <ServiceConfig
+                            DelayedAutoStart="no"
+                            OnInstall="yes"
+                            OnReinstall="yes" />
+                    </ServiceInstall>
+                    <!--
+                        Control service during install/uninstall:
+                        - Start after install completes
+                        - Stop before upgrade and uninstall
+                        - Remove on uninstall
+                    -->
+                    <ServiceControl
+                        Id="WinRunAgentServiceControl"
+                        Name="WinRunAgent"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+                </File>
+
+                <!--
+                    Framework-dependent deployment files.
+                    These are required for .NET to locate and load the assembly.
+                -->
+                <File
+                    Id="WinRunAgentDepsJson"
+                    Source="$(var.WinRunAgent.TargetDir)WinRunAgent.deps.json" />
+                <File
+                    Id="WinRunAgentRuntimeConfigJson"
+                    Source="$(var.WinRunAgent.TargetDir)WinRunAgent.runtimeconfig.json" />
+            </Component>
+
+            <!--
+                NuGet package dependencies that are copied to output.
+                System.Drawing.Common is used for icon extraction.
+            -->
+            <Component Id="SystemDrawingDependency" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
+                <File
+                    Id="SystemDrawingCommonDll"
+                    Source="$(var.WinRunAgent.TargetDir)System.Drawing.Common.dll"
+                    KeyPath="yes" />
+            </Component>
+        </ComponentGroup>
+
+        <!-- Create data folder for logs -->
+        <Component Id="DataFolderComponent" Directory="WinRunLogsFolder" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+            <CreateFolder />
+            <RemoveFolder Id="RemoveLogsFolder" On="uninstall" />
+            <RemoveFolder Id="RemoveWinRunDataFolder" Directory="WinRunDataFolder" On="uninstall" />
+            <RegistryValue
+                Root="HKLM"
+                Key="Software\WinRun"
+                Name="DataPath"
+                Type="string"
+                Value="[WinRunLogsFolder]"
+                KeyPath="yes" />
+        </Component>
+
+        <!-- Registry keys for application metadata -->
+        <Component Id="RegistryComponent" Directory="INSTALLFOLDER" Guid="D4E5F6A7-B8C9-0123-DEF0-123456789ABC">
+            <RegistryKey Root="HKLM" Key="Software\WinRun">
+                <RegistryValue Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" />
+                <RegistryValue Name="Version" Type="string" Value="$(ProductVersion)" />
+            </RegistryKey>
+        </Component>
+    </Package>
+</Wix>

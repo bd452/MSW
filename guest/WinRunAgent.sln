@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinRunAgent", "WinRunAgent\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinRunAgent.Tests", "WinRunAgent.Tests\WinRunAgent.Tests.csproj", "{414B23AA-060D-4C5C-A254-52612B0536A3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinRunAgent.Installer", "WinRunAgent.Installer\WinRunAgent.Installer.wixproj", "{7D8E4F12-3C9A-4B5E-A2D1-6F8E9C0B1234}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +22,10 @@ Global
 		{414B23AA-060D-4C5C-A254-52612B0536A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{414B23AA-060D-4C5C-A254-52612B0536A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{414B23AA-060D-4C5C-A254-52612B0536A3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D8E4F12-3C9A-4B5E-A2D1-6F8E9C0B1234}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D8E4F12-3C9A-4B5E-A2D1-6F8E9C0B1234}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D8E4F12-3C9A-4B5E-A2D1-6F8E9C0B1234}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D8E4F12-3C9A-4B5E-A2D1-6F8E9C0B1234}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
