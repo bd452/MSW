@@ -166,7 +166,7 @@
     - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
     - [ ] Wire VM shared memory for per-window frame buffers { host/Sources/WinRunVirtualMachine/, host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/ } <docs/decisions/spice-bridge.md>
-      - [ ] Configure VM shared memory region via Virtualization.framework { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+      - [X] Configure VM shared memory region via Virtualization.framework { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
         - Use VZVirtioFileSystemDeviceConfiguration or direct memory mapping
         - Expose shared region to both host process and guest VM
         - Size based on expected max windows × buffer size (e.g., 10 windows × 50MB = 500MB)
