@@ -132,6 +132,31 @@
     - [X] Add MSI build step to Windows CI { .github/workflows/ci.yml, new:scripts/build-guest-installer.ps1 } <docs/decisions/operations.md>
     - [X] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
 
+- [ ] Frame Streaming Pipeline { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md, docs/architecture.md>
+  - [ ] VM configuration for guest-host communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+    - [ ] Add VZVirtioSocketDeviceConfiguration for vsock communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+    - [ ] Configure shared memory region for frame buffer { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Add VZVirtioConsoleDeviceConfiguration for Spice port channel { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/protocols.md>
+  - [ ] Shared memory frame buffer infrastructure { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [ ] Define shared memory ring buffer protocol for frames { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [ ] Implement host-side memory mapping and frame reading { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Implement guest-side memory mapping and frame writing { new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [ ] Add FrameReady notification message type (lightweight, points to shared memory) { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/protocols.md>
+  - [ ] Guest frame capture and streaming { guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+    - [ ] Create FrameStreamingService to orchestrate capture loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
+    - [ ] Wire DesktopDuplicationBridge into frame streaming loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
+    - [ ] Implement per-window frame extraction and streaming { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
+    - [ ] Add frame compression (LZ4 or similar) for bandwidth efficiency { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/spice-bridge.md>
+    - [ ] Integrate FrameStreamingService into WinRunAgentService startup { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+  - [ ] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
+    - [ ] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
+  - [ ] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+    - [ ] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
+    - [ ] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+    - [ ] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
     - [X] Create script to build complete WinRun.app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>
