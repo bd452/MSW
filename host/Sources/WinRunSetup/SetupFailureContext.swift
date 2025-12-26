@@ -94,48 +94,24 @@ public struct SetupFailureContext: Sendable, Equatable {
     // MARK: - Default Generators
 
     private static func defaultSummary(for error: WinRunError, phase: ProvisioningPhase) -> String {
-        switch error {
-        case .cancelled:
-            return "Setup was cancelled."
-        case .configInvalid(let reason):
-            return "Configuration issue: \(reason)"
-        case .diskFull:
-            return "Not enough disk space to complete setup."
-        case .networkUnavailable:
-            return "Network connection required for setup."
-        case .timeout:
-            return "The operation timed out. This may be due to a slow or unresponsive ISO."
-        case .permissionDenied(let path):
-            return "Permission denied accessing \(path)."
-        case .internalError(let message):
-            return "An unexpected error occurred: \(message)"
-        case .vmError(let message):
-            return "Virtual machine error: \(message)"
-        case .isoValidationFailed(let reason):
-            return "ISO validation failed: \(reason)"
-        case .spiceConnectionFailed(let reason):
-            return "Connection to guest failed: \(reason)"
-        case .guestAgentError(let message):
-            return "Guest agent error: \(message)"
-        case .installationFailed(let phase, let reason):
-            return "Installation failed during \(phase): \(reason)"
-        case .unexpectedState(let expected, let actual):
-            return "Unexpected state: expected \(expected), got \(actual)"
+        // Handle common cases with specific summaries
+        if case .cancelled = error { return "Setup was cancelled." }
+        if case .diskInsufficientSpace(let req, let avail) = error {
+            return "Not enough disk space. Need \(req)GB, have \(avail)GB."
         }
+        if case .isoArchitectureUnsupported(let found, let required) = error {
+            return "ISO architecture '\(found)' not supported. Requires \(required)."
+        }
+
+        // For all other errors, use the localized description with phase context
+        return "Setup failed during \(phase.displayName): \(error.localizedDescription)"
     }
 
     private static func defaultTechnicalDetails(for error: WinRunError) -> String {
         var parts: [String] = []
         parts.append("Error: \(error.localizedDescription)")
         parts.append("Code: \(error.errorCode)")
-
-        if let nsError = error as NSError? {
-            parts.append("Domain: \(nsError.domain)")
-            if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-                parts.append("Underlying: \(underlying)")
-            }
-        }
-
+        parts.append("Domain: \(error.domain.rawValue)")
         return parts.joined(separator: "\n")
     }
 
@@ -147,23 +123,20 @@ public struct SetupFailureContext: Sendable, Equatable {
         case .cancelled:
             return [.retry]
 
-        case .diskFull:
+        case .diskInsufficientSpace:
             return [.freeDiskSpace, .chooseDifferentISO]
 
-        case .isoValidationFailed:
+        case .isoInvalid, .isoArchitectureUnsupported, .isoMountFailed, .isoMetadataParseFailed:
             return [.chooseDifferentISO, .contactSupport]
 
-        case .timeout:
+        case .vmOperationTimeout:
             return [.retry, .chooseDifferentISO, .contactSupport]
 
-        case .networkUnavailable:
-            return [.checkNetwork, .retry]
-
-        case .permissionDenied:
-            return [.grantPermission, .contactSupport]
-
-        case .configInvalid:
+        case .configInvalid, .configReadFailed, .configWriteFailed:
             return [.reviewConfig, .contactSupport]
+
+        case .diskCreationFailed, .diskAlreadyExists:
+            return [.rollback, .retry, .contactSupport]
 
         default:
             // Default set based on phase
@@ -175,7 +148,8 @@ public struct SetupFailureContext: Sendable, Equatable {
     }
 
     private static func getFreeDiskSpace(at url: URL) throws -> UInt64 {
-        let values = try url.deletingLastPathComponent().resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        let values = try url.deletingLastPathComponent().resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         return UInt64(values.volumeAvailableCapacityForImportantUsage ?? 0)
     }
 }
@@ -253,19 +227,57 @@ extension WinRunError {
     /// Error code for diagnostic purposes.
     public var errorCode: Int {
         switch self {
+        // General errors
         case .cancelled: return 1
-        case .configInvalid: return 2
-        case .diskFull: return 3
-        case .networkUnavailable: return 4
-        case .timeout: return 5
-        case .permissionDenied: return 6
-        case .internalError: return 7
-        case .vmError: return 8
-        case .isoValidationFailed: return 9
-        case .spiceConnectionFailed: return 10
-        case .guestAgentError: return 11
-        case .installationFailed: return 12
-        case .unexpectedState: return 13
+        case .internalError: return 2
+        case .notSupported: return 3
+
+        // VM errors
+        case .vmNotInitialized: return 10
+        case .vmAlreadyStopped: return 11
+        case .vmOperationTimeout: return 12
+        case .vmSnapshotFailed: return 13
+        case .virtualizationUnavailable: return 14
+
+        // Config errors
+        case .configReadFailed: return 20
+        case .configWriteFailed: return 21
+        case .configInvalid: return 22
+        case .configSchemaUnsupported: return 23
+        case .configMissingValue: return 24
+
+        // Spice errors
+        case .spiceConnectionFailed: return 30
+        case .spiceDisconnected: return 31
+        case .spiceSharedMemoryUnavailable: return 32
+        case .spiceAuthenticationFailed: return 33
+
+        // XPC errors
+        case .daemonUnreachable: return 40
+        case .xpcConnectionRejected: return 41
+        case .xpcThrottled: return 42
+        case .xpcUnauthorized: return 43
+
+        // Launch errors
+        case .launchFailed: return 50
+        case .invalidExecutable: return 51
+        case .programExitedWithError: return 52
+        case .launcherAlreadyExists: return 53
+        case .launcherCreationFailed: return 54
+        case .launcherIconMissing: return 55
+
+        // ISO errors
+        case .isoMountFailed: return 60
+        case .isoInvalid: return 61
+        case .isoArchitectureUnsupported: return 62
+        case .isoVersionWarning: return 63
+        case .isoMetadataParseFailed: return 64
+
+        // Disk errors
+        case .diskCreationFailed: return 70
+        case .diskAlreadyExists: return 71
+        case .diskInvalidSize: return 72
+        case .diskInsufficientSpace: return 73
         }
     }
 }
