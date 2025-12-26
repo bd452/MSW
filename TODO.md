@@ -154,7 +154,7 @@
     - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
   - [ ] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
-    - [ ] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+    - [X] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [ ] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
