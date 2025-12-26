@@ -266,6 +266,45 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         XCTAssertFalse(ProvisioningPhase.idle.isAfter(.complete))
     }
 
+    // MARK: - Sub-Phase Progress Tests
+
+    func testProvisioningProgress_withSubPhase_containsSubPhaseInfo() {
+        let progress = ProvisioningProgress.withInstallationSubPhase(
+            phase: .installingWindows,
+            phaseProgress: 0.5,
+            overallProgress: 0.3,
+            message: "Copying files...",
+            installationPhase: .copyingFiles,
+            subPhaseProgress: 0.5
+        )
+
+        XCTAssertEqual(progress.phase, .installingWindows)
+        XCTAssertEqual(progress.installationSubPhase, .copyingFiles)
+        XCTAssertEqual(progress.subPhaseProgress, 0.5)
+    }
+
+    func testProvisioningProgress_withoutSubPhase_nilSubPhaseInfo() {
+        let progress = ProvisioningProgress(
+            phase: .creatingDisk,
+            phaseProgress: 0.8,
+            overallProgress: 0.2,
+            message: "Creating disk..."
+        )
+
+        XCTAssertNil(progress.installationSubPhase)
+        XCTAssertNil(progress.subPhaseProgress)
+    }
+
+    func testInstallationPhase_displayNames() {
+        // Verify all installation phases have valid display names
+        let phases: [InstallationPhase] = [
+            .preparing, .booting, .copyingFiles, .installingFeatures, .firstBoot, .postInstall,
+        ]
+        for phase in phases {
+            XCTAssertFalse(phase.displayName.isEmpty, "Phase \(phase) should have a display name")
+        }
+    }
+
     // MARK: - Helpers
 
     private func makeCoordinator(delegate: SetupWizardCoordinatorDelegate? = nil) -> SetupWizardCoordinator {

@@ -4,14 +4,8 @@ import WinRunSpiceBridge
 
 // MARK: - Setup Coordinator
 
-/// Orchestrates the end-to-end Windows provisioning flow.
-///
-/// The coordinator manages:
-/// 1. ISO validation (architecture, edition detection)
-/// 2. Disk image creation
-/// 3. Windows installation lifecycle
-/// 4. Post-install provisioning (driver/agent installation, optimization)
-/// 5. Golden snapshot creation
+/// Orchestrates end-to-end Windows provisioning: ISO validation, disk creation,
+/// Windows installation, post-install provisioning, and snapshot creation.
 public actor SetupCoordinator {
     // MARK: - Dependencies
 
@@ -25,6 +19,10 @@ public actor SetupCoordinator {
     private var currentState: ProvisioningState = .idle
     private var context: ProvisioningContext?
     private var isCancelled = false
+
+    // Current installation sub-phase (during installingWindows phase)
+    private var currentInstallationSubPhase: InstallationPhase?
+    private var currentSubPhaseProgress: Double = 0.0
 
     // Guest provisioning state (set via Spice message handlers)
     private var provisioningComplete = false
@@ -196,18 +194,13 @@ public actor SetupCoordinator {
 
     // MARK: - Recovery State Accessors (for extension)
 
-    /// Checks if rollback can be performed (failed/cancelled state).
-    var canPerformRollback: Bool {
-        currentState.phase == .failed || currentState.phase == .cancelled
-    }
+    /// Checks if retry/rollback is available (failed or cancelled state).
+    public var canRetry: Bool { currentState.phase == .failed || currentState.phase == .cancelled }
 
-    /// Checks if rollback is available (failed/cancelled and disk exists).
+    /// Checks if rollback is available (can retry and disk exists).
     public var canRollback: Bool {
         canRetry && context.map { FileManager.default.fileExists(atPath: $0.diskImagePath.path) } ?? false
     }
-
-    /// Checks if retry is available (failed or cancelled state).
-    public var canRetry: Bool { currentState.phase == .failed || currentState.phase == .cancelled }
 
     /// Returns the last error if provisioning failed.
     public var lastError: WinRunError? { currentState.error }
@@ -218,15 +211,8 @@ public actor SetupCoordinator {
     /// The current phase (for extension).
     var currentPhase: ProvisioningPhase { currentState.phase }
 
-    /// Gets disk usage for rollback (for extension).
-    func getDiskUsageForRollback(at url: URL) throws -> UInt64 {
-        try getDiskUsage(at: url)
-    }
-
     /// Deletes disk image for rollback (for extension).
-    func deleteDiskImageForRollback(at url: URL) throws {
-        try diskCreator.deleteDiskImage(at: url)
-    }
+    func deleteDiskImageForRollback(at url: URL) throws { try diskCreator.deleteDiskImage(at: url) }
 
     // MARK: - Phase Execution
 
@@ -316,9 +302,18 @@ public actor SetupCoordinator {
     }
 
     private func handleInstallationProgress(_ progress: InstallationProgress) {
+        // Track the current installation sub-phase
+        currentInstallationSubPhase = progress.phase
+        currentSubPhaseProgress = progress.phaseProgress
+
         // Map installation progress (0.0-1.0) to the installingWindows phase weight
         let message = progress.message.isEmpty ? progress.phase.displayName : progress.message
-        updateProgress(phaseProgress: progress.overallProgress, message: message)
+        updateProgressWithSubPhase(
+            phaseProgress: progress.overallProgress,
+            message: message,
+            installationPhase: progress.phase,
+            subPhaseProgress: progress.phaseProgress
+        )
     }
 
     private func runPostInstallProvisioning() async throws {
@@ -355,14 +350,10 @@ public actor SetupCoordinator {
         try await waitForGuestProvisioningMessages(using: stream)
     }
 
-    /// Helper to check cancellation state (called from extension).
-    func checkCancelled() -> Bool {
-        isCancelled
-    }
+    /// Check cancellation state (called from extension).
+    func checkCancelled() -> Bool { isCancelled }
 
     /// Simulates guest provisioning progress (used when no control channel is provided).
-    ///
-    /// This is useful for testing the coordinator without a live Spice connection.
     private func simulateGuestProvisioning() async throws {
         let phases: [(GuestProvisioningPhase, Double)] = [
             (.drivers, 0.25),
@@ -481,7 +472,12 @@ public actor SetupCoordinator {
         }
     }
 
-    private func updateProgress(phaseProgress: Double, message: String) {
+    private func updateProgress(
+        phaseProgress: Double,
+        message: String,
+        installationPhase: InstallationPhase? = nil,
+        subPhaseProgress: Double? = nil
+    ) {
         currentState = ProvisioningState(
             phase: currentState.phase,
             phaseProgress: phaseProgress,
@@ -489,7 +485,23 @@ public actor SetupCoordinator {
             error: currentState.error,
             enteredAt: currentState.enteredAt
         )
+        currentInstallationSubPhase = installationPhase
+        currentSubPhaseProgress = subPhaseProgress ?? 0.0
         notifyProgress()
+    }
+
+    private func updateProgressWithSubPhase(
+        phaseProgress: Double,
+        message: String,
+        installationPhase: InstallationPhase,
+        subPhaseProgress: Double
+    ) {
+        updateProgress(
+            phaseProgress: phaseProgress,
+            message: message,
+            installationPhase: installationPhase,
+            subPhaseProgress: subPhaseProgress
+        )
     }
 
     // MARK: - Error Handling & Notifications
@@ -510,7 +522,16 @@ public actor SetupCoordinator {
     }
 
     private func notifyProgress() {
-        delegate?.provisioningDidUpdateProgress(ProvisioningProgress(from: currentState))
+        let progress = ProvisioningProgress(
+            phase: currentState.phase,
+            phaseProgress: currentState.phaseProgress,
+            overallProgress: currentState.overallProgress,
+            message: currentState.message,
+            estimatedSecondsRemaining: nil,
+            installationSubPhase: currentInstallationSubPhase,
+            subPhaseProgress: currentInstallationSubPhase != nil ? currentSubPhaseProgress : nil
+        )
+        delegate?.provisioningDidUpdateProgress(progress)
     }
 
     private func notifyPhaseChange(from oldPhase: ProvisioningPhase, to newPhase: ProvisioningPhase) {
