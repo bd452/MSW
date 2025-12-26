@@ -131,7 +131,7 @@ All frame data transfers via VM shared memory (zero-copy):
 | FrameReadyMessage routing (host) | ✅ Complete |
 | VM shared memory configuration | ✅ Complete |
 | Guest allocation from shared region | ✅ Complete |
-| Host mapping of guest buffer offsets | ❌ Not implemented |
+| Host mapping of guest buffer offsets | ✅ Complete |
 | Settings UI for mode selection | ❌ Not implemented |
 
 ### Deprecated: Single Shared Buffer

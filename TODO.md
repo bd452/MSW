@@ -174,7 +174,7 @@
         - Replace Marshal.AllocHGlobal with allocation from shared region
         - Track allocations with offset-based addressing
         - WindowBufferAllocatedMessage.bufferPointer becomes offset into shared region
-      - [ ] Map guest buffer offsets to host memory in SpiceFrameRouter { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+      - [X] Map guest buffer offsets to host memory in SpiceFrameRouter { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
         - Receive base pointer to shared region from VM controller
         - Convert offset from WindowBufferAllocatedMessage to host pointer
         - Create SharedFrameBufferReader for each per-window buffer
