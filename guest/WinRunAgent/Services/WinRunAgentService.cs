@@ -14,6 +14,7 @@ public sealed class WinRunAgentService : IDisposable
     private readonly InputInjectionService _inputService;
     private readonly ClipboardSyncService _clipboardService;
     private readonly DragDropService _dragDropService;
+    private readonly FrameStreamingService? _frameStreamingService;
     private readonly Channel<HostMessage> _inboundChannel;
     private readonly Channel<GuestMessage> _outboundChannel;
     private readonly IAgentLogger _logger;
@@ -30,7 +31,8 @@ public sealed class WinRunAgentService : IDisposable
         Channel<HostMessage> inboundChannel,
         Channel<GuestMessage> outboundChannel,
         IAgentLogger logger,
-        SpiceChannelTelemetry? telemetry = null)
+        SpiceChannelTelemetry? telemetry = null,
+        FrameStreamingService? frameStreamingService = null)
     {
         _windowTracker = windowTracker;
         _launcher = launcher;
@@ -38,6 +40,7 @@ public sealed class WinRunAgentService : IDisposable
         _inputService = inputService;
         _clipboardService = clipboardService;
         _dragDropService = dragDropService;
+        _frameStreamingService = frameStreamingService;
         ShortcutService = shortcutService;
         _inboundChannel = inboundChannel;
         _outboundChannel = outboundChannel;
@@ -127,6 +130,11 @@ public sealed class WinRunAgentService : IDisposable
     public SpiceChannelTelemetry Telemetry { get; }
 
     /// <summary>
+    /// Gets the frame streaming service (null if not configured).
+    /// </summary>
+    public FrameStreamingService? FrameStreaming => _frameStreamingService;
+
+    /// <summary>
     /// Runs the agent service, processing messages until cancelled.
     /// </summary>
     public async Task RunAsync(CancellationToken token)
@@ -145,6 +153,9 @@ public sealed class WinRunAgentService : IDisposable
         // Start shortcut monitoring
         ShortcutService.Start();
 
+        // Start frame streaming if configured
+        _frameStreamingService?.Start();
+
         try
         {
             // Process incoming messages
@@ -152,6 +163,13 @@ public sealed class WinRunAgentService : IDisposable
         }
         finally
         {
+            // Stop frame streaming
+            if (_frameStreamingService != null)
+            {
+                await _frameStreamingService.StopAsync();
+                _logger.Info($"Frame streaming stopped. Stats: {_frameStreamingService.Stats}");
+            }
+
             ShortcutService.Stop();
             SessionManager.Stop();
             _windowTracker.Stop();
@@ -453,6 +471,12 @@ public sealed class WinRunAgentService : IDisposable
             GuestCapabilities.ShortcutDetection |
             GuestCapabilities.HighDpiSupport;
 
+        // Add DesktopDuplication capability if frame streaming is enabled
+        if (_frameStreamingService != null)
+        {
+            capabilities |= GuestCapabilities.DesktopDuplication;
+        }
+
         var message = SpiceMessageSerializer.CreateCapabilityMessage(capabilities);
         await SendMessageAsync(message);
 
@@ -502,6 +526,7 @@ public sealed class WinRunAgentService : IDisposable
             return;
         }
 
+        _frameStreamingService?.Dispose();
         Telemetry.Dispose();
         ShortcutService.Dispose();
         SessionManager.Dispose();

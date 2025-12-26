@@ -412,5 +412,124 @@ public sealed class WinRunAgentServiceTests : IDisposable
         Assert.Contains("Session not found", ack.ErrorMessage);
     }
 
+    [Fact]
+    public void FrameStreamingPropertyIsNullByDefault()
+    {
+        using var windowTracker = new WindowTracker(_logger);
+        using var launcher = new ProgramLauncher(_logger);
+        var iconService = new IconExtractionService(_logger);
+        var inbound = Channel.CreateUnbounded<HostMessage>();
+
+        using var service = new WinRunAgentService(
+            windowTracker,
+            launcher,
+            iconService,
+            inbound,
+            _logger);
+
+        Assert.Null(service.FrameStreaming);
+    }
+
+    [Fact]
+    public void FrameStreamingPropertyExposesInjectedService()
+    {
+        using var windowTracker = new WindowTracker(_logger);
+        using var launcher = new ProgramLauncher(_logger);
+        var iconService = new IconExtractionService(_logger);
+        var inputService = new InputInjectionService(_logger);
+        using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
+        using var desktopDuplication = new DesktopDuplicationBridge(_logger);
+        using var frameBuffer = new SharedFrameBufferWriter(_logger);
+        var inbound = Channel.CreateUnbounded<HostMessage>();
+        var outbound = Channel.CreateUnbounded<GuestMessage>();
+
+        using var frameStreaming = new FrameStreamingService(
+            _logger,
+            windowTracker,
+            desktopDuplication,
+            frameBuffer,
+            outbound);
+
+        using var service = new WinRunAgentService(
+            windowTracker,
+            launcher,
+            iconService,
+            inputService,
+            clipboardService,
+            shortcutService,
+            dragDropService,
+            inbound,
+            outbound,
+            _logger,
+            frameStreamingService: frameStreaming);
+
+        Assert.NotNull(service.FrameStreaming);
+        Assert.Same(frameStreaming, service.FrameStreaming);
+    }
+
+    [Fact]
+    public async Task CapabilityAnnouncementIncludesDesktopDuplicationWhenFrameStreamingEnabled()
+    {
+        using var windowTracker = new WindowTracker(_logger);
+        using var launcher = new ProgramLauncher(_logger);
+        var iconService = new IconExtractionService(_logger);
+        var inputService = new InputInjectionService(_logger);
+        using var clipboardService = new ClipboardSyncService(_logger);
+        using var shortcutService = new ShortcutSyncService(_logger, _ => { });
+        using var dragDropService = new DragDropService(_logger);
+        using var desktopDuplication = new DesktopDuplicationBridge(_logger);
+        using var frameBuffer = new SharedFrameBufferWriter(_logger);
+        var inbound = Channel.CreateUnbounded<HostMessage>();
+        var outbound = Channel.CreateUnbounded<GuestMessage>();
+
+        using var frameStreaming = new FrameStreamingService(
+            _logger,
+            windowTracker,
+            desktopDuplication,
+            frameBuffer,
+            outbound);
+
+        using var service = new WinRunAgentService(
+            windowTracker,
+            launcher,
+            iconService,
+            inputService,
+            clipboardService,
+            shortcutService,
+            dragDropService,
+            inbound,
+            outbound,
+            _logger,
+            frameStreamingService: frameStreaming);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        try
+        {
+            await service.RunAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+
+        // Find capability message
+        var reader = outbound.Reader;
+        CapabilityFlagsMessage? caps = null;
+        while (reader.TryRead(out var msg))
+        {
+            if (msg is CapabilityFlagsMessage c)
+            {
+                caps = c;
+                break;
+            }
+        }
+
+        Assert.NotNull(caps);
+        Assert.True(caps.Capabilities.HasFlag(GuestCapabilities.DesktopDuplication));
+    }
+
 }
 

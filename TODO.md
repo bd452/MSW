@@ -142,12 +142,12 @@
     - [X] Implement host-side memory mapping and frame reading { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement guest-side memory mapping and frame writing { new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
     - [X] Add FrameReady notification message type (lightweight, points to shared memory) { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/protocols.md>
-  - [ ] Guest frame capture and streaming { guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+  - [X] Guest frame capture and streaming { guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
     - [X] Create FrameStreamingService to orchestrate capture loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
     - [X] Wire DesktopDuplicationBridge into frame streaming loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
     - [X] Implement per-window frame extraction and streaming { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
     - [X] Add frame compression (LZ4 or similar) for bandwidth efficiency { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/spice-bridge.md>
-    - [ ] Integrate FrameStreamingService into WinRunAgentService startup { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+    - [X] Integrate FrameStreamingService into WinRunAgentService startup { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
   - [ ] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
     - [ ] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
     - [ ] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
