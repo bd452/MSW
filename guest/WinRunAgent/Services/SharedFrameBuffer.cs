@@ -258,12 +258,9 @@ public sealed class SharedFrameBufferWriter : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_memoryPointer == IntPtr.Zero)
-        {
-            throw new InvalidOperationException("Buffer not initialized");
-        }
-
-        return Marshal.PtrToStructure<SharedFrameBufferHeader>(_memoryPointer);
+        return _memoryPointer == IntPtr.Zero
+            ? throw new InvalidOperationException("Buffer not initialized")
+            : Marshal.PtrToStructure<SharedFrameBufferHeader>(_memoryPointer);
     }
 
     /// <summary>

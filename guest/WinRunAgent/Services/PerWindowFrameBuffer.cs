@@ -70,11 +70,8 @@ public sealed class WindowFrameBuffer : IDisposable
 {
     private readonly IAgentLogger _logger;
     private readonly PerWindowBufferConfig _config;
-    private readonly ulong _windowId;
 
     private nint _bufferPointer;
-    private int _bufferSize;
-    private int _slotSize;
     private int _currentTrancheIndex = -1;
     private int _expectedFrameSize;
     private bool _disposed;
@@ -88,22 +85,22 @@ public sealed class WindowFrameBuffer : IDisposable
         PerWindowBufferConfig config,
         IAgentLogger logger)
     {
-        _windowId = windowId;
+        WindowId = windowId;
         _config = config;
         _logger = logger;
     }
 
     /// <summary>Window ID this buffer belongs to.</summary>
-    public ulong WindowId => _windowId;
+    public ulong WindowId { get; }
 
     /// <summary>Whether the buffer is allocated and ready.</summary>
     public bool IsAllocated => _bufferPointer != IntPtr.Zero;
 
     /// <summary>Current buffer size in bytes.</summary>
-    public int BufferSize => _bufferSize;
+    public int BufferSize { get; private set; }
 
     /// <summary>Current slot size in bytes.</summary>
-    public int SlotSize => _slotSize;
+    public int SlotSize { get; private set; }
 
     /// <summary>Number of slots in this buffer.</summary>
     public int SlotCount => _config.SlotsPerWindow;
@@ -250,15 +247,15 @@ public sealed class WindowFrameBuffer : IDisposable
             _bufferPointer = IntPtr.Zero;
         }
 
-        _slotSize = slotSize;
-        _bufferSize = slotSize * _config.SlotsPerWindow;
+        SlotSize = slotSize;
+        BufferSize = slotSize * _config.SlotsPerWindow;
 
-        _bufferPointer = Marshal.AllocHGlobal(_bufferSize);
+        _bufferPointer = Marshal.AllocHGlobal(BufferSize);
 
         // Zero the buffer
         unsafe
         {
-            new Span<byte>((void*)_bufferPointer, _bufferSize).Clear();
+            new Span<byte>((void*)_bufferPointer, BufferSize).Clear();
         }
 
         // Reset ring buffer indices
@@ -334,7 +331,7 @@ public sealed class PerWindowBufferManager : IDisposable
             if (_buffers.TryGetValue(windowId, out var buffer))
             {
                 buffer.Dispose();
-                _buffers.Remove(windowId);
+                _ = _buffers.Remove(windowId);
                 _logger.Debug($"Removed buffer for window {windowId}");
             }
         }
@@ -385,7 +382,7 @@ public sealed class PerWindowBufferManager : IDisposable
                 if (_buffers.TryGetValue(id, out var buffer))
                 {
                     buffer.Dispose();
-                    _buffers.Remove(id);
+                    _ = _buffers.Remove(id);
                 }
             }
 

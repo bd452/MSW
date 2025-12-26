@@ -97,7 +97,7 @@ public sealed class PerWindowFrameBufferTests
         using var buffer = new WindowFrameBuffer(1, config, logger);
 
         // First allocation at 1080p
-        buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
+        _ = buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
         var size1080p = buffer.BufferSize;
 
         // Resize to 4K should reallocate
@@ -119,7 +119,7 @@ public sealed class PerWindowFrameBufferTests
         using var buffer = new WindowFrameBuffer(1, config, logger);
 
         // Small compressed frame should use smallest tranche
-        buffer.EnsureAllocated(1920, 1080, 500 * 1024); // 500KB compressed
+        _ = buffer.EnsureAllocated(1920, 1080, 500 * 1024); // 500KB compressed
         var smallTrancheSize = buffer.SlotSize;
         Assert.Equal(1024 * 1024, smallTrancheSize);
 
@@ -138,7 +138,7 @@ public sealed class PerWindowFrameBufferTests
         using var buffer = new WindowFrameBuffer(1, config, logger);
 
         // Allocate for small test frame
-        buffer.EnsureAllocated(100, 100, 100 * 100 * 4);
+        _ = buffer.EnsureAllocated(100, 100, 100 * 100 * 4);
 
         var header = new FrameSlotHeader
         {
@@ -166,7 +166,7 @@ public sealed class PerWindowFrameBufferTests
 
         using var buffer = new WindowFrameBuffer(1, config, logger);
 
-        buffer.EnsureAllocated(100, 100, 100 * 100 * 4);
+        _ = buffer.EnsureAllocated(100, 100, 100 * 100 * 4);
 
         var header = new FrameSlotHeader
         {
@@ -210,7 +210,7 @@ public sealed class PerWindowFrameBufferTests
         using var buffer = new WindowFrameBuffer(1, config, logger);
 
         // Allocate for small frame
-        buffer.EnsureAllocated(100, 100, 100 * 100 * 4);
+        _ = buffer.EnsureAllocated(100, 100, 100 * 100 * 4);
 
         var header = new FrameSlotHeader
         {
@@ -237,7 +237,7 @@ public sealed class PerWindowFrameBufferTests
         var config = new PerWindowBufferConfig();
 
         var buffer = new WindowFrameBuffer(1, config, logger);
-        buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
+        _ = buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
         Assert.True(buffer.IsAllocated);
 
         buffer.Dispose();
@@ -252,7 +252,7 @@ public sealed class PerWindowFrameBufferTests
         var config = new PerWindowBufferConfig();
 
         var buffer = new WindowFrameBuffer(1, config, logger);
-        buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
+        _ = buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
 
         buffer.Dispose();
         buffer.Dispose(); // Should not throw
@@ -344,7 +344,7 @@ public sealed class PerWindowFrameBufferTests
         Assert.Equal(FrameBufferMode.Uncompressed, stats.Mode);
 
         var buffer = manager.GetOrCreateBuffer(1);
-        buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
+        _ = buffer.EnsureAllocated(1920, 1080, 1920 * 1080 * 4);
 
         stats = manager.GetStats();
         Assert.Equal(1, stats.WindowCount);
