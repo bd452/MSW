@@ -225,6 +225,24 @@ public struct VMConfiguration: Codable, Hashable {
         self.suspendOnIdleAfterSeconds = suspendOnIdleAfterSeconds
     }
 
+    // Custom decoder to handle backward compatibility with configs that don't have frameStreaming
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.resources = try container.decode(VMResources.self, forKey: .resources)
+        self.disk = try container.decode(VMDiskConfiguration.self, forKey: .disk)
+        self.network = try container.decode(VMNetworkConfiguration.self, forKey: .network)
+        // Provide default if frameStreaming is missing (backward compatibility)
+        self.frameStreaming = try container.decodeIfPresent(
+            FrameStreamingConfiguration.self,
+            forKey: .frameStreaming
+        ) ?? FrameStreamingConfiguration()
+        self.suspendOnIdleAfterSeconds = try container.decode(TimeInterval.self, forKey: .suspendOnIdleAfterSeconds)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case resources, disk, network, frameStreaming, suspendOnIdleAfterSeconds
+    }
+
     public var diskImagePath: URL {
         get { disk.imagePath }
         set { disk.imagePath = newValue }
