@@ -242,14 +242,18 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     private func isValidTransition(from: SetupWizardStep, to: SetupWizardStep) -> Bool {
         switch (from, to) {
-        case (.welcome, .welcome): return true  // Initial start
+        // Start/restart transitions
+        case (_, .welcome): return true  // Allow starting/restarting from any state
         case (.welcome, .importISO): return true
+        // Forward flow
         case (.importISO, .installing): return true
         case (.importISO, .importISO): return true  // Re-select ISO
         case (.installing, .complete): return true
         case (.installing, .error): return true
+        // Recovery transitions
         case (.error, .importISO): return true
         case (.error, .installing): return true  // Retry
+        // Terminal state
         case (.complete, _): return false  // Terminal
         default: return false
         }

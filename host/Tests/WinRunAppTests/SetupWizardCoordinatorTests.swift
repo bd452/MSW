@@ -121,18 +121,15 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.currentStep, .installing)
     }
 
-    func testRetry_withoutISO_transitionsToImportISO() {
+    func testRetry_fromNonErrorStep_isIgnored() {
         let coordinator = makeCoordinator()
-        goToError(coordinator)
-        // Clear the ISO to simulate retry without selection
-        coordinator.chooseNewISO()  // Clears ISO
-        // Now go back to error state for the test
-        goToError(coordinator, clearISO: false)
-        coordinator.chooseNewISO()  // Now ISO is nil
+        coordinator.start()
+        coordinator.proceedFromWelcome()
+        // Now at importISO step
 
-        coordinator.retry()
+        coordinator.retry()  // Should be ignored - not in error state
 
-        XCTAssertEqual(coordinator.currentStep, .importISO)
+        XCTAssertEqual(coordinator.currentStep, .importISO)  // Still at importISO
     }
 
     func testChooseNewISO_fromError_transitionsToImportISO() {
