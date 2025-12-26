@@ -76,6 +76,7 @@ jobs:
         with:
           path: |
             host/.build
+            host/.swiftpm
             ~/Library/Caches/org.swift.swiftpm
           key: swift-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('host/Package.swift', 'host/Package.resolved') }}
           restore-keys: swift-${{ runner.os }}-${{ runner.arch }}-
@@ -105,17 +106,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: guest/global.json
-
-      - name: Verify SDK version
-        run: dotnet --version
-
-      # Cache NuGet packages
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('guest/**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
+          cache: true
 
       - name: Restore dependencies
         working-directory: guest
@@ -154,14 +145,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: guest/global.json
-
-      # Cache NuGet packages (same cache as guest job)
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('guest/**/*.csproj') }}
-          restore-keys: nuget-${{ runner.os }}-
+          cache: true
 
       - name: Restore dependencies
         working-directory: guest
