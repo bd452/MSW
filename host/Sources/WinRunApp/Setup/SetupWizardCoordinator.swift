@@ -147,6 +147,10 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     /// Handles completion of the installation process.
     public func handleInstallationComplete(result: ProvisioningResult) {
+        guard currentStep == .installing else {
+            logger.warn("handleInstallationComplete called from invalid step: \(currentStep.rawValue)")
+            return
+        }
         lastResult = result
 
         if result.success {
