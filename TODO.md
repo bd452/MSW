@@ -57,7 +57,7 @@
     - [X] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
-- [ ] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
+- [X] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
   - [X] ISO validation + Windows version detection { new:host/Sources/WinRunSetup/ISOValidator.swift, new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
     - [X] Mount and parse Windows ISO metadata (install.wim/esd) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
@@ -120,17 +120,17 @@
     - [X] Implement retry and choose-ISO transitions in the coordinator { host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift, host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for coordinator state transitions and recovery wiring { new:host/Tests/WinRunAppTests/SetupWizardCoordinatorTests.swift } <docs/development.md>
 
-- [ ] Guest Agent Installer { new:guest/WinRunAgent.Installer/, guest/WinRunAgent/WinRunAgent.csproj } <docs/decisions/windows-provisioning.md>
-  - [ ] MSI installer project { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
-    - [ ] Create WiX installer project with service registration { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
-    - [ ] Configure auto-start service on Windows boot { new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
-    - [ ] Add upgrade/uninstall support { new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
-  - [ ] Silent installation scripts { new:guest/WinRunAgent.Installer/install-silent.ps1, new:guest/WinRunAgent.Installer/uninstall-silent.ps1 } <docs/decisions/windows-provisioning.md>
-    - [ ] Create silent install script for provisioning automation { new:guest/WinRunAgent.Installer/install-silent.ps1 } <docs/decisions/windows-provisioning.md>
-    - [ ] Create uninstall script for clean removal { new:guest/WinRunAgent.Installer/uninstall-silent.ps1 } <docs/decisions/windows-provisioning.md>
-  - [ ] Build integration { scripts/build-all.sh, new:scripts/build-guest-installer.ps1, .github/workflows/ci.yml } <docs/decisions/operations.md>
-    - [ ] Add MSI build step to Windows CI { .github/workflows/ci.yml, new:scripts/build-guest-installer.ps1 } <docs/decisions/operations.md>
-    - [ ] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
+- [X] Guest Agent Installer { new:guest/WinRunAgent.Installer/, guest/WinRunAgent/WinRunAgent.csproj } <docs/decisions/windows-provisioning.md>
+  - [X] MSI installer project { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+    - [X] Create WiX installer project with service registration { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+    - [X] Configure auto-start service on Windows boot { new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+    - [X] Add upgrade/uninstall support { new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
+  - [X] Silent installation scripts { new:guest/WinRunAgent.Installer/install-silent.ps1, new:guest/WinRunAgent.Installer/uninstall-silent.ps1 } <docs/decisions/windows-provisioning.md>
+    - [X] Create silent install script for provisioning automation { new:guest/WinRunAgent.Installer/install-silent.ps1 } <docs/decisions/windows-provisioning.md>
+    - [X] Create uninstall script for clean removal { new:guest/WinRunAgent.Installer/uninstall-silent.ps1 } <docs/decisions/windows-provisioning.md>
+  - [X] Build integration { scripts/build-all.sh, new:scripts/build-guest-installer.ps1, .github/workflows/ci.yml } <docs/decisions/operations.md>
+    - [X] Add MSI build step to Windows CI { .github/workflows/ci.yml, new:scripts/build-guest-installer.ps1 } <docs/decisions/operations.md>
+    - [X] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [ ] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>

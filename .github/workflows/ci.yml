@@ -131,7 +131,37 @@ jobs:
         run: dotnet --version
       - name: Check formatting
         working-directory: guest
-        run: dotnet format WinRunAgent.sln --verify-no-changes --verbosity diagnostic
+        # Format only C# projects (not WiX installer which has different file types)
+        run: |
+          dotnet format WinRunAgent/WinRunAgent.csproj --verify-no-changes --verbosity diagnostic
+          dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj --verify-no-changes --verbosity diagnostic
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Guest MSI Installer - builds after successful guest-build
+  # ─────────────────────────────────────────────────────────────────────────────
+  guest-installer:
+    name: Guest MSI Installer
+    needs: [changes, guest-build]
+    if: needs.changes.outputs.guest == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: guest/global.json
+      - name: Restore dependencies
+        working-directory: guest
+        run: dotnet restore WinRunAgent.sln
+      - name: Build MSI Installer
+        run: |
+          .\scripts\build-guest-installer.ps1 -Configuration Release -OutputDir .\artifacts
+      - name: Upload MSI Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinRunAgent-Installer
+          path: artifacts/
+          retention-days: 30
+          if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Final gate - require this single check in branch protection
@@ -141,16 +171,17 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [changes, host-build, host-lint, guest-build, guest-lint]
+    needs: [changes, host-build, host-lint, guest-build, guest-lint, guest-installer]
     steps:
       - name: Check all jobs passed
         run: |
           echo "Job results:"
-          echo "  changes:    ${{ needs.changes.result }}"
-          echo "  host-build: ${{ needs.host-build.result }}"
-          echo "  host-lint:  ${{ needs.host-lint.result }}"
-          echo "  guest-build: ${{ needs.guest-build.result }}"
-          echo "  guest-lint:  ${{ needs.guest-lint.result }}"
+          echo "  changes:       ${{ needs.changes.result }}"
+          echo "  host-build:    ${{ needs.host-build.result }}"
+          echo "  host-lint:     ${{ needs.host-lint.result }}"
+          echo "  guest-build:   ${{ needs.guest-build.result }}"
+          echo "  guest-lint:    ${{ needs.guest-lint.result }}"
+          echo "  guest-installer: ${{ needs.guest-installer.result }}"
           echo ""
           
           # A job is OK if it succeeded or was skipped (no relevant files changed)
@@ -170,6 +201,7 @@ jobs:
           check_job "${{ needs.host-lint.result }}" "host-lint" || failed=1
           check_job "${{ needs.guest-build.result }}" "guest-build" || failed=1
           check_job "${{ needs.guest-lint.result }}" "guest-lint" || failed=1
+          check_job "${{ needs.guest-installer.result }}" "guest-installer" || failed=1
           
           if [[ $failed -eq 1 ]]; then
             echo ""

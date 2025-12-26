@@ -80,10 +80,14 @@ build-host:
 
 build-guest:
 ifdef DOTNET_ROOT
-	cd $(REPO_ROOT)/guest && dotnet build WinRunAgent.sln
+	@# Build only main projects (not WiX installer) - WiX requires Windows
+	cd $(REPO_ROOT)/guest && dotnet build WinRunAgent/WinRunAgent.csproj && \
+		dotnet build WinRunAgent.Tests/WinRunAgent.Tests.csproj
 else
 	@if command -v dotnet >/dev/null 2>&1; then \
-		cd $(REPO_ROOT)/guest && dotnet build WinRunAgent.sln; \
+		echo "🔨 Building guest projects..."; \
+		cd $(REPO_ROOT)/guest && dotnet build WinRunAgent/WinRunAgent.csproj && \
+			dotnet build WinRunAgent.Tests/WinRunAgent.Tests.csproj; \
 	else \
 		echo "⚠️  dotnet CLI not found; skipping guest build"; \
 	fi
@@ -102,11 +106,11 @@ test-host:
 test-guest:
 ifdef DOTNET_ROOT
 	@echo "🧪 Running guest tests..."
-	cd $(REPO_ROOT)/guest && dotnet test WinRunAgent.sln
+	cd $(REPO_ROOT)/guest && dotnet test WinRunAgent.Tests/WinRunAgent.Tests.csproj
 else
 	@if command -v dotnet >/dev/null 2>&1; then \
 		echo "🧪 Running guest tests..."; \
-		cd $(REPO_ROOT)/guest && dotnet test WinRunAgent.sln; \
+		cd $(REPO_ROOT)/guest && dotnet test WinRunAgent.Tests/WinRunAgent.Tests.csproj; \
 	else \
 		echo "⚠️  dotnet CLI not found; skipping guest tests"; \
 	fi
@@ -328,11 +332,14 @@ lint-host:
 lint-guest:
 ifdef DOTNET_ROOT
 	@echo "🔍 Linting guest (dotnet format)..."
-	cd $(REPO_ROOT)/guest && dotnet format WinRunAgent.sln --verify-no-changes
+	@# Only lint C# projects (not WiX installer which has different file types)
+	cd $(REPO_ROOT)/guest && dotnet format WinRunAgent/WinRunAgent.csproj --verify-no-changes && \
+		dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj --verify-no-changes
 else
 	@if command -v dotnet >/dev/null 2>&1; then \
 		echo "🔍 Linting guest (dotnet format)..."; \
-		cd $(REPO_ROOT)/guest && dotnet format WinRunAgent.sln --verify-no-changes; \
+		cd $(REPO_ROOT)/guest && dotnet format WinRunAgent/WinRunAgent.csproj --verify-no-changes && \
+			dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj --verify-no-changes; \
 	else \
 		echo "⚠️  dotnet CLI not found; skipping guest lint"; \
 	fi
@@ -356,11 +363,14 @@ format-host:
 format-guest:
 ifdef DOTNET_ROOT
 	@echo "✨ Formatting guest (dotnet format)..."
-	cd $(REPO_ROOT)/guest && dotnet format WinRunAgent.sln
+	@# Only format C# projects (not WiX installer)
+	cd $(REPO_ROOT)/guest && dotnet format WinRunAgent/WinRunAgent.csproj && \
+		dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj
 else
 	@if command -v dotnet >/dev/null 2>&1; then \
 		echo "✨ Formatting guest (dotnet format)..."; \
-		cd $(REPO_ROOT)/guest && dotnet format WinRunAgent.sln; \
+		cd $(REPO_ROOT)/guest && dotnet format WinRunAgent/WinRunAgent.csproj && \
+			dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj; \
 	else \
 		echo "⚠️  dotnet CLI not found; skipping guest format"; \
 	fi
@@ -383,11 +393,12 @@ check-guest: lint-guest build-guest test-guest
 # Linux-friendly check: runs everything that works on Linux
 # - Host: lint only (build/test require macOS)
 # - Guest: lint + build + test (97% of tests pass, ~3% require Windows P/Invoke)
+# - Installer: skipped (requires Windows + WiX)
 check-linux: lint-host lint-guest build-guest
 	@echo ""
 	@echo "🧪 Running guest tests (some Windows-only tests expected to fail on Linux)..."
 	@cd $(REPO_ROOT)/guest && \
-		if $(DOTNET) test WinRunAgent.sln 2>&1 | tee /tmp/test-output.txt | tail -20; then \
+		if $(DOTNET) test WinRunAgent.Tests/WinRunAgent.Tests.csproj 2>&1 | tee /tmp/test-output.txt | tail -20; then \
 			echo ""; \
 			echo "✅ All guest tests passed!"; \
 		else \
@@ -407,6 +418,7 @@ check-linux: lint-host lint-guest build-guest
 	@echo "✅ Linux checks passed!"
 	@echo "   Note: Host build/test skipped (requires macOS). Use 'make check-host-remote' for full host CI."
 	@echo "   Note: Some guest tests require Windows. Use 'make test-guest-remote' for full guest tests."
+	@echo "   Note: WiX installer skipped (requires Windows). MSI is built in Windows CI."
 
 # Full remote CI: run host on macOS, guest on Windows via GitHub Actions
 check-remote:
