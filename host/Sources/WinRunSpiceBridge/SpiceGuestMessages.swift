@@ -335,7 +335,8 @@ public struct WindowBufferAllocatedMessage: GuestMessage {
     public let timestamp: Int64
     /// Window ID this buffer belongs to
     public let windowId: UInt64
-    /// Pointer to the buffer (for shared memory mapping)
+    /// Buffer location. When `usesSharedMemory` is true, this is an offset into
+    /// the shared memory region. Otherwise, it's a guest memory pointer (for diagnostics).
     public let bufferPointer: UInt64
     /// Total buffer size in bytes
     public let bufferSize: Int32
@@ -347,6 +348,9 @@ public struct WindowBufferAllocatedMessage: GuestMessage {
     public let isCompressed: Bool
     /// Whether this is a reallocation (vs initial allocation)
     public let isReallocation: Bool
+    /// Whether the buffer is in shared memory (true) or guest-local memory (false).
+    /// When true, `bufferPointer` is an offset into the shared memory region.
+    public let usesSharedMemory: Bool
 
     public init(
         timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
@@ -356,7 +360,8 @@ public struct WindowBufferAllocatedMessage: GuestMessage {
         slotSize: Int32,
         slotCount: Int32,
         isCompressed: Bool,
-        isReallocation: Bool = false
+        isReallocation: Bool = false,
+        usesSharedMemory: Bool = false
     ) {
         self.timestamp = timestamp
         self.windowId = windowId
@@ -366,6 +371,7 @@ public struct WindowBufferAllocatedMessage: GuestMessage {
         self.slotCount = slotCount
         self.isCompressed = isCompressed
         self.isReallocation = isReallocation
+        self.usesSharedMemory = usesSharedMemory
     }
 }
 

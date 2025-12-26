@@ -70,11 +70,13 @@ public sealed class WindowFrameBuffer : IDisposable
 {
     private readonly IAgentLogger _logger;
     private readonly PerWindowBufferConfig _config;
+    private readonly SharedMemoryAllocator? _sharedAllocator;
 
     private nint _bufferPointer;
     private int _currentTrancheIndex = -1;
     private int _expectedFrameSize;
     private bool _disposed;
+    private SharedAllocation _currentAllocation;
 
     // Ring buffer state
     private int _writeIndex;
@@ -83,11 +85,13 @@ public sealed class WindowFrameBuffer : IDisposable
     public WindowFrameBuffer(
         ulong windowId,
         PerWindowBufferConfig config,
-        IAgentLogger logger)
+        IAgentLogger logger,
+        SharedMemoryAllocator? sharedAllocator = null)
     {
         WindowId = windowId;
         _config = config;
         _logger = logger;
+        _sharedAllocator = sharedAllocator;
     }
 
     /// <summary>Window ID this buffer belongs to.</summary>
@@ -104,6 +108,14 @@ public sealed class WindowFrameBuffer : IDisposable
 
     /// <summary>Number of slots in this buffer.</summary>
     public int SlotCount => _config.SlotsPerWindow;
+
+    /// <summary>Whether this buffer uses shared memory (vs local allocation).</summary>
+    public bool UsesSharedMemory => _currentAllocation.IsValid;
+
+    /// <summary>
+    /// Gets the buffer offset within shared memory (only valid if UsesSharedMemory is true).
+    /// </summary>
+    public long SharedMemoryOffset => _currentAllocation.Offset;
 
     /// <summary>
     /// Ensures the buffer is allocated for the given frame size.
@@ -241,26 +253,68 @@ public sealed class WindowFrameBuffer : IDisposable
     private void Reallocate(int slotSize)
     {
         // Free existing buffer
-        if (_bufferPointer != IntPtr.Zero)
-        {
-            Marshal.FreeHGlobal(_bufferPointer);
-            _bufferPointer = IntPtr.Zero;
-        }
+        FreeCurrentBuffer();
 
         SlotSize = slotSize;
         BufferSize = slotSize * _config.SlotsPerWindow;
 
+        // Try shared memory first, fall back to local allocation
+        if (_sharedAllocator?.IsInitialized == true)
+        {
+            _currentAllocation = _sharedAllocator.Allocate(BufferSize);
+            if (_currentAllocation.IsValid)
+            {
+                _bufferPointer = _currentAllocation.Pointer;
+                _logger.Debug($"Window {WindowId}: Allocated {BufferSize} bytes from shared memory at offset {_currentAllocation.Offset}");
+            }
+            else
+            {
+                _logger.Warn($"Window {WindowId}: Shared memory allocation failed, falling back to local");
+                AllocateLocal();
+            }
+        }
+        else
+        {
+            AllocateLocal();
+        }
+
+        // Reset ring buffer indices
+        _writeIndex = 0;
+        _readIndex = 0;
+    }
+
+    private void AllocateLocal()
+    {
         _bufferPointer = Marshal.AllocHGlobal(BufferSize);
+        _currentAllocation = default; // Clear shared allocation
 
         // Zero the buffer
         unsafe
         {
             new Span<byte>((void*)_bufferPointer, BufferSize).Clear();
         }
+    }
 
-        // Reset ring buffer indices
-        _writeIndex = 0;
-        _readIndex = 0;
+    private void FreeCurrentBuffer()
+    {
+        if (_bufferPointer == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (_currentAllocation.IsValid && _sharedAllocator != null)
+        {
+            // Free from shared memory
+            _sharedAllocator.Free(_currentAllocation);
+            _currentAllocation = default;
+        }
+        else
+        {
+            // Free local memory
+            Marshal.FreeHGlobal(_bufferPointer);
+        }
+
+        _bufferPointer = IntPtr.Zero;
     }
 
     public void Dispose()
@@ -271,12 +325,7 @@ public sealed class WindowFrameBuffer : IDisposable
         }
 
         _disposed = true;
-
-        if (_bufferPointer != IntPtr.Zero)
-        {
-            Marshal.FreeHGlobal(_bufferPointer);
-            _bufferPointer = IntPtr.Zero;
-        }
+        FreeCurrentBuffer();
     }
 }
 
@@ -287,19 +336,28 @@ public sealed class PerWindowBufferManager : IDisposable
 {
     private readonly IAgentLogger _logger;
     private readonly PerWindowBufferConfig _config;
+    private readonly SharedMemoryAllocator? _sharedAllocator;
     private readonly Dictionary<ulong, WindowFrameBuffer> _buffers = [];
     private readonly object _lock = new();
     private bool _disposed;
 
     public PerWindowBufferManager(
         PerWindowBufferConfig config,
-        IAgentLogger logger)
+        IAgentLogger logger,
+        SharedMemoryAllocator? sharedAllocator = null)
     {
         _config = config;
         _logger = logger;
+        _sharedAllocator = sharedAllocator;
 
-        _logger.Info($"PerWindowBufferManager created: mode={config.Mode}, slots={config.SlotsPerWindow}");
+        var allocMode = sharedAllocator?.IsInitialized == true ? "shared" : "local";
+        _logger.Info($"PerWindowBufferManager created: mode={config.Mode}, slots={config.SlotsPerWindow}, allocation={allocMode}");
     }
+
+    /// <summary>
+    /// Whether buffers will use shared memory.
+    /// </summary>
+    public bool UsesSharedMemory => _sharedAllocator?.IsInitialized == true;
 
     /// <summary>
     /// Gets or creates a buffer for the specified window.
@@ -315,7 +373,7 @@ public sealed class PerWindowBufferManager : IDisposable
                 return existing;
             }
 
-            var buffer = new WindowFrameBuffer(windowId, _config, _logger);
+            var buffer = new WindowFrameBuffer(windowId, _config, _logger, _sharedAllocator);
             _buffers[windowId] = buffer;
             return buffer;
         }
@@ -346,6 +404,7 @@ public sealed class PerWindowBufferManager : IDisposable
         {
             var totalMemory = 0L;
             var allocatedCount = 0;
+            var sharedCount = 0;
 
             foreach (var buffer in _buffers.Values)
             {
@@ -353,6 +412,10 @@ public sealed class PerWindowBufferManager : IDisposable
                 {
                     totalMemory += buffer.BufferSize;
                     allocatedCount++;
+                    if (buffer.UsesSharedMemory)
+                    {
+                        sharedCount++;
+                    }
                 }
             }
 
@@ -360,11 +423,18 @@ public sealed class PerWindowBufferManager : IDisposable
             {
                 WindowCount = _buffers.Count,
                 AllocatedBufferCount = allocatedCount,
+                SharedMemoryBufferCount = sharedCount,
                 TotalMemoryBytes = totalMemory,
-                Mode = _config.Mode
+                Mode = _config.Mode,
+                UsesSharedMemory = UsesSharedMemory
             };
         }
     }
+
+    /// <summary>
+    /// Gets shared memory statistics if available.
+    /// </summary>
+    public SharedMemoryStats? GetSharedMemoryStats() => _sharedAllocator?.GetStats();
 
     /// <summary>
     /// Cleans up buffers for windows that no longer exist.
@@ -421,8 +491,10 @@ public sealed record BufferManagerStats
 {
     public int WindowCount { get; init; }
     public int AllocatedBufferCount { get; init; }
+    public int SharedMemoryBufferCount { get; init; }
     public long TotalMemoryBytes { get; init; }
     public FrameBufferMode Mode { get; init; }
+    public bool UsesSharedMemory { get; init; }
 
     public string TotalMemoryFormatted => TotalMemoryBytes switch
     {
@@ -431,6 +503,11 @@ public sealed record BufferManagerStats
         _ => $"{TotalMemoryBytes / (1024 * 1024)} MB"
     };
 
-    public override string ToString() =>
-        $"Mode={Mode}, Windows={WindowCount}, Allocated={AllocatedBufferCount}, Memory={TotalMemoryFormatted}";
+    public override string ToString()
+    {
+        var allocInfo = UsesSharedMemory
+            ? $"Allocated={AllocatedBufferCount} (shared={SharedMemoryBufferCount})"
+            : $"Allocated={AllocatedBufferCount}";
+        return $"Mode={Mode}, Windows={WindowCount}, {allocInfo}, Memory={TotalMemoryFormatted}";
+    }
 }

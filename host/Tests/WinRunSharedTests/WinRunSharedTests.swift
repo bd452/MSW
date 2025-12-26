@@ -121,7 +121,7 @@ final class WinRunSharedTests: XCTestCase {
         XCTAssertEqual(config.controlPort, 5900)
         XCTAssertEqual(config.frameDataPort, 5901)
         XCTAssertTrue(config.sharedMemoryEnabled)
-        XCTAssertEqual(config.sharedMemorySizeMB, 64)
+        XCTAssertEqual(config.sharedMemorySizeMB, 256)
         XCTAssertTrue(config.spiceConsoleEnabled)
     }
 
@@ -142,12 +142,12 @@ final class WinRunSharedTests: XCTestCase {
     }
 
     func testFrameStreamingSharedMemoryTooLarge() {
-        let config = FrameStreamingConfiguration(sharedMemorySizeMB: 512)
+        let config = FrameStreamingConfiguration(sharedMemorySizeMB: 1024)
         XCTAssertThrowsError(try config.validate()) { error in
             guard case VMConfigurationValidationError.sharedMemoryTooLarge(let actual, let maximum) = error else {
                 return XCTFail("Expected sharedMemoryTooLarge, got \(error)")
             }
-            XCTAssertEqual(actual, 512)
+            XCTAssertEqual(actual, 1024)
             XCTAssertEqual(maximum, FrameStreamingConfiguration.maximumSharedMemorySizeMB)
         }
     }

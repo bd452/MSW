@@ -38,16 +38,15 @@ public final class SpiceFrameRouter {
                 bufferSize: Int(notification.bufferSize),
                 slotSize: Int(notification.slotSize),
                 slotCount: Int(notification.slotCount),
-                isCompressed: notification.isCompressed
+                isCompressed: notification.isCompressed,
+                usesSharedMemory: notification.usesSharedMemory
             )
 
-            // Note: In a real implementation, we would map the guest's buffer pointer
-            // to host memory. For now, we log the allocation and the stream will
-            // need to handle reading from the appropriate location.
             let action = notification.isReallocation ? "reallocated" : "allocated"
+            let memoryType = notification.usesSharedMemory ? "shared" : "local"
             self.logger.info(
                 "Window \(windowId) buffer \(action): " +
-                "\(notification.bufferSize / 1024) KB, \(notification.slotCount) slots"
+                "\(notification.bufferSize / 1024) KB, \(notification.slotCount) slots (\(memoryType))"
             )
 
             // If there's a stream registered for this window, notify it of the new buffer
@@ -162,7 +161,8 @@ public final class SpiceFrameRouter {
 
 /// Information about a window's frame buffer allocation.
 public struct WindowBufferInfo: Hashable {
-    /// Guest-side pointer to the buffer
+    /// Buffer location. When `usesSharedMemory` is true, this is an offset into
+    /// the shared memory region. Otherwise, it's a guest memory pointer.
     public let bufferPointer: UInt64
     /// Total buffer size in bytes
     public let bufferSize: Int
@@ -172,19 +172,23 @@ public struct WindowBufferInfo: Hashable {
     public let slotCount: Int
     /// Whether frames in this buffer are compressed
     public let isCompressed: Bool
+    /// Whether this buffer uses shared memory
+    public let usesSharedMemory: Bool
 
     public init(
         bufferPointer: UInt64,
         bufferSize: Int,
         slotSize: Int,
         slotCount: Int,
-        isCompressed: Bool
+        isCompressed: Bool,
+        usesSharedMemory: Bool = false
     ) {
         self.bufferPointer = bufferPointer
         self.bufferSize = bufferSize
         self.slotSize = slotSize
         self.slotCount = slotCount
         self.isCompressed = isCompressed
+        self.usesSharedMemory = usesSharedMemory
     }
 }
 

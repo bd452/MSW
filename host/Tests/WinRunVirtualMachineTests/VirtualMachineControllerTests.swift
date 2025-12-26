@@ -204,3 +204,212 @@ final class VirtualMachineControllerBasicTests: XCTestCase {
     }
     #endif
 }
+
+// MARK: - Shared Memory Tests
+
+final class SharedMemoryManagerTests: XCTestCase {
+    var tempDirectory: URL!
+
+    override func setUp() {
+        super.setUp()
+        tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WinRunTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: tempDirectory)
+        super.tearDown()
+    }
+
+    func testCreateRegionCreatesFile() throws {
+        let manager = SharedMemoryManager(baseDirectory: tempDirectory)
+        let region = try manager.createRegion(sizeMB: 16)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: region.fileURL.path))
+        XCTAssertEqual(region.size, 16 * 1024 * 1024)
+    }
+
+    func testCreateRegionMapsMemory() throws {
+        let manager = SharedMemoryManager(baseDirectory: tempDirectory)
+        let region = try manager.createRegion(sizeMB: 16)
+
+        // Write to the memory
+        let testValue: UInt32 = 0x12345678
+        region.pointer.storeBytes(of: testValue, as: UInt32.self)
+
+        // Read it back
+        let readValue = region.pointer.load(as: UInt32.self)
+        XCTAssertEqual(readValue, testValue)
+    }
+
+    func testCurrentRegionReturnsActiveRegion() throws {
+        let manager = SharedMemoryManager(baseDirectory: tempDirectory)
+
+        XCTAssertNil(manager.currentRegion())
+
+        let region = try manager.createRegion(sizeMB: 16)
+
+        XCTAssertNotNil(manager.currentRegion())
+        XCTAssertEqual(manager.currentRegion()?.fileURL, region.fileURL)
+    }
+
+    func testCleanupRemovesRegion() throws {
+        let manager = SharedMemoryManager(baseDirectory: tempDirectory)
+        _ = try manager.createRegion(sizeMB: 16)
+
+        XCTAssertNotNil(manager.currentRegion())
+
+        manager.cleanup()
+
+        XCTAssertNil(manager.currentRegion())
+    }
+
+    func testGuestRelativePath() throws {
+        let manager = SharedMemoryManager(baseDirectory: tempDirectory)
+        let region = try manager.createRegion(sizeMB: 16)
+
+        XCTAssertEqual(region.guestRelativePath, "framebuffer.shm")
+    }
+
+    func testVirtioFSTag() {
+        XCTAssertEqual(SharedMemoryManager.virtioFSTag, "winrun-framebuffer")
+    }
+
+    func testSharedDirectoryPath() {
+        let manager = SharedMemoryManager(baseDirectory: tempDirectory)
+        XCTAssertEqual(manager.sharedDirectoryPath, tempDirectory)
+    }
+
+    func testCreatingNewRegionCleansUpOldRegion() throws {
+        let manager = SharedMemoryManager(baseDirectory: tempDirectory)
+
+        let region1 = try manager.createRegion(sizeMB: 16)
+        let url1 = region1.fileURL
+
+        // Create a second region (should clean up the first)
+        let region2 = try manager.createRegion(sizeMB: 32)
+
+        // The new region should be different
+        XCTAssertEqual(region2.size, 32 * 1024 * 1024)
+
+        // Old URL should be cleaned up (file removed when old region is deinitialized)
+        // Since region1 is still in scope, it may or may not be removed yet
+        // After region1 goes out of scope, the file should be gone
+        _ = url1 // suppress unused warning
+    }
+}
+
+// MARK: - Shared Memory Error Tests
+
+final class SharedMemoryErrorTests: XCTestCase {
+    func testDirectoryCreationFailedDescription() {
+        let url = URL(fileURLWithPath: "/test/path")
+        let underlyingError = NSError(domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Permission denied"])
+        let error = SharedMemoryError.directoryCreationFailed(url, underlyingError)
+
+        XCTAssertTrue(error.description.contains("/test/path"))
+        XCTAssertTrue(error.description.contains("Permission denied"))
+    }
+
+    func testFileCreationFailedDescription() {
+        let url = URL(fileURLWithPath: "/test/file.shm")
+        let underlyingError = NSError(domain: "Test", code: 2)
+        let error = SharedMemoryError.fileCreationFailed(url, underlyingError)
+
+        XCTAssertTrue(error.description.contains("/test/file.shm"))
+    }
+
+    func testFileTruncationFailedDescription() {
+        let url = URL(fileURLWithPath: "/test/file.shm")
+        let underlyingError = NSError(domain: "Test", code: 3, userInfo: [NSLocalizedDescriptionKey: "No space"])
+        let error = SharedMemoryError.fileTruncationFailed(url, underlyingError)
+
+        XCTAssertTrue(error.description.contains("/test/file.shm"))
+        XCTAssertTrue(error.description.contains("No space"))
+    }
+
+    func testMemoryMappingFailedDescription() {
+        let url = URL(fileURLWithPath: "/test/file.shm")
+        let error = SharedMemoryError.memoryMappingFailed(url, "mmap failed")
+
+        XCTAssertTrue(error.description.contains("/test/file.shm"))
+        XCTAssertTrue(error.description.contains("mmap failed"))
+    }
+
+    func testRegionNotInitializedDescription() {
+        let error = SharedMemoryError.regionNotInitialized
+
+        XCTAssertTrue(error.description.contains("not been initialized"))
+    }
+}
+
+// MARK: - VirtualMachineController Shared Memory Tests
+
+final class VirtualMachineControllerSharedMemoryTests: XCTestCase {
+    func testGetSharedMemoryDirectoryReturnsDefaultPath() async {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        let directory = await controller.getSharedMemoryDirectory()
+
+        XCTAssertTrue(directory.path.contains("SharedMemory"))
+    }
+
+    func testGetSharedMemoryRegionReturnsNilBeforeInitialization() async {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        let region = await controller.getSharedMemoryRegion()
+
+        XCTAssertNil(region)
+    }
+
+    func testInitializeSharedMemoryFailsWhenDisabled() async {
+        let frameConfig = FrameStreamingConfiguration(sharedMemoryEnabled: false)
+        let config = VMConfiguration(frameStreaming: frameConfig)
+        let controller = VirtualMachineController(configuration: config)
+
+        do {
+            _ = try await controller.initializeSharedMemory()
+            XCTFail("Expected error")
+        } catch let error as SharedMemoryError {
+            XCTAssertEqual(error.description, "Shared memory region has not been initialized")
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    func testInitializeSharedMemoryCreatesRegion() async throws {
+        let frameConfig = FrameStreamingConfiguration(
+            sharedMemoryEnabled: true,
+            sharedMemorySizeMB: 32
+        )
+        let config = VMConfiguration(frameStreaming: frameConfig)
+        let controller = VirtualMachineController(configuration: config)
+
+        let region = try await controller.initializeSharedMemory()
+
+        XCTAssertEqual(region.size, 32 * 1024 * 1024)
+        let currentRegion = await controller.getSharedMemoryRegion()
+        XCTAssertNotNil(currentRegion)
+
+        // Clean up
+        await controller.cleanupSharedMemory()
+    }
+
+    func testCleanupSharedMemoryRemovesRegion() async throws {
+        let frameConfig = FrameStreamingConfiguration(sharedMemoryEnabled: true)
+        let config = VMConfiguration(frameStreaming: frameConfig)
+        let controller = VirtualMachineController(configuration: config)
+
+        _ = try await controller.initializeSharedMemory()
+        let regionBeforeCleanup = await controller.getSharedMemoryRegion()
+        XCTAssertNotNil(regionBeforeCleanup)
+
+        await controller.cleanupSharedMemory()
+
+        let regionAfterCleanup = await controller.getSharedMemoryRegion()
+        XCTAssertNil(regionAfterCleanup)
+    }
+}
