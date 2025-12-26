@@ -143,13 +143,10 @@
     - [X] Sign app bundle with Developer ID certificate { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
     - [X] Notarize with Apple for Gatekeeper approval { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
     - [X] Staple notarization ticket to app bundle { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
-  - [ ] DMG creation { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
+  - [X] DMG creation { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
     - [X] Create DMG with drag-to-Applications layout { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
-    - [ ] Add background image and icon positioning { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
-    - [ ] Add a real DMG background image asset and wire it into packaging { scripts/package-dmg.sh, new:scripts/assets/winrun-dmg-background.png } <docs/decisions/operations.md>
-    - [ ] Sign and notarize final DMG { new:scripts/package-dmg.sh } <docs/decisions/operations.md>
+    - [X] Set Finder icon positioning (WinRun.app + Applications link) { scripts/package-dmg.sh } <docs/decisions/operations.md>
   - [ ] CI artifact publishing { .github/workflows/ci.yml } <docs/decisions/operations.md>
-    - [ ] Build and sign app bundle in CI { .github/workflows/ci.yml } <docs/decisions/operations.md>
     - [ ] Upload DMG and MSI as release artifacts { .github/workflows/ci.yml } <docs/decisions/operations.md>
 
 - [ ] Cross-Cutting & Operations { scripts/build-all.sh, scripts/bootstrap.sh, Makefile, README.md } <docs/decisions/operations.md, docs/development.md>
@@ -162,16 +159,19 @@
     - [ ] Document Windows ISO acquisition and recommendations { README.md, docs/decisions/windows-provisioning.md }
     - [ ] Reflect production architecture + workflows { docs/architecture.md, docs/development.md, docs/decisions/operations.md }
 
-- [ ] Credential Setup & Secrets Configuration { docs/development.md, .github/workflows/ci.yml }
-  - [ ] Configure Apple Developer credentials for code signing { docs/development.md }
+- [ ] Manual inputs required (assets + credentials) { docs/development.md, .github/workflows/ci.yml } <docs/decisions/operations.md>
+  - [ ] Provide DMG background image asset (REQUIRES: you provide `scripts/assets/winrun-dmg-background.png`) { new:scripts/assets/winrun-dmg-background.png, scripts/package-dmg.sh } <docs/decisions/operations.md>
+  - [ ] Sign and notarize final DMG (REQUIRES: Apple signing + notarization credentials below; macOS environment) { scripts/package-dmg.sh, scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
+  - [ ] Build and sign app bundle in CI (REQUIRES: GitHub Actions signing secrets below) { .github/workflows/ci.yml } <docs/decisions/operations.md>
+  - [ ] Configure Apple Developer credentials for code signing (REQUIRES: Developer ID cert + App Store Connect notarization key) { docs/development.md }
     - [ ] Obtain Developer ID Application certificate from Apple Developer portal
     - [ ] Export certificate as .p12 and store securely
     - [ ] Create App Store Connect API key for notarization
-  - [ ] Configure GitHub Actions secrets for CI signing { .github/workflows/ci.yml }
+  - [ ] Configure GitHub Actions secrets for CI signing (REQUIRES: set repository secrets) { .github/workflows/ci.yml }
     - [ ] Add DEVELOPER_ID secret
     - [ ] Add APPLE_CERTIFICATE_P12 and APPLE_CERTIFICATE_PASSWORD secrets
     - [ ] Add NOTARIZE_KEY_ID, NOTARIZE_KEY_ISSUER, NOTARIZE_KEY_P8 secrets
-  - [ ] Test full signing and notarization pipeline { scripts/sign-and-notarize.sh }
+  - [ ] Test full signing + notarization pipeline (REQUIRES: the above credentials/secrets and a macOS machine for local Gatekeeper verification) { scripts/sign-and-notarize.sh }
     - [ ] Verify local signing works with credentials
     - [ ] Verify CI signing works with secrets configured
     - [ ] Verify notarized app passes Gatekeeper on fresh macOS install
