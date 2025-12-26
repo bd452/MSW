@@ -37,124 +37,122 @@ jobs:
               - '.github/workflows/ci.yml'
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Host (macOS) - runs only when host paths change
+  # Host (macOS) - Lint + Build + Test in single job to avoid runner overhead
+  # macOS runners are 10x more expensive than Linux, so minimize job count
   # ─────────────────────────────────────────────────────────────────────────────
-  host-build:
-    name: Host Build & Test
+  host:
+    name: Host (Lint + Build + Test)
     needs: changes
     if: needs.changes.outputs.host == 'true'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+
+      # Cache Homebrew downloads (not installed packages - symlinks break)
       - name: Cache Homebrew downloads
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/Homebrew
-          key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build') }}
-          restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
+          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
+          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Install dependencies
-        timeout-minutes: 15
+        timeout-minutes: 10
         run: |
-          echo "Installing dependencies from Brewfile..."
-          brew bundle install --file=.github/Brewfile.host-build --no-upgrade --verbose
-          echo "Verifying spice-gtk installation..."
+          # Install both build and lint dependencies together
+          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
           pkg-config --modversion spice-client-glib-2.0
+          swiftlint version
+
+      # Lint first (fast, catches issues early)
+      - name: Lint (SwiftLint)
+        working-directory: host
+        run: swiftlint lint --strict --reporter github-actions-logging
+
+      # Cache Swift Package Manager build artifacts
+      - name: Cache Swift build
+        uses: actions/cache@v4
+        with:
+          path: |
+            host/.build
+            host/.swiftpm
+            ~/Library/Caches/org.swift.swiftpm
+          key: swift-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('host/Package.swift', 'host/Package.resolved') }}
+          restore-keys: swift-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Validate protocol
         run: make validate-protocol-host
+
       - name: Build
         working-directory: host
         run: swift build
+
       - name: Test
         working-directory: host
         run: swift test
 
-  host-lint:
-    name: Host Lint
-    needs: changes
-    if: needs.changes.outputs.host == 'true'
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cache Homebrew downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/Homebrew
-          key: brew-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-lint') }}
-          restore-keys: brew-downloads-${{ runner.os }}-${{ runner.arch }}-
-      - name: Install SwiftLint
-        timeout-minutes: 10
-        run: |
-          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade --verbose
-          swiftlint version
-      - name: Run SwiftLint
-        working-directory: host
-        run: swiftlint lint --strict --no-cache --reporter github-actions-logging
-
   # ─────────────────────────────────────────────────────────────────────────────
-  # Guest (Windows) - runs only when guest paths change
+  # Guest (Windows) - Lint + Build + Test in single job to avoid runner overhead
   # ─────────────────────────────────────────────────────────────────────────────
-  guest-build:
-    name: Guest Build & Test
+  guest:
+    name: Guest (Lint + Build + Test)
     needs: changes
     if: needs.changes.outputs.guest == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: guest/global.json
-      - name: Verify SDK version
-        run: dotnet --version
+
       - name: Restore dependencies
         working-directory: guest
         run: dotnet restore WinRunAgent.sln
+
+      # Lint first (fast, catches formatting issues early)
+      # Format only C# projects (not WiX installer which has different file types)
+      - name: Lint (dotnet format)
+        working-directory: guest
+        run: |
+          dotnet format WinRunAgent/WinRunAgent.csproj --verify-no-changes
+          dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj --verify-no-changes
+
       - name: Validate protocol
         run: make validate-protocol-guest
+
       - name: Build
         working-directory: guest
         run: dotnet build WinRunAgent.sln --no-restore --configuration Release
+
       - name: Test
         working-directory: guest
         run: dotnet test WinRunAgent.sln --no-build --configuration Release --verbosity normal
 
-  guest-lint:
-    name: Guest Lint
-    needs: changes
-    if: needs.changes.outputs.guest == 'true'
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: guest/global.json
-      - name: Verify SDK version
-        run: dotnet --version
-      - name: Check formatting
-        working-directory: guest
-        # Format only C# projects (not WiX installer which has different file types)
-        run: |
-          dotnet format WinRunAgent/WinRunAgent.csproj --verify-no-changes --verbosity diagnostic
-          dotnet format WinRunAgent.Tests/WinRunAgent.Tests.csproj --verify-no-changes --verbosity diagnostic
-
   # ─────────────────────────────────────────────────────────────────────────────
-  # Guest MSI Installer - builds after successful guest-build
+  # Guest MSI Installer - builds after successful guest job
   # ─────────────────────────────────────────────────────────────────────────────
   guest-installer:
     name: Guest MSI Installer
-    needs: [changes, guest-build]
+    needs: [changes, guest]
     if: needs.changes.outputs.guest == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: guest/global.json
+
       - name: Restore dependencies
         working-directory: guest
         run: dotnet restore WinRunAgent.sln
+
       - name: Build MSI Installer
         run: |
           .\scripts\build-guest-installer.ps1 -Configuration Release -OutputDir .\artifacts
+
       - name: Upload MSI Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -171,16 +169,14 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [changes, host-build, host-lint, guest-build, guest-lint, guest-installer]
+    needs: [changes, host, guest, guest-installer]
     steps:
       - name: Check all jobs passed
         run: |
           echo "Job results:"
-          echo "  changes:       ${{ needs.changes.result }}"
-          echo "  host-build:    ${{ needs.host-build.result }}"
-          echo "  host-lint:     ${{ needs.host-lint.result }}"
-          echo "  guest-build:   ${{ needs.guest-build.result }}"
-          echo "  guest-lint:    ${{ needs.guest-lint.result }}"
+          echo "  changes:        ${{ needs.changes.result }}"
+          echo "  host:           ${{ needs.host.result }}"
+          echo "  guest:          ${{ needs.guest.result }}"
           echo "  guest-installer: ${{ needs.guest-installer.result }}"
           echo ""
           
@@ -197,10 +193,8 @@ jobs:
           
           failed=0
           check_job "${{ needs.changes.result }}" "changes" || failed=1
-          check_job "${{ needs.host-build.result }}" "host-build" || failed=1
-          check_job "${{ needs.host-lint.result }}" "host-lint" || failed=1
-          check_job "${{ needs.guest-build.result }}" "guest-build" || failed=1
-          check_job "${{ needs.guest-lint.result }}" "guest-lint" || failed=1
+          check_job "${{ needs.host.result }}" "host" || failed=1
+          check_job "${{ needs.guest.result }}" "guest" || failed=1
           check_job "${{ needs.guest-installer.result }}" "guest-installer" || failed=1
           
           if [[ $failed -eq 1 ]]; then
@@ -210,4 +204,3 @@ jobs:
           fi
           
           echo "✅ All CI checks passed!"
-
