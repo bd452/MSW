@@ -589,7 +589,7 @@ public sealed class WindowFrameBufferSharedMemoryTests : IDisposable
         };
 
         using var smallAllocator = new SharedMemoryAllocator(smallConfig, logger);
-        smallAllocator.Initialize();
+        _ = smallAllocator.Initialize();
 
         var bufferConfig = new PerWindowBufferConfig();
 

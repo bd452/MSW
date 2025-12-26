@@ -220,7 +220,7 @@ public sealed class SharedMemoryAllocator : IDisposable
                     var dir = Path.GetDirectoryName(filePath);
                     if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     {
-                        Directory.CreateDirectory(dir);
+                        _ = Directory.CreateDirectory(dir);
                     }
 
                     // Create sparse file

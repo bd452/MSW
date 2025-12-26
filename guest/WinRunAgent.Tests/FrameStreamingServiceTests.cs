@@ -438,7 +438,7 @@ public sealed class FrameStreamingServiceTests
             };
 
             using var allocator = new SharedMemoryAllocator(allocatorConfig, new TestLogger());
-            allocator.Initialize();
+            _ = allocator.Initialize();
 
             var logger = new TestLogger();
             var windowTracker = new WindowTracker(logger);
@@ -464,7 +464,13 @@ public sealed class FrameStreamingServiceTests
         {
             if (Directory.Exists(tempDir))
             {
-                try { Directory.Delete(tempDir, true); } catch { }
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                }
             }
         }
     }
@@ -487,7 +493,7 @@ public sealed class FrameStreamingServiceTests
             };
 
             using var allocator = new SharedMemoryAllocator(allocatorConfig, new TestLogger());
-            allocator.Initialize();
+            _ = allocator.Initialize();
 
             var logger = new TestLogger();
             var windowTracker = new WindowTracker(logger);
@@ -515,7 +521,13 @@ public sealed class FrameStreamingServiceTests
         {
             if (Directory.Exists(tempDir))
             {
-                try { Directory.Delete(tempDir, true); } catch { }
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                }
             }
         }
     }
