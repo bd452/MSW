@@ -80,17 +80,58 @@ FrameReadyMessage {
 2. Receiving `FrameReadyMessage` → routes to correct `SpiceWindowStream`
 3. Managing `SharedFrameBufferReader` instances per window
 
-### Current Implementation Gap
-The guest allocates buffers in its own address space and sends the pointer to the host. For the host to actually read this memory, **VM-level shared memory must be configured** via Virtualization.framework:
+### Frame Transfer Strategies
 
-1. Guest buffer pointers must be within a shared memory region accessible to both host and guest
-2. The host must map the guest's buffer pointer to a host-accessible address
-3. `SpiceFrameRouter.handleBufferAllocation` currently logs the allocation but doesn't create a usable reader
+Two transfer strategies are supported, selectable via Settings UI:
 
-**Options for implementation**:
-- Configure `VZVirtioFileSystemDeviceConfiguration` for a shared memory-mapped directory
-- Use a pre-allocated shared memory region that the guest's `PerWindowBufferManager` allocates from
-- Direct memory mapping via Virtualization.framework (if supported)
+#### Strategy A: Shared Memory (Zero-Copy)
+**Default for production** - Lowest latency, no data copying.
+
+1. VM configures shared memory region via Virtualization.framework
+2. Guest allocates per-window buffers from shared region
+3. Guest sends `WindowBufferAllocatedMessage` with offset into shared region
+4. Host maps offset to host pointer, creates `SharedFrameBufferReader`
+5. Guest sends `FrameReadyMessage` (lightweight notification)
+6. Host reads frame data directly from mapped memory
+
+**Requirements**: VM shared memory configuration (VZVirtioFileSystemDeviceConfiguration or similar)
+
+#### Strategy B: Socket Transfer (Fallback)
+**For development/fallback** - Works without shared memory, higher latency.
+
+1. Guest captures frame and optionally compresses it
+2. Guest sends frame data embedded in message over control channel
+3. Host receives message, extracts frame bytes
+4. Host creates `SharedFrame` directly from message payload
+
+**Tradeoffs**: Copies data over socket, but works immediately without VM memory setup.
+
+#### FrameTransferMode Configuration
+
+```swift
+enum FrameTransferMode {
+    case sharedMemory  // Zero-copy via VM shared memory
+    case socket        // Send frame data over control channel  
+    case auto          // Try shared memory, fall back to socket
+}
+```
+
+User selects mode in Settings UI. Default is `auto` which:
+1. Attempts shared memory on startup
+2. Falls back to socket if shared memory unavailable
+3. Logs which mode is active
+
+### Current Implementation Status
+
+| Component | Status |
+|-----------|--------|
+| Per-window buffer allocation (guest) | ✅ Complete |
+| WindowBufferAllocatedMessage protocol | ✅ Complete |
+| FrameReadyMessage routing (host) | ✅ Complete |
+| Strategy A: VM shared memory mapping | ❌ Not implemented |
+| Strategy B: Socket frame transfer | ❌ Not implemented |
+| FrameTransferMode configuration | ❌ Not implemented |
+| Settings UI for mode selection | ❌ Not implemented |
 
 ### Deprecated: Single Shared Buffer
 The original design used a single `SharedFrameBufferWriter`/`SharedFrameBufferReader` pair shared across all windows. This is now deprecated in favor of per-window buffers. Legacy code paths using `setFrameBufferReader(reader)` are marked `@available(*, deprecated)`.

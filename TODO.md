@@ -152,26 +152,61 @@
     - [X] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
     - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Wire per-window buffer allocation to host memory mapping { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
-      - [ ] Configure VM shared memory region accessible to both host and guest { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
-        - Option A: VZVirtioFileSystemDeviceConfiguration with memory-mapped directory
-        - Option B: Pre-allocated shared memory region guest allocates from
-        - Must allow host to read arbitrary offsets within the region
-      - [ ] Update guest PerWindowBufferManager to allocate from shared region instead of Marshal.AllocHGlobal { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
-        - Guest buffer pointers must be offsets into the shared region
-        - WindowBufferAllocatedMessage.bufferPointer becomes offset, not raw pointer
-      - [ ] Map guest buffer offsets to host memory in SpiceFrameRouter.handleBufferAllocation { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
-        - Convert offset from WindowBufferAllocatedMessage to host pointer
-        - Create SharedFrameBufferReader for each per-window buffer
-        - Attach reader to the registered SpiceWindowStream
+    - [ ] Implement frame transfer strategies (both required, user-selectable) { host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/ } <docs/decisions/spice-bridge.md>
+      - [ ] Strategy A: Shared Memory (zero-copy, production default) { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+        - [ ] Configure VM shared memory region via Virtualization.framework { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+          - Use VZVirtioFileSystemDeviceConfiguration or direct memory mapping
+          - Expose shared region to both host process and guest VM
+        - [ ] Update guest PerWindowBufferManager to allocate from shared region { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+          - Replace Marshal.AllocHGlobal with allocation from shared region
+          - WindowBufferAllocatedMessage.bufferPointer becomes offset into shared region
+        - [ ] Map guest buffer offsets to host memory in SpiceFrameRouter { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+          - Convert offset from WindowBufferAllocatedMessage to host pointer
+          - Create SharedFrameBufferReader for each per-window buffer
+      - [ ] Strategy B: Socket Transfer (fallback, development) { host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/FrameStreamingService.cs }
+        - [ ] Add frame data payload to FrameReadyMessage or new FrameDataMessage { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift }
+          - Include compressed/uncompressed frame bytes in message
+          - Larger message size but works without shared memory setup
+        - [ ] Update FrameStreamingService to send frame data over control channel { guest/WinRunAgent/Services/FrameStreamingService.cs }
+          - Check configured transfer mode before deciding send path
+          - Socket mode: embed frame data in message
+          - Shared memory mode: send pointer/offset only
+        - [ ] Update SpiceFrameRouter to receive frame data from messages { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+          - Extract frame bytes from message payload
+          - Create SharedFrame directly without memory mapping
+      - [ ] Add FrameTransferMode configuration { host/Sources/WinRunShared/, guest/WinRunAgent/Services/ }
+        - [ ] Define FrameTransferMode enum (SharedMemory, Socket, Auto) { host/Sources/WinRunShared/VMConfiguration.swift, guest/WinRunAgent/Services/FrameStreamingService.cs }
+        - [ ] Add to host config store with persistence { host/Sources/WinRunShared/ConfigStore.swift }
+        - [ ] Communicate configured mode to guest via control channel { host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift, guest/WinRunAgent/Services/Messages.cs }
+        - [ ] Auto mode: try shared memory first, fall back to socket if unavailable
       - [ ] Enable skipped integration tests for per-window buffer frame delivery { host/Tests/WinRunSpiceBridgeTests/SpiceFrameRouterTests.swift, host/Tests/WinRunSpiceBridgeTests/FrameDeliveryIntegrationTests.swift }
-        - testFrameReadyRoutedToCorrectStream, testControlChannelDelegateRoutesFrameReady
-        - testEndToEndFrameDeliveryPipeline, testMultiWindowFrameRouting, testFrameDeliveryUpdatesMetrics
-      - [ ] Remove deprecated setFrameBufferReader API after per-window buffers are wired { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+      - [ ] Remove deprecated setFrameBufferReader API after both strategies work { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
   - [X] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
     - [X] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
+
+- [ ] Settings UI (Preferences Window) { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
+  - [ ] Settings window infrastructure { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift } <docs/architecture.md>
+    - [ ] Create settings window with tab view for categories { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift }
+    - [ ] Wire Cmd+, keyboard shortcut and menu item { host/Sources/WinRunApp/AppMain.swift }
+    - [ ] Persist window position and selected tab { host/Sources/WinRunShared/ConfigStore.swift }
+  - [ ] Streaming settings tab { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Frame transfer mode picker (Shared Memory / Socket / Auto) { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift }
+      - Shared Memory: zero-copy, lowest latency, requires VM shared memory setup
+      - Socket: higher latency, works everywhere, good for development
+      - Auto: try shared memory, fall back to socket
+    - [ ] Frame buffer mode picker (Uncompressed / Compressed) { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift }
+      - Uncompressed: exact allocation, ~33MB for 4K, lowest latency
+      - Compressed: tranche allocation with LZ4, lower memory, higher latency
+    - [ ] Show current streaming stats (frames/sec, memory usage, transfer mode in use)
+  - [ ] Apply settings changes { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift }
+    - [ ] Save to ConfigStore on change { host/Sources/WinRunShared/ConfigStore.swift }
+    - [ ] Notify running streams of config changes { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift }
+    - [ ] Send updated config to guest agent { host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift }
+  - [ ] Settings UI tests { new:host/Tests/WinRunAppTests/SettingsTests.swift }
+    - [ ] Test settings persistence and restoration
+    - [ ] Test config change notifications
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
