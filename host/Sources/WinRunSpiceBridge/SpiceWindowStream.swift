@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import WinRunShared
 
 /// Manages a Spice stream connection to a Windows guest window.
@@ -21,6 +22,8 @@ public final class SpiceWindowStream {
     private var reconnectPolicy: ReconnectPolicy
     private var reconnectWorkItem: DispatchWorkItem?
     private var metrics = SpiceStreamMetrics()
+    private var controlBuffer = Data()
+    private var pendingFrame: PendingSpiceFrame?
 
     public convenience init(
         configuration: SpiceStreamConfiguration = SpiceStreamConfiguration.environmentDefault(),
@@ -269,6 +272,15 @@ public final class SpiceWindowStream {
             state.lifecycle = .connected
             reconnectWorkItem = nil
             metrics.reconnectAttempts = 0
+            controlBuffer.removeAll(keepingCapacity: true)
+            pendingFrame = nil
+
+            // Per-window streams receive metadata/frames over the control port.
+            // The transport callback can deliver partial chunks, so we buffer and parse.
+            transport.setControlCallback { [weak self] chunk in
+                self?.handleControlChunk(chunk)
+            }
+
             logger.info("Spice stream connected for window \(windowID)")
             notifyStateChange(.connected)
         } catch let error as SpiceStreamError {
@@ -406,5 +418,145 @@ public final class SpiceWindowStream {
             guard let self else { return }
             delegate.windowStream(self, didChangeState: newState)
         }
+    }
+}
+
+// MARK: - Control Channel Parsing
+
+private struct PendingSpiceFrame {
+    let windowID: UInt64
+    var remainingBytes: Int
+    let shouldDeliver: Bool
+    var collected: Data
+
+    init(windowID: UInt64, remainingBytes: Int, shouldDeliver: Bool) {
+        self.windowID = windowID
+        self.remainingBytes = remainingBytes
+        self.shouldDeliver = shouldDeliver
+        self.collected = Data(capacity: max(0, remainingBytes))
+    }
+}
+
+extension SpiceWindowStream {
+    /// Handle a raw chunk of bytes received from the Spice control port.
+    /// The stream contains a mix of:
+    /// - Envelope messages: `[Type:1][Length:4][Payload:N]`
+    /// - Optional raw frame payloads following a `FrameDataMessage` header.
+    func handleControlChunk(_ chunk: Data) {
+        stateQueue.async {
+            guard !chunk.isEmpty else { return }
+
+            // If we're in the middle of consuming a raw frame payload, do that first.
+            if var pending = self.pendingFrame {
+                let take = min(pending.remainingBytes, chunk.count)
+                if take > 0, pending.shouldDeliver {
+                    pending.collected.append(chunk.prefix(take))
+                }
+                pending.remainingBytes -= take
+
+                if pending.remainingBytes <= 0 {
+                    if pending.shouldDeliver {
+                        self.handleFrame(pending.collected)
+                    }
+                    self.pendingFrame = nil
+                } else {
+                    self.pendingFrame = pending
+                }
+
+                // Continue processing any leftover bytes after the frame payload.
+                if take < chunk.count {
+                    self.controlBuffer.append(chunk.suffix(chunk.count - take))
+                }
+            } else {
+                self.controlBuffer.append(chunk)
+            }
+
+            self.drainControlBuffer()
+        }
+    }
+
+    private func drainControlBuffer() {
+        // Parse zero or more envelope messages out of the stream buffer.
+        while true {
+            // If a frame payload is pending, we must stop parsing envelopes until it completes.
+            if pendingFrame != nil {
+                return
+            }
+
+            do {
+                let result = try SpiceMessageSerializer.tryReadMessage(from: controlBuffer)
+                guard result.bytesConsumed > 0 else { return }
+
+                defer {
+                    controlBuffer.removeFirst(result.bytesConsumed)
+                }
+
+                guard let type = result.type, let message = result.message else {
+                    // Unknown message type: skip consumed bytes and continue.
+                    continue
+                }
+
+                // Dispatch only the messages relevant to window streams. We still need to
+                // observe frame headers for *all* windows so we can correctly consume the
+                // following raw frame payload from the byte stream.
+                switch type {
+                case .windowMetadata:
+                    guard let metadata = message as? WindowMetadataMessage else { continue }
+                    handleWindowMetadataMessage(metadata)
+
+                case .frameData:
+                    guard let frameHeader = message as? FrameDataMessage else { continue }
+                    let expected = Int(frameHeader.dataLength)
+                    let shouldDeliver = frameHeader.windowId == state.windowID
+                    pendingFrame = PendingSpiceFrame(
+                        windowID: frameHeader.windowId,
+                        remainingBytes: expected,
+                        shouldDeliver: shouldDeliver
+                    )
+
+                case .clipboardChanged:
+                    guard let clipboard = message as? GuestClipboardMessage else { continue }
+                    let data = ClipboardData(
+                        format: clipboard.format,
+                        data: clipboard.data,
+                        sequenceNumber: clipboard.sequenceNumber
+                    )
+                    handleClipboard(data)
+
+                default:
+                    // Ignore other unsolicited messages (session list, provisioning, telemetry, etc.)
+                    continue
+                }
+            } catch {
+                // If parsing fails, drop the buffer (prevents infinite loops) and surface the error.
+                metrics.lastErrorDescription = "Spice control parse error: \(error.localizedDescription)"
+                logger.error(metrics.lastErrorDescription ?? "Spice control parse error")
+                controlBuffer.removeAll(keepingCapacity: true)
+                return
+            }
+        }
+    }
+
+    private func handleWindowMetadataMessage(_ message: WindowMetadataMessage) {
+        // If this stream is bound to a specific windowID, filter by it.
+        if let boundWindowID = state.windowID, boundWindowID != 0, message.windowId != boundWindowID {
+            return
+        }
+
+        let frame = CGRect(
+            x: Double(message.bounds.x),
+            y: Double(message.bounds.y),
+            width: Double(message.bounds.width),
+            height: Double(message.bounds.height)
+        )
+
+        let metadata = WindowMetadata(
+            windowID: message.windowId,
+            title: message.title,
+            frame: frame,
+            isResizable: message.isResizable,
+            scaleFactor: CGFloat(message.scaleFactor)
+        )
+        handleMetadata(metadata)
     }
 }
