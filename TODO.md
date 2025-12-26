@@ -133,10 +133,10 @@
     - [X] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
 
 - [ ] Frame Streaming Pipeline { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md, docs/architecture.md>
-  - [ ] VM configuration for guest-host communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
-    - [ ] Add VZVirtioSocketDeviceConfiguration for vsock communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
-    - [ ] Configure shared memory region for frame buffer { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Add VZVirtioConsoleDeviceConfiguration for Spice port channel { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/protocols.md>
+  - [X] VM configuration for guest-host communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+    - [X] Add VZVirtioSocketDeviceConfiguration for vsock communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+    - [X] Configure shared memory region for frame buffer { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
+    - [X] Add VZVirtioConsoleDeviceConfiguration for Spice port channel { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/protocols.md>
   - [ ] Shared memory frame buffer infrastructure { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
     - [ ] Define shared memory ring buffer protocol for frames { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
     - [ ] Implement host-side memory mapping and frame reading { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift } <docs/decisions/spice-bridge.md>
