@@ -38,6 +38,11 @@ public protocol SpiceControlChannelDelegate: AnyObject {
 
     /// Called when a guest message is received that isn't a response to a pending request.
     func controlChannel(_ channel: SpiceControlChannel, didReceiveMessage message: Any, type: SpiceMessageType)
+
+    /// Called when a FrameReady notification is received from the guest.
+    /// This indicates a new frame is available in shared memory for the specified window.
+    /// This method may be called frequently (e.g., 60+ times per second for video playback).
+    func controlChannel(_ channel: SpiceControlChannel, didReceiveFrameReady notification: FrameReadyMessage)
 }
 
 /// Extension with default implementations
@@ -45,6 +50,7 @@ public extension SpiceControlChannelDelegate {
     func controlChannelDidConnect(_ channel: SpiceControlChannel) {}
     func controlChannelDidDisconnect(_ channel: SpiceControlChannel) {}
     func controlChannel(_ channel: SpiceControlChannel, didReceiveMessage message: Any, type: SpiceMessageType) {}
+    func controlChannel(_ channel: SpiceControlChannel, didReceiveFrameReady notification: FrameReadyMessage) {}
 }
 
 /// A control channel for sending commands to the guest agent and receiving responses.
@@ -242,6 +248,14 @@ public actor SpiceControlChannel {
     public func handleReceivedData(_ data: Data) throws {
         guard let (type, message) = try SpiceMessageSerializer.deserialize(data) else {
             logger.warn("Incomplete message received")
+            return
+        }
+
+        // Handle FrameReady notifications with dedicated fast path
+        // These are high-frequency messages that need efficient dispatch
+        if type == .frameReady, let frameReady = message as? FrameReadyMessage {
+            logger.debug("FrameReady: window=\(frameReady.windowId) frame=\(frameReady.frameNumber) slot=\(frameReady.slotIndex)")
+            _delegate?.controlChannel(self, didReceiveFrameReady: frameReady)
             return
         }
 
