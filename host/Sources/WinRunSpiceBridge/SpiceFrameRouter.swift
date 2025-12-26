@@ -164,24 +164,6 @@ public final class SpiceFrameRouter {
         routingQueue.sync { windowBufferInfo[windowID] }
     }
 
-    // MARK: - Legacy Shared Buffer Support
-
-    /// Sets a shared frame buffer reader (legacy mode for single shared buffer).
-    /// - Parameter reader: The shared memory buffer reader
-    @available(*, deprecated, message: "Use per-window buffer allocation instead")
-    public func setFrameBufferReader(_ reader: SharedFrameBufferReader?) {
-        routingQueue.async {
-            // In legacy mode, apply the same reader to all streams
-            for (_, stream) in self.windowStreams {
-                stream.setFrameBufferReader(reader)
-            }
-
-            if reader != nil {
-                self.logger.info("Legacy shared buffer reader set for \(self.windowStreams.count) streams")
-            }
-        }
-    }
-
     // MARK: - Stream Registration
 
     /// Registers a window stream for frame routing.

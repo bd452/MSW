@@ -107,34 +107,46 @@ final class SpiceFrameRouterTests: XCTestCase {
 
     // MARK: - Routing Tests
 
-    /// NOTE: This test uses the deprecated shared buffer path. Per-window buffers are now used.
-    func testFrameReadyRoutedToCorrectStream() throws {
-        throw XCTSkip("Test uses deprecated shared buffer path - per-window buffers are now used")
-
-        // swiftlint:disable:next unused_declaration
+    /// Tests that FrameReady notifications are routed to the correct stream using per-window buffers.
+    func testFrameReadyRoutedToCorrectStream() async {
         let (stream1, delegate1) = makeStream(windowID: 100)
-        // swiftlint:disable:next unused_declaration
         let (stream2, delegate2) = makeStream(windowID: 200)
 
-        // Create a mock shared frame buffer with test data
+        // Create shared memory region with per-window buffers
         let bufferConfig = SharedFrameBufferConfig(slotCount: 3, maxWidth: 100, maxHeight: 100)
-        let bufferPointer = createTestFrameBuffer(config: bufferConfig, windowID: 100, frameNumber: 1)
-        let reader = SharedFrameBufferReader(
-            pointer: bufferPointer,
-            size: bufferConfig.totalSize,
-            ownsMemory: true,
-            logger: NullLogger()
+        let regionSize = bufferConfig.totalSize * 2  // Space for 2 windows
+        let regionPointer = UnsafeMutableRawPointer.allocate(
+            byteCount: regionSize,
+            alignment: MemoryLayout<UInt64>.alignment
         )
+        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: regionSize)
+        defer { regionPointer.deallocate() }
 
-        router.setFrameBufferReader(reader)
+        // Set up shared memory region
+        router.setSharedMemoryRegion(basePointer: regionPointer, size: regionSize)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // Register streams
         router.registerStream(stream1, forWindowID: 100)
         router.registerStream(stream2, forWindowID: 200)
+        try? await Task.sleep(for: .milliseconds(50))
 
-        let setupExpectation = expectation(description: "Setup")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
-            setupExpectation.fulfill()
-        }
-        wait(for: [setupExpectation], timeout: 1.0)
+        // Allocate per-window buffer for window 100
+        let window1Offset = 0
+        initializeBufferAtOffset(regionPointer, offset: window1Offset, config: bufferConfig, windowID: 100, frameNumber: 1)
+
+        let allocation1 = WindowBufferAllocatedMessage(
+            windowId: 100,
+            bufferPointer: UInt64(window1Offset),
+            bufferSize: Int32(bufferConfig.totalSize),
+            slotSize: Int32(bufferConfig.slotSize),
+            slotCount: Int32(bufferConfig.slotCount),
+            isCompressed: false,
+            isReallocation: false,
+            usesSharedMemory: true
+        )
+        router.handleBufferAllocation(allocation1)
+        try? await Task.sleep(for: .milliseconds(100))
 
         // Route a FrameReady notification for window 100
         let notification = FrameReadyMessage(
@@ -149,7 +161,7 @@ final class SpiceFrameRouterTests: XCTestCase {
         testQueue.asyncAfter(deadline: .now() + 0.2) {
             routeExpectation.fulfill()
         }
-        wait(for: [routeExpectation], timeout: 1.0)
+        await fulfillment(of: [routeExpectation], timeout: 1.0)
 
         // Stream 1 should have received the frame
         XCTAssertEqual(delegate1.sharedFrames.count, 1)
@@ -191,27 +203,42 @@ final class SpiceFrameRouterTests: XCTestCase {
 
     // MARK: - Control Channel Delegate Tests
 
-    /// NOTE: This test uses the deprecated shared buffer path. Per-window buffers are now used.
-    func testControlChannelDelegateRoutesFrameReady() async throws {
-        throw XCTSkip("Test uses deprecated shared buffer path - per-window buffers are now used")
-
-        // swiftlint:disable:next unused_declaration
+    /// Tests that control channel delegate routes FrameReady using per-window buffers.
+    func testControlChannelDelegateRoutesFrameReady() async {
         let (stream1, delegate1) = makeStream(windowID: 100)
 
-        // Create a mock shared frame buffer
+        // Create shared memory region with per-window buffer
         let bufferConfig = SharedFrameBufferConfig(slotCount: 3, maxWidth: 100, maxHeight: 100)
-        let bufferPointer = createTestFrameBuffer(config: bufferConfig, windowID: 100, frameNumber: 42)
-        let reader = SharedFrameBufferReader(
-            pointer: bufferPointer,
-            size: bufferConfig.totalSize,
-            ownsMemory: true,
-            logger: NullLogger()
+        let regionPointer = UnsafeMutableRawPointer.allocate(
+            byteCount: bufferConfig.totalSize,
+            alignment: MemoryLayout<UInt64>.alignment
         )
+        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: bufferConfig.totalSize)
+        defer { regionPointer.deallocate() }
 
-        router.setFrameBufferReader(reader)
+        // Set up shared memory region
+        router.setSharedMemoryRegion(basePointer: regionPointer, size: bufferConfig.totalSize)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // Register stream
         router.registerStream(stream1, forWindowID: 100)
+        try? await Task.sleep(for: .milliseconds(50))
 
-        // Wait for setup
+        // Initialize buffer with frame data
+        initializeBufferAtOffset(regionPointer, offset: 0, config: bufferConfig, windowID: 100, frameNumber: 42)
+
+        // Allocate per-window buffer
+        let allocation = WindowBufferAllocatedMessage(
+            windowId: 100,
+            bufferPointer: 0,
+            bufferSize: Int32(bufferConfig.totalSize),
+            slotSize: Int32(bufferConfig.slotSize),
+            slotCount: Int32(bufferConfig.slotCount),
+            isCompressed: false,
+            isReallocation: false,
+            usesSharedMemory: true
+        )
+        router.handleBufferAllocation(allocation)
         try? await Task.sleep(for: .milliseconds(100))
 
         // Simulate receiving a FrameReady from control channel
@@ -371,6 +398,38 @@ final class SpiceFrameRouterTests: XCTestCase {
     }
 
     // MARK: - Helper Methods
+
+    /// Initializes a per-window buffer at a given offset in the shared memory region
+    private func initializeBufferAtOffset(
+        _ regionPointer: UnsafeMutableRawPointer,
+        offset: Int,
+        config: SharedFrameBufferConfig,
+        windowID: UInt64,
+        frameNumber: UInt32
+    ) {
+        let bufferPtr = regionPointer.advanced(by: offset)
+
+        // Initialize header
+        let headerPtr = bufferPtr.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
+        var header = config.createHeader()
+        header.writeIndex = 1  // One frame written
+        header.readIndex = 0   // No frames read yet
+        headerPtr.pointee = header
+
+        // Initialize frame slot
+        let slotOffset = SharedFrameBufferHeader.size
+        let slotPtr = bufferPtr.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
+        var slotHeader = FrameSlotHeader()
+        slotHeader.windowId = windowID
+        slotHeader.frameNumber = frameNumber
+        slotHeader.width = UInt32(config.maxWidth)
+        slotHeader.height = UInt32(config.maxHeight)
+        slotHeader.stride = UInt32(config.maxWidth * config.bytesPerPixel)
+        slotHeader.format = UInt32(SpicePixelFormat.bgra32.rawValue)
+        slotHeader.dataSize = UInt32(config.maxWidth * config.maxHeight * config.bytesPerPixel)
+        slotHeader.flags = FrameSlotFlags.keyFrame.rawValue
+        slotPtr.pointee = slotHeader
+    }
 
     /// Creates a test shared frame buffer with a single frame
     private func createTestFrameBuffer(

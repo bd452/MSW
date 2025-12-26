@@ -132,7 +132,7 @@
     - [X] Add MSI build step to Windows CI { .github/workflows/ci.yml, new:scripts/build-guest-installer.ps1 } <docs/decisions/operations.md>
     - [X] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
 
-- [ ] Frame Streaming Pipeline { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md, docs/architecture.md>
+- [X] Frame Streaming Pipeline { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md, docs/architecture.md>
   - [X] VM configuration for guest-host communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
     - [X] Add VZVirtioSocketDeviceConfiguration for vsock communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
     - [X] Configure shared memory region for frame buffer { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
@@ -161,11 +161,11 @@
       - Lower memory usage, adds compression/decompression latency
     - [X] PerWindowBufferManager for multi-window buffer lifecycle { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
     - [X] WindowBufferAllocatedMessage to notify host of buffer allocation/reallocation { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift }
-  - [ ] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
+  - [X] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
     - [X] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
     - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Wire VM shared memory for per-window frame buffers { host/Sources/WinRunVirtualMachine/, host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/ } <docs/decisions/spice-bridge.md>
+    - [X] Wire VM shared memory for per-window frame buffers { host/Sources/WinRunVirtualMachine/, host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/ } <docs/decisions/spice-bridge.md>
       - [X] Configure VM shared memory region via Virtualization.framework { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
         - Use VZVirtioFileSystemDeviceConfiguration or direct memory mapping
         - Expose shared region to both host process and guest VM
@@ -179,8 +179,8 @@
         - Convert offset from WindowBufferAllocatedMessage to host pointer
         - Create SharedFrameBufferReader for each per-window buffer
         - Attach reader to the registered SpiceWindowStream
-      - [ ] Enable skipped integration tests for per-window buffer frame delivery { host/Tests/WinRunSpiceBridgeTests/SpiceFrameRouterTests.swift, host/Tests/WinRunSpiceBridgeTests/FrameDeliveryIntegrationTests.swift }
-      - [ ] Remove deprecated setFrameBufferReader API { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
+      - [X] Enable skipped integration tests for per-window buffer frame delivery { host/Tests/WinRunSpiceBridgeTests/SpiceFrameRouterTests.swift, host/Tests/WinRunSpiceBridgeTests/FrameDeliveryIntegrationTests.swift }
+      - [X] Remove deprecated setFrameBufferReader API { host/Sources/WinRunSpiceBridge/SpiceFrameRouter.swift }
   - [X] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
     - [X] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
