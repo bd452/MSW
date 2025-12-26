@@ -148,6 +148,19 @@
     - [X] Implement per-window frame extraction and streaming { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
     - [X] Add frame compression (LZ4 or similar) for bandwidth efficiency { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/spice-bridge.md>
     - [X] Integrate FrameStreamingService into WinRunAgentService startup { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
+  - [X] Per-window buffer allocation with two strategies { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs } <docs/decisions/spice-bridge.md>
+    - [X] FrameBufferMode configuration (Uncompressed/Compressed) { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+    - [X] Strategy 1: Uncompressed mode - exact allocation { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+      - Allocates exact size for frame dimensions (width × height × 4 bytes)
+      - Reallocates only when window dimensions change
+      - ~33MB per 4K window, lowest latency, best for modern machines
+    - [X] Strategy 2: Compressed mode - tranche allocation { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+      - Allocates from predefined size buckets: 3MB, 8MB, 20MB, 50MB
+      - Reallocates when compressed frame exceeds current tranche
+      - LZ4 compression applied to each frame
+      - Lower memory usage, adds compression/decompression latency
+    - [X] PerWindowBufferManager for multi-window buffer lifecycle { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+    - [X] WindowBufferAllocatedMessage to notify host of buffer allocation/reallocation { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift }
   - [ ] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
     - [X] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
     - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
