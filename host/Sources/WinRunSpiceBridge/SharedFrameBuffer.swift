@@ -93,7 +93,7 @@ public struct SharedFrameBufferHeader {
 }
 
 /// Metadata for a single frame slot.
-/// Size: 32 bytes
+/// Size: 36 bytes
 public struct FrameSlotHeader {
     /// Window ID this frame belongs to
     public var windowId: UInt64
@@ -103,14 +103,16 @@ public struct FrameSlotHeader {
     public var width: UInt32
     /// Frame height in pixels
     public var height: UInt32
-    /// Bytes per row (stride)
+    /// Bytes per row (stride) for uncompressed data
     public var stride: UInt32
     /// Pixel format (matches SpicePixelFormat)
     public var format: UInt32
     /// Actual data size in bytes (may be compressed)
     public var dataSize: UInt32
+    /// Per-frame flags (compression, key frame, etc.)
+    public var flags: UInt32
 
-    public static let size = 32
+    public static let size = 36
 
     public init() {
         windowId = 0
@@ -120,7 +122,22 @@ public struct FrameSlotHeader {
         stride = 0
         format = 0
         dataSize = 0
+        flags = 0
     }
+}
+
+/// Per-frame slot flags
+public struct FrameSlotFlags: OptionSet {
+    public let rawValue: UInt32
+
+    public init(rawValue: UInt32) {
+        self.rawValue = rawValue
+    }
+
+    /// Frame data is LZ4 compressed
+    public static let compressed = FrameSlotFlags(rawValue: 1 << 0)
+    /// Frame is a key frame (not a delta)
+    public static let keyFrame = FrameSlotFlags(rawValue: 1 << 1)
 }
 
 /// Flags for SharedFrameBufferHeader.flags field
@@ -316,7 +333,7 @@ public final class SharedFrameBufferReader {
         let dataPtr = memoryPointer.advanced(by: dataOffset)
         let data = Data(bytes: dataPtr, count: dataSize)
 
-        let flags = SharedFrameBufferFlags(rawValue: header.flags)
+        let slotFlags = FrameSlotFlags(rawValue: slotHeader.flags)
         let format = SpicePixelFormat(rawValue: UInt8(truncatingIfNeeded: slotHeader.format)) ?? .bgra32
 
         let frame = SharedFrame(
@@ -327,7 +344,7 @@ public final class SharedFrameBufferReader {
             stride: Int(slotHeader.stride),
             format: format,
             data: data,
-            isCompressed: flags.contains(.compressed)
+            isCompressed: slotFlags.contains(.compressed)
         )
 
         // Advance read pointer

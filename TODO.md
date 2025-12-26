@@ -143,17 +143,17 @@
     - [X] Implement guest-side memory mapping and frame writing { new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
     - [X] Add FrameReady notification message type (lightweight, points to shared memory) { guest/WinRunAgent/Services/Messages.cs, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift } <docs/decisions/protocols.md>
   - [ ] Guest frame capture and streaming { guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
-    - [ ] Create FrameStreamingService to orchestrate capture loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
-    - [ ] Wire DesktopDuplicationBridge into frame streaming loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
-    - [ ] Implement per-window frame extraction and streaming { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
-    - [ ] Add frame compression (LZ4 or similar) for bandwidth efficiency { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/spice-bridge.md>
+    - [X] Create FrameStreamingService to orchestrate capture loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
+    - [X] Wire DesktopDuplicationBridge into frame streaming loop { new:guest/WinRunAgent/Services/FrameStreamingService.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
+    - [X] Implement per-window frame extraction and streaming { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/protocols.md>
+    - [X] Add frame compression (LZ4 or similar) for bandwidth efficiency { new:guest/WinRunAgent/Services/FrameStreamingService.cs } <docs/decisions/spice-bridge.md>
     - [ ] Integrate FrameStreamingService into WinRunAgentService startup { guest/WinRunAgent/Services/WinRunAgentService.cs } <docs/decisions/protocols.md>
   - [ ] Host frame receiving and routing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/spice-bridge.md>
     - [ ] Handle FrameReady notifications in SpiceControlChannel { host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/protocols.md>
     - [ ] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [ ] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
   - [ ] Frame streaming tests { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs, host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
-    - [ ] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
+    - [X] Add unit tests for frame capture loop and streaming { new:guest/WinRunAgent.Tests/FrameStreamingServiceTests.cs } <docs/development.md>
     - [ ] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [ ] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
 

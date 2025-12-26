@@ -25,6 +25,9 @@ public sealed record FrameStreamingConfig
     /// <summary>Minimum interval between frames for the same window (milliseconds).</summary>
     public int MinWindowFrameIntervalMs { get; init; } = 33; // ~30fps per window
 
+    /// <summary>Configuration for frame compression. Null to disable compression.</summary>
+    public FrameCompressionConfig? Compression { get; init; } = new();
+
     /// <summary>Computed target frame interval in milliseconds.</summary>
     public int TargetFrameIntervalMs => 1000 / TargetFps;
 }
@@ -41,6 +44,7 @@ public sealed class FrameStreamingService : IDisposable
     private readonly SharedFrameBufferWriter _frameBufferWriter;
     private readonly ChannelWriter<GuestMessage> _outboundWriter;
     private readonly FrameStreamingConfig _config;
+    private readonly FrameCompressor? _compressor;
 
     private readonly Dictionary<ulong, WindowFrameState> _windowFrameStates = [];
     private readonly object _stateLock = new();
@@ -74,6 +78,13 @@ public sealed class FrameStreamingService : IDisposable
         _frameBufferWriter = frameBufferWriter;
         _outboundWriter = outboundChannel.Writer;
         _config = config ?? new FrameStreamingConfig();
+
+        // Initialize compressor if compression is configured
+        if (_config.Compression is { Enabled: true })
+        {
+            _compressor = new FrameCompressor(logger, _config.Compression);
+            _logger.Info($"Frame compression enabled: level={_config.Compression.CompressionLevel}");
+        }
     }
 
     /// <summary>
@@ -90,6 +101,11 @@ public sealed class FrameStreamingService : IDisposable
     /// Gets capture statistics for diagnostics.
     /// </summary>
     public FrameStreamingStats Stats { get; } = new();
+
+    /// <summary>
+    /// Gets compression statistics (null if compression is disabled).
+    /// </summary>
+    public CompressionStats? CompressionStats => _compressor?.Stats;
 
     /// <summary>
     /// Starts the frame capture loop.
@@ -325,6 +341,26 @@ public sealed class FrameStreamingService : IDisposable
     {
         var frameNumber = Interlocked.Increment(ref _frameCounter);
 
+        // Compress frame data if compression is enabled
+        ReadOnlySpan<byte> dataToWrite;
+        var isCompressed = false;
+
+        if (_compressor != null)
+        {
+            var compressionResult = _compressor.Compress(frame.Data);
+            dataToWrite = compressionResult.Data;
+            isCompressed = compressionResult.IsCompressed;
+
+            if (compressionResult.IsCompressed)
+            {
+                Stats.RecordFrameCompressed(compressionResult.BytesSaved);
+            }
+        }
+        else
+        {
+            dataToWrite = frame.Data;
+        }
+
         // Write frame to shared memory
         var slotIndex = _frameBufferWriter.WriteFrame(
             windowId,
@@ -333,7 +369,8 @@ public sealed class FrameStreamingService : IDisposable
             frame.Height,
             frame.Stride,
             frame.Format,
-            frame.Data);
+            dataToWrite,
+            isCompressed);
 
         if (slotIndex < 0)
         {
@@ -350,7 +387,7 @@ public sealed class FrameStreamingService : IDisposable
             WindowId = windowId,
             SlotIndex = (uint)slotIndex,
             FrameNumber = frameNumber,
-            IsKeyFrame = true // TODO: Track key frames when delta compression is implemented
+            IsKeyFrame = true // All frames are key frames until delta compression is implemented
         };
 
         try
@@ -481,6 +518,8 @@ public sealed class FrameStreamingStats
     private long _notificationsSent;
     private long _captureErrors;
     private long _bufferFullCount;
+    private long _framesCompressed;
+    private long _bytesSavedByCompression;
 
     public long CaptureAttempts => Interlocked.Read(ref _captureAttempts);
     public long FramesCaptured => Interlocked.Read(ref _framesCaptured);
@@ -488,6 +527,8 @@ public sealed class FrameStreamingStats
     public long NotificationsSent => Interlocked.Read(ref _notificationsSent);
     public long CaptureErrors => Interlocked.Read(ref _captureErrors);
     public long BufferFullCount => Interlocked.Read(ref _bufferFullCount);
+    public long FramesCompressed => Interlocked.Read(ref _framesCompressed);
+    public long BytesSavedByCompression => Interlocked.Read(ref _bytesSavedByCompression);
 
     internal void RecordCaptureAttempt() => Interlocked.Increment(ref _captureAttempts);
     internal void RecordFrameCaptured() => Interlocked.Increment(ref _framesCaptured);
@@ -496,7 +537,14 @@ public sealed class FrameStreamingStats
     internal void RecordCaptureError() => Interlocked.Increment(ref _captureErrors);
     internal void RecordBufferFull() => Interlocked.Increment(ref _bufferFullCount);
 
+    internal void RecordFrameCompressed(int bytesSaved)
+    {
+        Interlocked.Increment(ref _framesCompressed);
+        Interlocked.Add(ref _bytesSavedByCompression, bytesSaved);
+    }
+
     public override string ToString() =>
         $"Attempts={CaptureAttempts}, Captured={FramesCaptured}, Written={FramesWritten}, " +
-        $"Sent={NotificationsSent}, Errors={CaptureErrors}, BufferFull={BufferFullCount}";
+        $"Sent={NotificationsSent}, Errors={CaptureErrors}, BufferFull={BufferFullCount}, " +
+        $"Compressed={FramesCompressed}, SavedKB={BytesSavedByCompression / 1024}";
 }

@@ -106,7 +106,7 @@ public struct SharedFrameBufferHeader
 
 /// <summary>
 /// Metadata for a single frame slot.
-/// Size: 32 bytes.
+/// Size: 36 bytes (padded to 40 for alignment).
 /// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct FrameSlotHeader
@@ -119,14 +119,29 @@ public struct FrameSlotHeader
     public uint Width;
     /// <summary>Frame height in pixels.</summary>
     public uint Height;
-    /// <summary>Bytes per row (stride).</summary>
+    /// <summary>Bytes per row (stride) for uncompressed data.</summary>
     public uint Stride;
     /// <summary>Pixel format (matches SpicePixelFormat/PixelFormatType).</summary>
     public uint Format;
     /// <summary>Actual data size in bytes (may be compressed).</summary>
     public uint DataSize;
+    /// <summary>Per-frame flags (compression, key frame, etc.).</summary>
+    public FrameSlotFlags Flags;
 
-    public const int Size = 32;
+    public const int Size = 36;
+}
+
+/// <summary>
+/// Per-frame slot flags.
+/// </summary>
+[Flags]
+public enum FrameSlotFlags : uint
+{
+    None = 0,
+    /// <summary>Frame data is LZ4 compressed.</summary>
+    Compressed = 1 << 0,
+    /// <summary>Frame is a key frame (not a delta).</summary>
+    KeyFrame = 1 << 1
 }
 
 /// <summary>
@@ -273,9 +288,10 @@ public sealed class SharedFrameBufferWriter : IDisposable
     /// <param name="frameNumber">Frame sequence number.</param>
     /// <param name="width">Frame width in pixels.</param>
     /// <param name="height">Frame height in pixels.</param>
-    /// <param name="stride">Bytes per row.</param>
+    /// <param name="stride">Bytes per row (uncompressed).</param>
     /// <param name="format">Pixel format.</param>
-    /// <param name="data">Frame pixel data.</param>
+    /// <param name="data">Frame pixel data (may be compressed).</param>
+    /// <param name="isCompressed">Whether the data is LZ4 compressed.</param>
     /// <returns>The slot index where the frame was written, or -1 if buffer is full.</returns>
     public int WriteFrame(
         ulong windowId,
@@ -284,7 +300,8 @@ public sealed class SharedFrameBufferWriter : IDisposable
         int height,
         int stride,
         PixelFormatType format,
-        ReadOnlySpan<byte> data)
+        ReadOnlySpan<byte> data,
+        bool isCompressed = false)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -313,6 +330,13 @@ public sealed class SharedFrameBufferWriter : IDisposable
         var slotIndex = (int)header.WriteIndex;
         var slotOffset = SharedFrameBufferHeader.Size + (slotIndex * (int)header.SlotSize);
 
+        // Build slot flags
+        var flags = FrameSlotFlags.KeyFrame; // All frames are key frames until delta compression
+        if (isCompressed)
+        {
+            flags |= FrameSlotFlags.Compressed;
+        }
+
         // Write frame slot header
         var slotHeader = new FrameSlotHeader
         {
@@ -322,7 +346,8 @@ public sealed class SharedFrameBufferWriter : IDisposable
             Height = (uint)height,
             Stride = (uint)stride,
             Format = (uint)format,
-            DataSize = (uint)data.Length
+            DataSize = (uint)data.Length,
+            Flags = flags
         };
 
         Marshal.StructureToPtr(slotHeader, _memoryPointer + slotOffset, false);
@@ -342,7 +367,8 @@ public sealed class SharedFrameBufferWriter : IDisposable
         var writeIndexOffset = Marshal.OffsetOf<SharedFrameBufferHeader>(nameof(SharedFrameBufferHeader.WriteIndex));
         Marshal.WriteInt32(headerPtr + (int)writeIndexOffset, (int)nextWrite);
 
-        _logger.Debug($"Wrote frame {frameNumber} for window {windowId} to slot {slotIndex}: {width}x{height}, {data.Length} bytes");
+        var compressedStr = isCompressed ? " (compressed)" : "";
+        _logger.Debug($"Wrote frame {frameNumber} for window {windowId} to slot {slotIndex}: {width}x{height}, {data.Length} bytes{compressedStr}");
 
         return slotIndex;
     }
