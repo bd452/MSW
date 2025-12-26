@@ -83,6 +83,11 @@ protocol SpiceStreamTransport {
             }
 
             self.currentHandle = handle
+            if let handle {
+                // Enable guest -> host clipboard callbacks.
+                // (Host -> guest clipboard send still goes through sendClipboard/requestClipboard.)
+                winrun_spice_set_clipboard_callback(handle, spiceClipboardThunk, unmanaged.toOpaque())
+            }
 
             return SpiceStreamSubscription {
                 if let handle {
@@ -465,6 +470,35 @@ protocol SpiceStreamTransport {
             let trampoline = Unmanaged<CallbackTrampoline>.fromOpaque(userData)
                 .takeUnretainedValue()
             trampoline.handleClose(SpiceStreamCloseReason(code: code, message: message))
+        }
+
+    private let spiceClipboardThunk:
+        @convention(c) (
+            UnsafePointer<winrun_clipboard_data>?,
+            UnsafeMutableRawPointer?
+        ) -> Void = { clipboardPointer, userData in
+            guard let clipboardPointer, let userData else { return }
+            let clipboard = clipboardPointer.pointee
+            guard let bytes = clipboard.data, clipboard.data_length > 0 else { return }
+
+            let trampoline = Unmanaged<CallbackTrampoline>.fromOpaque(userData)
+                .takeUnretainedValue()
+
+            // Map C clipboard format to the generated ClipboardFormat enum.
+            let format: ClipboardFormat
+            switch clipboard.format {
+            case WINRUN_CLIPBOARD_FORMAT_TEXT: format = .plainText
+            case WINRUN_CLIPBOARD_FORMAT_RTF: format = .rtf
+            case WINRUN_CLIPBOARD_FORMAT_HTML: format = .html
+            case WINRUN_CLIPBOARD_FORMAT_PNG: format = .png
+            case WINRUN_CLIPBOARD_FORMAT_TIFF: format = .tiff
+            case WINRUN_CLIPBOARD_FORMAT_FILE_URL: format = .fileUrl
+            default: format = .plainText
+            }
+
+            let data = Data(bytes: bytes, count: Int(clipboard.data_length))
+            let payload = ClipboardData(format: format, data: data, sequenceNumber: clipboard.sequence_number)
+            trampoline.handleClipboard(payload)
         }
 #else
     // MARK: - Mock Implementation (non-macOS)

@@ -11,6 +11,8 @@
 
 #if __APPLE__
 #include "shim.h"
+#include <glib.h>
+#include <gio/gio.h>
 
 // Spice protocol clipboard constants (from spice-protocol/spice/vd_agent.h)
 // These are stable protocol values that may not be exposed by spice-client.h
@@ -54,6 +56,7 @@ typedef struct winrun_spice_stream {
     SpiceInputsChannel *inputs_channel;
     SpiceMainChannel *main_channel;
     SpicePortChannel *control_channel;  // For bidirectional control messages
+    GMainLoop *main_loop;               // GLib main loop for spice signal dispatch
     gulong channel_new_handler_id;
     // Clipboard signal handlers on main channel
     gulong clipboard_grab_handler_id;
@@ -65,7 +68,7 @@ typedef struct winrun_spice_stream {
 #endif
 } winrun_spice_stream;
 
-static void *winrun_mock_worker(void *context);
+static void *winrun_worker(void *context);
 
 #if __APPLE__
 // Forward declarations for clipboard signal handlers (needed before on_channel_new)
@@ -296,6 +299,7 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->inputs_channel = NULL;
     stream->main_channel = NULL;
     stream->control_channel = NULL;
+    stream->main_loop = NULL;
     stream->channel_new_handler_id = 0;
     stream->clipboard_grab_handler_id = 0;
     stream->clipboard_data_handler_id = 0;
@@ -354,6 +358,11 @@ static void winrun_spice_stream_free(winrun_spice_stream *stream) {
     if (stream->session) {
         g_object_unref(stream->session);
     }
+
+    if (stream->main_loop) {
+        g_main_loop_unref(stream->main_loop);
+        stream->main_loop = NULL;
+    }
 #endif
 
     free(stream);
@@ -368,7 +377,7 @@ static bool winrun_spice_stream_start_worker(
         return false;
     }
 
-    if (pthread_create(&stream->worker_thread, NULL, winrun_mock_worker, stream) != 0) {
+    if (pthread_create(&stream->worker_thread, NULL, winrun_worker, stream) != 0) {
         winrun_write_error(error_buffer, error_buffer_length, "Failed to spawn Spice worker thread");
         atomic_store(&stream->worker_running, false);
         return false;
@@ -378,12 +387,37 @@ static bool winrun_spice_stream_start_worker(
     return true;
 }
 
-static void *winrun_mock_worker(void *context) {
+static void *winrun_worker(void *context) {
     winrun_spice_stream *stream = (winrun_spice_stream *)context;
     if (!stream) {
         return NULL;
     }
 
+#if __APPLE__
+    // libspice-glib is driven by a GLib main loop. Run it on a dedicated thread so
+    // callbacks (channel-new, port-data, clipboard signals, etc.) are delivered.
+    //
+    // We intentionally use the default context for this thread. The WinRun app does
+    // not otherwise run GLib, so this avoids coupling to the Cocoa run loop.
+    stream->main_loop = g_main_loop_new(NULL, FALSE);
+    if (!stream->main_loop) {
+        atomic_store(&stream->worker_running, false);
+        return NULL;
+    }
+
+    // Run until winrun_spice_stream_close() requests shutdown.
+    g_main_loop_run(stream->main_loop);
+
+    g_main_loop_unref(stream->main_loop);
+    stream->main_loop = NULL;
+
+    // Best-effort close notification.
+    if (stream->closed_cb) {
+        stream->closed_cb(WINRUN_SPICE_CLOSE_REASON_TRANSPORT, "Spice loop exited", stream->user_data);
+    }
+
+    return NULL;
+#else
     if (stream->metadata_cb) {
         winrun_spice_window_metadata metadata = {
             .window_id = stream->window_id,
@@ -419,6 +453,7 @@ static void *winrun_mock_worker(void *context) {
     }
 
     return NULL;
+#endif
 }
 
 winrun_spice_stream_handle winrun_spice_stream_open_tcp(
@@ -474,8 +509,12 @@ winrun_spice_stream_handle winrun_spice_stream_open_tcp(
         g_object_set(stream->session, "password", ticket, NULL);
     }
     spice_session_connect(stream->session);
-    // On macOS with libspice, real frame delivery comes from the session callbacks,
-    // not from the mock worker thread. Don't start the mock worker.
+
+    // Start the GLib main loop thread so libspice can dispatch callbacks.
+    if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
+        winrun_spice_stream_free(stream);
+        return NULL;
+    }
 #else
     (void)host;
     (void)port;
@@ -548,8 +587,12 @@ winrun_spice_stream_handle winrun_spice_stream_open_shared(
         winrun_spice_stream_free(stream);
         return NULL;
     }
-    // On macOS with libspice, real frame delivery comes from the session callbacks,
-    // not from the mock worker thread. Don't start the mock worker.
+
+    // Start the GLib main loop thread so libspice can dispatch callbacks.
+    if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
+        winrun_spice_stream_free(stream);
+        return NULL;
+    }
 #else
     (void)shared_fd;
     (void)ticket;
@@ -569,6 +612,18 @@ void winrun_spice_stream_close(winrun_spice_stream_handle streamHandle) {
     if (!stream) {
         return;
     }
+
+#if __APPLE__
+    // Ask libspice to disconnect and stop delivering callbacks.
+    pthread_mutex_lock(&stream->send_mutex);
+    if (stream->session) {
+        spice_session_disconnect(stream->session);
+    }
+    if (stream->main_loop) {
+        g_main_loop_quit(stream->main_loop);
+    }
+    pthread_mutex_unlock(&stream->send_mutex);
+#endif
 
     atomic_store(&stream->worker_running, false);
 
