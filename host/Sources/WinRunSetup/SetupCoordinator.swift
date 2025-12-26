@@ -18,6 +18,7 @@ public actor SetupCoordinator {
     private let isoValidator: ISOValidator
     private let diskCreator: DiskImageCreator
     private let vmProvisioner: VMProvisioner
+    private let controlChannel: SpiceControlChannel?
 
     // MARK: - State
 
@@ -29,6 +30,9 @@ public actor SetupCoordinator {
     private var provisioningComplete = false
     private var provisioningError: WinRunError?
 
+    // Stream for receiving guest provisioning messages
+    private var guestMessageContinuation: AsyncStream<GuestProvisioningEvent>.Continuation?
+
     // MARK: - Delegate
 
     private weak var delegate: (any ProvisioningDelegate)?
@@ -39,11 +43,13 @@ public actor SetupCoordinator {
     public init(
         isoValidator: ISOValidator? = nil,
         diskCreator: DiskImageCreator? = nil,
-        vmProvisioner: VMProvisioner? = nil
+        vmProvisioner: VMProvisioner? = nil,
+        controlChannel: SpiceControlChannel? = nil
     ) {
         self.isoValidator = isoValidator ?? ISOValidator()
         self.diskCreator = diskCreator ?? DiskImageCreator()
         self.vmProvisioner = vmProvisioner ?? VMProvisioner()
+        self.controlChannel = controlChannel
     }
 
     // MARK: - Public API
@@ -188,110 +194,11 @@ public actor SetupCoordinator {
         provisioningError = nil
     }
 
-    // MARK: - Error Recovery and Rollback
+    // MARK: - Recovery State Accessors (for extension)
 
-    /// Cleans up a failed provisioning attempt by deleting the partial disk image.
-    ///
-    /// Call this method after provisioning fails if you want to free disk space
-    /// and start fresh with a new provisioning attempt.
-    ///
-    /// - Returns: The result of the rollback operation.
-    @discardableResult
-    public func rollback() async -> RollbackResult {
-        guard currentState.phase == .failed || currentState.phase == .cancelled else {
-            return RollbackResult(
-                success: false,
-                freedBytes: 0,
-                error: WinRunError.configInvalid(
-                    reason: "Rollback only available after failed or cancelled provisioning"
-                )
-            )
-        }
-
-        guard let ctx = context else {
-            return RollbackResult(success: true, freedBytes: 0, error: nil)
-        }
-
-        var freedBytes: UInt64 = 0
-        var rollbackError: WinRunError?
-
-        // Delete the partial disk image if it exists
-        let diskPath = ctx.diskImagePath
-        if FileManager.default.fileExists(atPath: diskPath.path) {
-            do {
-                // Get size before deletion
-                freedBytes = (try? getDiskUsage(at: diskPath)) ?? 0
-
-                try diskCreator.deleteDiskImage(at: diskPath)
-            } catch {
-                rollbackError = (error as? WinRunError) ?? WinRunError.wrap(error, context: "Rollback")
-            }
-        }
-
-        // Reset state for retry
-        reset()
-
-        return RollbackResult(
-            success: rollbackError == nil,
-            freedBytes: freedBytes,
-            error: rollbackError
-        )
-    }
-
-    /// Retries provisioning after a failure.
-    ///
-    /// This is a convenience method that performs rollback and starts a new
-    /// provisioning attempt with the same or different configuration.
-    ///
-    /// - Parameters:
-    ///   - configuration: The configuration to use. If nil, uses the previous configuration.
-    ///   - performRollback: Whether to delete the partial disk image before retrying.
-    /// - Returns: The provisioning result.
-    @discardableResult
-    public func retry(
-        with configuration: SetupCoordinatorConfiguration? = nil,
-        performRollback: Bool = true
-    ) async -> ProvisioningResult {
-        guard currentState.phase == .failed || currentState.phase == .cancelled else {
-            return ProvisioningResult(
-                success: false,
-                finalPhase: currentState.phase,
-                error: WinRunError.configInvalid(
-                    reason: "Retry only available after failed or cancelled provisioning"
-                ),
-                durationSeconds: 0,
-                diskImagePath: context?.diskImagePath ?? DiskImageConfiguration.defaultPath
-            )
-        }
-
-        // Get configuration - use provided or reconstruct from previous context
-        let retryConfig: SetupCoordinatorConfiguration
-        if let config = configuration {
-            retryConfig = config
-        } else if let ctx = context {
-            retryConfig = SetupCoordinatorConfiguration(
-                isoPath: ctx.isoPath,
-                diskImagePath: ctx.diskImagePath
-            )
-        } else {
-            return ProvisioningResult(
-                success: false,
-                finalPhase: .failed,
-                error: WinRunError.configInvalid(reason: "No configuration available for retry"),
-                durationSeconds: 0,
-                diskImagePath: DiskImageConfiguration.defaultPath
-            )
-        }
-
-        // Optionally perform rollback
-        if performRollback {
-            _ = await rollback()
-        } else {
-            reset()
-        }
-
-        // Start fresh provisioning
-        return await startProvisioning(with: retryConfig)
+    /// Checks if rollback can be performed (failed/cancelled state).
+    var canPerformRollback: Bool {
+        currentState.phase == .failed || currentState.phase == .cancelled
     }
 
     /// Checks if rollback is available (failed/cancelled and disk exists).
@@ -304,6 +211,22 @@ public actor SetupCoordinator {
 
     /// Returns the last error if provisioning failed.
     public var lastError: WinRunError? { currentState.error }
+
+    /// The current provisioning context (for extension).
+    var provisioningContext: ProvisioningContext? { context }
+
+    /// The current phase (for extension).
+    var currentPhase: ProvisioningPhase { currentState.phase }
+
+    /// Gets disk usage for rollback (for extension).
+    func getDiskUsageForRollback(at url: URL) throws -> UInt64 {
+        try getDiskUsage(at: url)
+    }
+
+    /// Deletes disk image for rollback (for extension).
+    func deleteDiskImageForRollback(at url: URL) throws {
+        try diskCreator.deleteDiskImage(at: url)
+    }
 
     // MARK: - Phase Execution
 
@@ -403,13 +326,43 @@ public actor SetupCoordinator {
         // The guest sends ProvisionProgressMessage updates as it runs scripts.
         // This method waits for the ProvisionCompleteMessage or an unrecoverable error.
 
-        // In the real implementation, this would wait for guest Spice messages.
-        // For now, we simulate with progress callbacks until Spice transport is wired.
         updateProgress(phaseProgress: 0.0, message: "Waiting for guest agent...")
-        try await simulateGuestProvisioning()
+
+        // If we have a control channel, wait for real guest messages
+        // Otherwise, use simulation for testing
+        if controlChannel != nil {
+            try await waitForGuestProvisioning()
+        } else {
+            try await simulateGuestProvisioning()
+        }
     }
 
-    /// Simulates guest provisioning progress (placeholder until Spice transport is wired).
+    /// Waits for guest provisioning messages via the Spice control channel.
+    ///
+    /// This creates an async stream and waits for provisioning events from the guest.
+    /// The control channel delegate routes incoming messages to this stream.
+    private func waitForGuestProvisioning() async throws {
+        // Create stream for guest provisioning events
+        let stream = AsyncStream<GuestProvisioningEvent> { continuation in
+            self.guestMessageContinuation = continuation
+        }
+
+        defer {
+            guestMessageContinuation?.finish()
+            guestMessageContinuation = nil
+        }
+
+        try await waitForGuestProvisioningMessages(using: stream)
+    }
+
+    /// Helper to check cancellation state (called from extension).
+    func checkCancelled() -> Bool {
+        isCancelled
+    }
+
+    /// Simulates guest provisioning progress (used when no control channel is provided).
+    ///
+    /// This is useful for testing the coordinator without a live Spice connection.
     private func simulateGuestProvisioning() async throws {
         let phases: [(GuestProvisioningPhase, Double)] = [
             (.drivers, 0.25),
@@ -488,19 +441,7 @@ public actor SetupCoordinator {
 
     /// Maps a guest provisioning phase to overall post-install progress (0.0 to 1.0).
     private func mapGuestPhaseToProgress(_ phase: GuestProvisioningPhase, phaseProgress: Double) -> Double {
-        let phaseWeights: [GuestProvisioningPhase: (start: Double, weight: Double)] = [
-            .drivers: (0.0, 0.25),
-            .agent: (0.25, 0.25),
-            .optimize: (0.50, 0.30),
-            .finalize: (0.80, 0.15),
-            .complete: (0.95, 0.05),
-        ]
-
-        guard let info = phaseWeights[phase] else {
-            return phaseProgress
-        }
-
-        return info.start + (info.weight * phaseProgress)
+        calculateGuestPhaseProgress(phase, phaseProgress: phaseProgress)
     }
 
     private func createSnapshot(configuration: SetupCoordinatorConfiguration) async throws {
@@ -581,5 +522,52 @@ public actor SetupCoordinator {
     private func getDiskUsage(at url: URL) throws -> UInt64 {
         let resourceValues = try url.resourceValues(forKeys: [.totalFileAllocatedSizeKey])
         return UInt64(resourceValues.totalFileAllocatedSize ?? 0)
+    }
+
+    // MARK: - Control Channel Message Routing
+
+    /// Routes a Spice message to the appropriate handler.
+    ///
+    /// Call this method from a `SpiceControlChannelDelegate` to route
+    /// provisioning messages to this coordinator.
+    ///
+    /// - Parameters:
+    ///   - message: The decoded message object.
+    ///   - type: The Spice message type.
+    public func routeSpiceMessage(_ message: Any, type: SpiceMessageType) {
+        switch type {
+        case .provisionProgress:
+            if let msg = message as? ProvisionProgressMessage {
+                guestMessageContinuation?.yield(.progress(msg))
+            }
+        case .provisionError:
+            if let msg = message as? ProvisionErrorMessage {
+                guestMessageContinuation?.yield(.error(msg))
+            }
+        case .provisionComplete:
+            if let msg = message as? ProvisionCompleteMessage {
+                guestMessageContinuation?.yield(.complete(msg))
+            }
+        default:
+            // Ignore non-provisioning messages
+            break
+        }
+    }
+
+    /// Injects a provisioning progress message (for testing).
+    ///
+    /// This allows tests to simulate guest messages without a real Spice connection.
+    public func injectProvisionProgress(_ message: ProvisionProgressMessage) {
+        guestMessageContinuation?.yield(.progress(message))
+    }
+
+    /// Injects a provisioning error message (for testing).
+    public func injectProvisionError(_ message: ProvisionErrorMessage) {
+        guestMessageContinuation?.yield(.error(message))
+    }
+
+    /// Injects a provisioning complete message (for testing).
+    public func injectProvisionComplete(_ message: ProvisionCompleteMessage) {
+        guestMessageContinuation?.yield(.complete(message))
     }
 }
