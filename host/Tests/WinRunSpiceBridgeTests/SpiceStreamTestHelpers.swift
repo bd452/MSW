@@ -142,6 +142,7 @@ final class TestSpiceStreamTransport: SpiceStreamTransport {
 
 final class TestSpiceWindowStreamDelegate: SpiceWindowStreamDelegate {
     var frames: [Data] = []
+    var sharedFrames: [SharedFrame] = []
     var metadataUpdates: [WindowMetadata] = []
     var stateChanges: [SpiceConnectionState] = []
     var clipboardReceived: [ClipboardData] = []
@@ -157,6 +158,10 @@ final class TestSpiceWindowStreamDelegate: SpiceWindowStreamDelegate {
 
     func windowStream(_ stream: SpiceWindowStream, didUpdateFrame frame: Data) {
         frames.append(frame)
+    }
+
+    func windowStream(_ stream: SpiceWindowStream, didReceiveSharedFrame frame: SharedFrame) {
+        sharedFrames.append(frame)
     }
 
     func windowStream(_ stream: SpiceWindowStream, didUpdateMetadata metadata: WindowMetadata) {
@@ -180,6 +185,7 @@ final class TestSpiceWindowStreamDelegate: SpiceWindowStreamDelegate {
 
     func reset() {
         frames.removeAll()
+        sharedFrames.removeAll()
         metadataUpdates.removeAll()
         stateChanges.removeAll()
         clipboardReceived.removeAll()
