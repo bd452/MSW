@@ -470,7 +470,7 @@ public sealed class WindowFrameBufferSharedMemoryTests : IDisposable
 
         var sharedStats = manager.GetSharedMemoryStats();
         Assert.NotNull(sharedStats);
-        Assert.True(sharedStats.Value.UsedBytes > 0);
+        Assert.True(sharedStats!.UsedBytes > 0);
     }
 
     [Fact]
