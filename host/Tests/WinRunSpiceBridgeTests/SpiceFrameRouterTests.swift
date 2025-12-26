@@ -369,20 +369,29 @@ final class SpiceFrameRouterTests: XCTestCase {
         windowID: UInt64,
         frameNumber: UInt32
     ) -> UnsafeMutableRawPointer {
+        // Use proper alignment for both SharedFrameBufferHeader and FrameSlotHeader
+        let headerStride = MemoryLayout<SharedFrameBufferHeader>.stride
+        let slotHeaderStride = MemoryLayout<FrameSlotHeader>.stride
+        let slotDataSize = config.maxWidth * config.maxHeight * config.bytesPerPixel
+        let slotStride = slotHeaderStride + slotDataSize
+        let totalSize = headerStride + config.slotCount * slotStride
+
         let pointer = UnsafeMutableRawPointer.allocate(
-            byteCount: config.totalSize,
+            byteCount: totalSize,
             alignment: MemoryLayout<UInt64>.alignment
         )
-        pointer.initializeMemory(as: UInt8.self, repeating: 0, count: config.totalSize)
+        pointer.initializeMemory(as: UInt8.self, repeating: 0, count: totalSize)
 
-        // Write header
+        // Write header using bound pointer for proper alignment
+        let headerPtr = pointer.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
         var header = config.createHeader()
         header.writeIndex = 1  // One frame written
         header.readIndex = 0   // No frames read yet
-        pointer.storeBytes(of: header, as: SharedFrameBufferHeader.self)
+        headerPtr.pointee = header
 
-        // Write frame slot header
-        let slotOffset = SharedFrameBufferHeader.size
+        // Write frame slot header with proper alignment
+        let slotOffset = headerStride
+        let slotPtr = pointer.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
         var slotHeader = FrameSlotHeader()
         slotHeader.windowId = windowID
         slotHeader.frameNumber = frameNumber
@@ -392,7 +401,7 @@ final class SpiceFrameRouterTests: XCTestCase {
         slotHeader.format = SpicePixelFormat.bgra32.rawValue.toUInt32()
         slotHeader.dataSize = 100 * 100 * 4
         slotHeader.flags = FrameSlotFlags.keyFrame.rawValue
-        pointer.advanced(by: slotOffset).storeBytes(of: slotHeader, as: FrameSlotHeader.self)
+        slotPtr.pointee = slotHeader
 
         return pointer
     }

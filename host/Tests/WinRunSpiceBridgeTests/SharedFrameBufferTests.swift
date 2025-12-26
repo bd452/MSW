@@ -370,10 +370,12 @@ final class SharedFrameBufferReaderTests: XCTestCase {
         )
         pointer.initializeMemory(as: UInt8.self, repeating: 0, count: config.totalSize)
 
+        // Use bound pointer for proper alignment
+        let headerPtr = pointer.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
         var header = config.createHeader()
         header.writeIndex = UInt32(frameCount)
         header.readIndex = 0
-        pointer.storeBytes(of: header, as: SharedFrameBufferHeader.self)
+        headerPtr.pointee = header
 
         return (pointer, header)
     }
@@ -397,7 +399,9 @@ final class SharedFrameBufferReaderTests: XCTestCase {
         slotHeader.dataSize = UInt32(config.maxWidth * config.maxHeight * config.bytesPerPixel)
         slotHeader.flags = FrameSlotFlags.keyFrame.rawValue
 
-        pointer.advanced(by: slotOffset).storeBytes(of: slotHeader, as: FrameSlotHeader.self)
+        // Use bound pointer for proper alignment
+        let slotPtr = pointer.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
+        slotPtr.pointee = slotHeader
 
         // Fill frame data with a test pattern
         let dataOffset = slotOffset + FrameSlotHeader.size
