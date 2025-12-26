@@ -106,7 +106,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: guest/global.json
-          cache: true
+
+      # Cache NuGet packages
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('guest/**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
 
       - name: Restore dependencies
         working-directory: guest
@@ -145,7 +152,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: guest/global.json
-          cache: true
+
+      # Cache NuGet packages (same key as guest job for cache sharing)
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('guest/**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
 
       - name: Restore dependencies
         working-directory: guest
