@@ -133,12 +133,12 @@
     - [X] Publish MSI as CI artifact { .github/workflows/ci.yml } <docs/decisions/operations.md>
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
-  - [ ] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
-    - [ ] Create script to build complete WinRun.app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>
-    - [ ] Embed CLI and daemon binaries in app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>
-    - [ ] Bundle provisioning assets (autounattend.xml, scripts, MSI) { new:scripts/package-app.sh } <docs/decisions/operations.md>
-    - [ ] Bundle or configure download of VirtIO drivers { new:scripts/package-app.sh } <docs/decisions/operations.md>
-    - [ ] Embed Spice libraries (libspice-glib and dependencies) { new:scripts/package-app.sh } <docs/decisions/operations.md>
+  - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
+    - [X] Create script to build complete WinRun.app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [X] Embed CLI and daemon binaries in app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [X] Bundle provisioning assets (autounattend.xml, scripts, MSI) { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [X] Bundle or configure download of VirtIO drivers { new:scripts/package-app.sh } <docs/decisions/operations.md>
+    - [X] Embed Spice libraries (libspice-glib and dependencies) { new:scripts/package-app.sh } <docs/decisions/operations.md>
   - [ ] Code signing + notarization { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
     - [ ] Sign app bundle with Developer ID certificate { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
     - [ ] Notarize with Apple for Gatekeeper approval { new:scripts/sign-and-notarize.sh } <docs/decisions/operations.md>
