@@ -1,0 +1,330 @@
+Do the next TODO item with the following rules:
+
+# WinRun Project Rules
+
+## Project Context
+
+WinRun is a seamless Windows-on-macOS solution using Virtualization.framework + Spice protocol to run Windows GUI apps as native-feeling macOS windows. Before making any decisions or implementations, reference `SUMMARY.md` for the authoritative design, requirements, and architectural approach.
+
+### Key Components
+- **Host (macOS)**: Swift daemon (`winrund`), AppKit app (`WinRun.app`), CLI (`winrun`), launcher templates
+- **Guest (Windows)**: C# service (`WinRunAgent`) running inside the VM
+- **Communication**: XPC for host IPC, Spice protocol for host↔guest streaming and control
+
+## TODO.md Completion Protocol
+
+When asked to complete a task in `TODO.md`, follow this depth-first recursive algorithm:
+
+### Algorithm
+
+1. **Start** at the requested task (or first incomplete task if none specified)
+2. **Check for children**: If the task has incomplete child tasks, descend to the first incomplete child
+3. **Complete leaf**: When you reach a task with no incomplete children, implement it
+4. **Mark complete**: After implementation, change `[ ]` to `[X]`
+5. **Return up**: Go back to the parent and evaluate:
+   - If parent has more incomplete children → go to next incomplete child
+   - If all children complete → check if parent is now complete, mark it `[X]`
+6. **Continue to sibling**: If current task is complete and has no incomplete children, move to next sibling
+7. **Recurse up**: If no siblings remain, return to parent level
+
+### Task Notation
+
+Each TODO item uses this notation:
+- `{ file1.swift, file2.swift }` — Files to edit during implementation
+- `{ new:path/to/file.swift }` — New files to create
+- `< docs/decisions/foo.md >` — Reference documentation for guidance
+
+### Implementation Rules
+
+1. **Read references first**: Before implementing, read all `<>` referenced docs
+2. **Check SUMMARY.md**: When confused about platform, approach, or requirements
+3. **One task at a time**: Complete tasks sequentially unless concurrent implementation is clearly more efficient
+4. **Update TODO.md**: Mark `[X]` immediately upon completing each task
+5. **Maintain coherence**: If you must change architecture:
+   - Update relevant docs first
+   - Re-evaluate all completed tasks referencing those docs
+   - Update affected tasks and their references recursively
+   - Avoid architecture changes when possible
+
+### Pre-Implementation Checklist
+
+Before starting any task:
+1. Read `SUMMARY.md` for context
+2. Read all `<>` referenced documentation
+3. Examine all `{}` files (both existing and `new:` paths)
+4. Understand the parent task's goal
+5. Check sibling tasks for related context
+
+### Post-Implementation Checklist
+
+After completing a task:
+1. Verify implementation matches documentation
+2. **Write tests** if the new code meets testing criteria (see [Testing](#testing) section)
+   2.a. If the new code makes changes to areas with existing test coverage, update the relevant tests if necessary.
+3. **Run `make check-linux`** to verify lint and tests pass locally
+4. **Run remote tests and iterate until they pass**:
+   - For host changes: `make test-host-remote`
+   - For guest changes: `make test-guest-remote`
+   - If permission denied: `git push -u origin HEAD && make ci-watch`
+   - **If tests fail**: Read the error output, fix the issues, commit, and re-run
+   - **Repeat until CI passes** — do NOT wait for user to report errors
+5. Mark the task `[X]` in `TODO.md` only after CI passes
+6. Check if parent task is now complete
+7. If all children complete, mark parent `[X]`
+8. Move to next incomplete task per the algorithm
+
+**Critical — Autonomous CI Iteration**: When remote tests fail, the agent MUST:
+1. Read the error output (printed directly to console)
+2. Fix the issues
+3. Commit and re-run the remote tests
+4. Repeat until CI passes
+
+Do NOT ask the user to copy CI errors. The commands show errors directly.
+
+## Branch Workflow
+
+### Scope: One Second-Level Task Per Branch
+
+Each branch/PR corresponds to **one second-level task** in TODO.md. A chat session should complete all third-level subtasks under that second-level task before the branch is merged. Before starting a task check the current branch.
+
+**Example TODO.md structure:**
+```
+- [ ] Guest WinRunAgent                              ← First level (epic)
+  - [ ] Program launch + session management          ← Second level (branch scope)
+    - [ ] Launch Windows processes with args/env     ← Third level (individual work item)
+    - [ ] Track active sessions, heartbeats          ← Third level (individual work item)
+    - [ ] Expose control-channel handlers            ← Third level (individual work item)
+```
+
+For the above, you would create branch `program-launch-session-management` and complete all three third-level tasks (one at a time) within that branch.
+
+### When to Create a New Branch
+
+Create a new feature branch **only** at the **start of a new chat session** when beginning TODO.md work, and when we are not already on a fresh branch:
+
+```bash
+git checkout main
+git checkout -b <branch-name>
+```
+
+**Key rule:** One chat session = one second-level task = one branch. When the user asks to continue to the next TODO item within the same session, **stay on the current branch** and keep committing there until all third-level subtasks under the current second-level task are complete.
+
+### When to Stay on Current Branch
+
+Stay on the current branch when:
+- Continuing to the next **third-level** TODO item under the same second-level task
+- The user says "next", "continue", or similar without explicitly requesting a new branch
+- Fixing issues or making follow-up changes to recent work
+- The current branch isn't `main` (you're already on a feature branch)
+
+### When NOT to Create a Branch
+
+Skip branch creation if:
+- **Same chat session** — Always stay on the current branch within a session
+- Making quick fixes unrelated to TODO.md tasks
+- User explicitly requests working on an existing branch
+- The current branch already matches the work being done
+
+### Branch Naming Convention
+
+Use kebab-case names derived from the **second-level task description**:
+- Convert the second-level task name to kebab-case
+- Keep it concise but descriptive (3-5 words typical)
+- Prefix with category if helpful (e.g., `feat-`, `fix-`, `refactor-`)
+
+**Examples (from second-level tasks):**
+- `program-launch-session-management`
+- `icon-extraction-shortcut-sync`
+- `window-tracking-metadata-streaming`
+- `host-guest-protocol-contracts`
+
+### Session Workflow Example
+
+```
+New chat session starts (second-level task: "Program launch + session management")
+├── User: "do the next todo item"
+├── AI: git checkout -b program-launch-session-management  ← Creates branch from 2nd-level task
+├── AI: implements "Launch Windows processes...", commits
+├── User: "next"
+├── AI: stays on program-launch-session-management         ← Same session, same branch
+├── AI: implements "Track active sessions...", commits
+├── User: "next"  
+├── AI: stays on program-launch-session-management         ← Same session, same branch
+├── AI: implements "Expose control-channel handlers", commits
+├── AI: marks second-level task [X] (all children complete)
+└── Session ends, branch ready for PR
+```
+
+## General Coding Standards
+
+### Platform Targeting & Conditional Compilation
+Each sub-codebase targets exactly one platform:
+- `host/` → **macOS only**
+- `guest/` → **Windows only**
+
+**Core principle:** Never use conditional compilation (`#if`, `#ifdef`, platform checks) to silence or work around compiler errors/warnings when that platform is your target. If an error is "platform-specific" but that platform IS your target, it's a real error — fix it properly, don't suppress it.
+
+- Don't write code for platforms you don't target. Dead fallback branches add noise and hide the real implementation.
+- Conditional compilation is only appropriate when code genuinely needs to run on multiple platforms (rare — e.g., test mocks that run on CI hosts).
+- Silent degradation via `#else` fallbacks hides real problems. Prefer loud build failures over quiet misbehavior.
+
+See platform-specific rules in `host/.cursorrules` (Swift) and `guest/.cursorrules` (C#) for language-specific details.
+
+### Error Handling
+- Use idiomatic error handling for each platform (Result/throws in Swift, exceptions in C#)
+- All Spice/XPC operations need timeout handling
+- Critical commands must be idempotent (retries must not duplicate work)
+
+### Documentation
+- Keep `docs/` in sync with implementation
+- Link decision records from TODO items
+- Update `architecture.md` and `development.md` for user-facing changes
+
+### Testing
+
+**When implementing new code, write tests alongside the implementation** if the code meets either criterion:
+1. **Would normally require tests** — Non-trivial logic, state machines, parsers, serialization
+2. **Has downstream impact** — APIs consumed by other components, protocol contracts, data models
+
+Tests are not optional for qualifying code — CI will enforce this by requiring all tests to pass before merge.
+
+#### What to Test
+
+**Always test:**
+- Protocol message serialization/deserialization (host↔guest contracts)
+- Configuration parsing and validation
+- State machine transitions (VM lifecycle, connection states)
+- Public APIs in shared libraries (`WinRunShared`, `WinRunXPC`)
+- Error handling paths for critical operations
+
+**Usually test:**
+- Complex business logic with multiple code paths
+- Data transformations and format conversions
+- Retry/backoff/timeout logic
+
+**Skip tests for:**
+- Simple wrappers or pass-through code
+- Platform-provided functionality (Virtualization.framework, Win32 APIs)
+- One-off scripts and build tooling
+
+#### Test Infrastructure
+
+| Platform        | Framework | Command                            | Location                   |
+| --------------- | --------- | ---------------------------------- | -------------------------- |
+| Host (macOS)    | XCTest    | `swift test` or `make test-host`   | `host/Tests/`              |
+| Guest (Windows) | xUnit     | `dotnet test` or `make test-guest` | `guest/WinRunAgent.Tests/` |
+
+#### Naming Conventions
+- Host: `<Module>Tests/` directories with `*Tests.swift` files
+- Guest: `<ClassName>Tests.cs` files in `WinRunAgent.Tests/`
+
+#### Running Tests & Checks
+```bash
+# Full CI check (lint + build + test) — run before pushing
+make check
+
+# All tests only
+make test
+
+# Host only
+make check-host   # lint + build + test
+make test-host    # test only
+
+# Guest only (requires .NET 8 SDK or use remote)
+make check-guest        # lint + build + test (local)
+make test-guest         # test only (local)
+make test-guest-remote  # test on Windows via GitHub Actions
+make test-host-remote   # test on macOS via GitHub Actions
+
+# Watch existing CI run (after pushing)
+make ci-watch           # finds latest run for current branch, shows errors on failure
+```
+
+> **Line Endings**: The `.gitattributes` file automatically handles line endings. New files created on macOS will be normalized to CRLF for C# files when committed.
+
+#### CI Requirements
+GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`:
+- **Host Build & Test** — `swift build` + `swift test` on macOS
+- **Host Lint** — SwiftLint with `--strict` on macOS
+- **Guest Build & Test** — `dotnet build` + `dotnet test` on Windows
+- **Guest Lint** — `dotnet format --verify-no-changes` on Windows
+
+All four jobs run in parallel. The final **CI** gate job requires all to pass before merge. Run `make check` locally before pushing to catch issues early.
+
+## File Organization
+
+```
+host/                     Swift Package (macOS)
+  Sources/
+    WinRunShared/         Config, logging, error types, input models
+    WinRunXPC/            IPC contracts
+    WinRunVirtualMachine/ VM lifecycle
+    WinRunSpiceBridge/    Spice C shim wrapper
+    WinRunDaemon/         winrund entry point
+    WinRunApp/            AppKit window shell
+    WinRunCLI/            CLI implementation
+  Tests/
+
+guest/                    .NET 8 (Windows)
+  WinRunAgent/            C# service
+  WinRunAgent.Tests/      xUnit tests
+
+apps/launchers/           macOS .app templates
+infrastructure/launchd/   LaunchDaemon plist
+scripts/                  Bootstrap, build, packaging
+docs/                     Architecture, decisions
+```
+
+## File Size Guidelines
+
+Keep source files focused and manageable:
+
+### Target Limits
+- **Swift files**: ~300 lines ideal, 500 lines maximum
+- **C# files**: ~300 lines ideal, 500 lines maximum  
+- **C files**: ~400 lines ideal, 600 lines maximum
+
+### When to Split Files
+
+Split a file when:
+1. It exceeds the size guidelines above
+2. It contains multiple unrelated concerns (e.g., VM config + input models + authentication)
+3. A logical group of types/functions could be reused independently
+4. The file name no longer accurately describes all its contents
+
+### How to Split (Swift)
+Swift modules automatically export all public types from all files in the module. Simply:
+1. Create new files with focused names (e.g., `InputModels.swift`, `VMConfiguration.swift`)
+2. Move related types to each file
+3. Keep imports minimal—don't add unnecessary dependencies between files
+4. The original file can become a documentation comment or be deleted
+
+### How to Split (C#)
+C# uses namespaces and partial classes:
+1. Create new files with focused names
+2. Use `partial class` if splitting a single large class
+3. Keep the same namespace across related files
+4. Consider extracting interfaces for better testability
+
+### Module Structure Conventions
+
+**WinRunShared** (shared types library):
+- `VMConfiguration.swift` - VM config, validation, state
+- `Logging.swift` - Logger protocol and implementations
+- `Errors.swift` - Error types and descriptions
+- `XPCAuth.swift` - XPC authentication and throttling
+- `InputModels.swift` - Mouse, keyboard, clipboard, drag/drop, key code mapping
+- `SpiceMetrics.swift` - Spice stream metrics
+
+**WinRunSpiceBridge** (Spice protocol wrapper):
+- `SpiceStreamConfiguration.swift` - Connection configuration and transport types
+- `SpiceStreamModels.swift` - WindowMetadata, delegate protocol, reconnect policy, internal types
+- `SpiceWindowStream.swift` - Main stream manager (connection lifecycle, input forwarding)
+- `SpiceStreamTransport.swift` - Transport protocol and platform implementations (LibSpice/Mock)
+
+**WinRunApp** (macOS app):
+- `AppMain.swift` - Entry point, app delegate, menu setup
+- `WinRunWindowController.swift` - Window management, Spice stream delegation
+- `MetalContentView.swift` - GPU rendering and input handling
+- `SpiceFrameRenderer.swift` - Metal frame rendering
+- `ClipboardManager.swift` - Clipboard synchronization
