@@ -189,15 +189,18 @@ final class VirtualMachineControllerBasicTests: XCTestCase {
         }
     }
 
+    #if canImport(Virtualization)
+    @available(macOS 13, *)
     func testListenVsockRequiresRunningVM() async throws {
         let config = VMConfiguration()
         let controller = VirtualMachineController(configuration: config)
 
         do {
-            _ = try controller.listenVsock(port: 5900)
+            _ = try await controller.listenVsock(port: 5900) { _ in true }
             XCTFail("Expected error")
         } catch let error as VirtualMachineLifecycleError {
             XCTAssertTrue(error.description.contains("running"))
         }
     }
+    #endif
 }
