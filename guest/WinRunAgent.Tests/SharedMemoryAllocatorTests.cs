@@ -79,7 +79,8 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
         {
             SharedFilePath = _tempFile,
             CreateIfNotExists = true,
-            CreateSizeBytes = 1024 * 1024 // 1 MB
+            CreateSizeBytes = 1024 * 1024, // 1 MB
+            MinimumSizeBytes = 1024 // Override default 16 MB minimum for test
         };
 
         using var allocator = new SharedMemoryAllocator(config, logger);
@@ -339,9 +340,8 @@ public sealed class SharedMemoryAllocatorTests : IDisposable
 
         allocator.Dispose();
 
-        // After dispose, trying to allocate should fail
-        var allocation = allocator.Allocate(1024);
-        Assert.False(allocation.IsValid);
+        // After dispose, trying to allocate should throw ObjectDisposedException
+        Assert.Throws<ObjectDisposedException>(() => allocator.Allocate(1024));
     }
 }
 

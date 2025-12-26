@@ -110,7 +110,7 @@ public sealed class WindowFrameBuffer : IDisposable
     public int SlotCount => _config.SlotsPerWindow;
 
     /// <summary>Whether this buffer uses shared memory (vs local allocation).</summary>
-    public bool UsesSharedMemory => _sharedAllocator?.IsInitialized == true;
+    public bool UsesSharedMemory => _currentAllocation.IsValid;
 
     /// <summary>
     /// Gets the buffer offset within shared memory (only valid if UsesSharedMemory is true).
