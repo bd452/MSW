@@ -118,6 +118,7 @@ Stay on the current branch when:
 - The user says "next", "continue", or similar without explicitly requesting a new branch
 - Fixing issues or making follow-up changes to recent work
 - The current branch isn't `main` (you're already on a feature branch)
+- **The current branch is prefixed with `cursor/`** — These are Cursor-managed branches; stay on them unless the user explicitly requests a new branch
 
 ### When NOT to Create a Branch
 
@@ -126,6 +127,7 @@ Skip branch creation if:
 - Making quick fixes unrelated to TODO.md tasks
 - User explicitly requests working on an existing branch
 - The current branch already matches the work being done
+- **On a `cursor/` branch** — Cursor cloud agents create branches with this prefix; do NOT fork to a new branch unless the user explicitly requests it
 
 ### Branch Naming Convention
 
