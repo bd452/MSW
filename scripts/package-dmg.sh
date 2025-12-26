@@ -16,7 +16,7 @@
 #   --app PATH         Path to WinRun.app (default: build/WinRun.app)
 #   --output PATH      Output DMG path (default: build/WinRun.dmg)
 #   --volname NAME     DMG volume name (default: WinRun)
-#   --background PATH  Background image to use (optional)
+#   --background PATH  Background image to use (optional; png/jpg recommended)
 #   --window-size WxH  Finder window size (default: 640x420)
 #   --help             Show this help message
 #
@@ -38,6 +38,10 @@ VOLNAME="WinRun"
 BACKGROUND_PATH=""
 WINDOW_W=640
 WINDOW_H=420
+
+# If no --background is provided, we’ll attempt to generate one from a text-based
+# template (HTML) using Quick Look on macOS. This avoids committing binary assets.
+DEFAULT_BG_TEMPLATE_HTML="${REPO_ROOT}/scripts/assets/dmg-background.html"
 
 # Color output helpers
 RED='\033[0;31m'
@@ -117,6 +121,43 @@ validate_inputs() {
     mkdir -p "$(dirname "$OUTPUT_DMG")"
 }
 
+generate_default_background_if_needed() {
+    if [[ -n "$BACKGROUND_PATH" ]]; then
+        return 0
+    fi
+
+    if [[ ! -f "$DEFAULT_BG_TEMPLATE_HTML" ]]; then
+        log_warn "No default DMG background template found at: $DEFAULT_BG_TEMPLATE_HTML"
+        log_warn "Proceeding without a background image (you can pass --background PATH)."
+        return 0
+    fi
+
+    if ! command -v qlmanage >/dev/null 2>&1; then
+        log_warn "qlmanage not available; proceeding without a background image."
+        return 0
+    fi
+
+    GENERATED_BG_DIR="$(mktemp -d)"
+    log_info "Generating DMG background from HTML template..."
+
+    # Generate a PNG thumbnail from the HTML template using Quick Look.
+    # qlmanage chooses the output filename; we pick the first PNG produced.
+    qlmanage -t -s "${WINDOW_W}" -o "$GENERATED_BG_DIR" "$DEFAULT_BG_TEMPLATE_HTML" >/dev/null 2>&1 || {
+        log_warn "Failed to generate DMG background via qlmanage; proceeding without a background image."
+        return 0
+    }
+
+    local generated_png
+    generated_png="$(ls "${GENERATED_BG_DIR}"/*.png 2>/dev/null | head -n 1 || true)"
+    if [[ -z "$generated_png" || ! -f "$generated_png" ]]; then
+        log_warn "qlmanage did not produce a PNG; proceeding without a background image."
+        return 0
+    fi
+
+    BACKGROUND_PATH="$generated_png"
+    log_success "Using generated background image: $BACKGROUND_PATH"
+}
+
 create_staging_dir() {
     STAGING_DIR="$(mktemp -d)"
     log_info "Creating staging dir: $STAGING_DIR"
@@ -137,6 +178,12 @@ create_staging_dir() {
 cleanup_staging_dir() {
     if [[ -n "${STAGING_DIR:-}" && -d "$STAGING_DIR" ]]; then
         rm -rf "$STAGING_DIR"
+    fi
+}
+
+cleanup_generated_background() {
+    if [[ -n "${GENERATED_BG_DIR:-}" && -d "$GENERATED_BG_DIR" ]]; then
+        rm -rf "$GENERATED_BG_DIR"
     fi
 }
 
@@ -204,7 +251,7 @@ configure_finder_layout() {
     fi
 
     # Give Finder a moment to notice the newly mounted volume.
-    sleep 1
+    sleep 2
 
     # Finder scripting: set icon view, window size, icon positions, background.
     # Note: AppleScript coordinates are in points from top-left of the window content area.
@@ -234,7 +281,7 @@ tell application "Finder"
     close
     open
     update without registering applications
-    delay 1
+    delay 2
   end tell
 end tell
 EOF
@@ -264,6 +311,7 @@ cleanup_all() {
     detach_dmg || true
     cleanup_rw_dmg || true
     cleanup_staging_dir || true
+    cleanup_generated_background || true
 }
 
 main() {
@@ -273,6 +321,7 @@ main() {
 
     require_macos
     validate_inputs
+    generate_default_background_if_needed
 
     trap cleanup_all EXIT
 
