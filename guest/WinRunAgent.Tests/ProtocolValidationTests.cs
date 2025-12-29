@@ -127,8 +127,9 @@ public sealed class ProtocolValidationTests
             SpiceMessageType.LaunchProgram, SpiceMessageType.RequestIcon,
             SpiceMessageType.ClipboardData, SpiceMessageType.MouseInput,
             SpiceMessageType.KeyboardInput, SpiceMessageType.DragDropEvent,
-            SpiceMessageType.ListSessions, SpiceMessageType.CloseSession,
-            SpiceMessageType.ListShortcuts, SpiceMessageType.Shutdown
+            SpiceMessageType.ConfigureStreaming, SpiceMessageType.ListSessions,
+            SpiceMessageType.CloseSession, SpiceMessageType.ListShortcuts,
+            SpiceMessageType.Shutdown
         };
 
         foreach (var msg in hostMessages)
@@ -244,7 +245,7 @@ public sealed class ProtocolValidationTests
     public void AllMessageTypesExist()
     {
         var allValues = Enum.GetValues<SpiceMessageType>();
-        Assert.Equal(28, allValues.Length); // Includes FrameReady (0x8E), WindowBufferAllocated (0x8F)
+        Assert.Equal(29, allValues.Length); // Includes ConfigureStreaming (0x07), FrameReady (0x8E), WindowBufferAllocated (0x8F)
 
         // Verify no duplicate raw values
         var rawValues = allValues.Select(v => (byte)v).ToList();

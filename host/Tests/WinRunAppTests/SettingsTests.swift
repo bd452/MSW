@@ -1,5 +1,6 @@
 import Foundation
 import WinRunShared
+import WinRunSpiceBridge
 import XCTest
 
 @testable import WinRunApp
