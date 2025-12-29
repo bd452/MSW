@@ -79,3 +79,6 @@
         - Permissions set correctly (root:wheel, 644 for plist, 755 for binary)
         - MachServiceName consistent across plist, daemon, and XPC client (`com.winrun.daemon`)
         - Binary path consistent across plist and bootstrap.sh (`/usr/local/bin/winrund`)
+    - [X] Implement real session listing backed by guest agent
+      - **Status:** ✅ No bugs found
+      - **Notes:** Full data flow traced from XPC client → daemon → control channel → guest → response. Protocol types match between host (Swift) and guest (C#) with consistent JSON serialization (camelCase). Session state enum values correctly serialize to lowercase strings. Message ID tracking for request/response pairing works correctly. Daemon gracefully returns empty list when control channel is unavailable. Test coverage includes serialization, deserialization, type conversions, and control channel request/response handling.

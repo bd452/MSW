@@ -436,7 +436,42 @@ public sealed class WinRunAgentService : IDisposable
             return;
         }
 
-        // Mark session as exited (this will notify host via existing event handling)
+        // Actually terminate the Windows process
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(processId);
+            if (!process.HasExited)
+            {
+                _logger.Info($"Terminating process {processId} ({session.ExecutablePath})");
+                process.Kill(entireProcessTree: true);
+
+                // Wait briefly for process to exit (non-blocking with timeout)
+                var exited = process.WaitForExit(3000);
+                if (!exited)
+                {
+                    _logger.Warn($"Process {processId} did not exit within timeout, but kill was issued");
+                }
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Process already exited - this is fine
+            _logger.Debug($"Process {processId} already exited");
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Process has already exited
+            _logger.Debug($"Process {processId} already exited: {ex.Message}");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // Access denied or other Windows error
+            _logger.Error($"Failed to terminate process {processId}: {ex.Message}");
+            await SendAckAsync(request.MessageId, success: false, $"Failed to terminate process: {ex.Message}");
+            return;
+        }
+
+        // Mark session as exited in our tracking
         SessionManager.MarkSessionExited(processId);
 
         _logger.Info($"Session {request.SessionId} closed");
