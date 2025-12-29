@@ -16,6 +16,7 @@ disabled_rules:
   - force_unwrapping # Too noisy, especially in tests
   - implicitly_unwrapped_optional # Common pattern in test setup
   - function_parameter_count # Sometimes needed for complex APIs
+  - statement_position # Requires SourceKit (not available on Linux CI)
 
 opt_in_rules:
   - closure_spacing
