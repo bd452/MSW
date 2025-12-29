@@ -50,9 +50,12 @@ jobs:
 
       # Cache Homebrew packages AND symlinks for near-instant restore
       # Without symlinks, brew still needs to relink all deps (slow)
+      # To bust cache: increment BREW_CACHE_VERSION below
       - name: Cache Homebrew
         id: brew-cache
         uses: actions/cache@v4
+        env:
+          BREW_CACHE_VERSION: v1  # Increment to force cache refresh
         with:
           path: |
             /opt/homebrew/Cellar
@@ -62,7 +65,7 @@ jobs:
             /opt/homebrew/include
             /opt/homebrew/share
             /opt/homebrew/Frameworks
-          key: brew-installed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
+          key: brew-${{ env.BREW_CACHE_VERSION }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
 
       - name: Install dependencies
         timeout-minutes: 10
