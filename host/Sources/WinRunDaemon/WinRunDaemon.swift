@@ -5,16 +5,13 @@ import WinRunXPC
 import WinRunSpiceBridge
 import Security
 
-@objc final class WinRunDaemonService: NSObject, WinRunDaemonXPC {
+@objc final class WinRunDaemonService: NSObject {
     private let vmController: VirtualMachineController
     private let logger: Logger
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private let rateLimiter: RateLimiter
+    let rateLimiter: RateLimiter
     private let controlChannel: SpiceControlChannel
-
-    /// Client identifier for the current request (set by connection handler)
-    var currentClientId: String?
 
     init(
         configuration: VMConfiguration = VMConfiguration(),
@@ -29,8 +26,9 @@ import Security
     }
 
     /// Check rate limit before processing request
-    private func checkThrottle() async throws {
-        guard let clientId = currentClientId else { return }
+    /// - Parameter clientId: The unique identifier for the client making the request
+    /// - Throws: XPCAuthenticationError.throttled if rate limit exceeded
+    private func checkThrottle(clientId: String) async throws {
         let result = await rateLimiter.checkRequest(clientId: clientId)
         if case .failure(let error) = result {
             throw error
@@ -43,10 +41,10 @@ import Security
         logger.debug("Pruned stale rate limit entries")
     }
 
-    func ensureVMRunning(_ reply: @escaping (NSData?, NSError?) -> Void) {
+    func ensureVMRunning(clientId: String, reply: @escaping (NSData?, NSError?) -> Void) {
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
                 let state = try await vmController.ensureRunning()
                 reply(try encode(state), nil)
             } catch {
@@ -55,11 +53,11 @@ import Security
         }
     }
 
-    func executeProgram(_ requestData: NSData, reply: @escaping (NSError?) -> Void) {
+    func executeProgram(clientId: String, requestData: NSData, reply: @escaping (NSError?) -> Void) {
         let data = Data(referencing: requestData)
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
                 let request = try decode(ProgramLaunchRequest.self, from: data)
                 _ = try await vmController.ensureRunning()
                 logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
@@ -71,10 +69,10 @@ import Security
         }
     }
 
-    func getStatus(_ reply: @escaping (NSData?, NSError?) -> Void) {
+    func getStatus(clientId: String, reply: @escaping (NSData?, NSError?) -> Void) {
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
                 let status = await vmController.currentState()
                 reply(try encode(status), nil)
             } catch {
@@ -83,10 +81,10 @@ import Security
         }
     }
 
-    func suspendIfIdle(_ reply: @escaping (NSError?) -> Void) {
+    func suspendIfIdle(clientId: String, reply: @escaping (NSError?) -> Void) {
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
                 try await vmController.suspendIfIdle()
                 reply(nil)
             } catch {
@@ -95,10 +93,10 @@ import Security
         }
     }
 
-    func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void) {
+    func stopVM(clientId: String, reply: @escaping (NSData?, NSError?) -> Void) {
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
                 let state = try await vmController.shutdown()
                 reply(try encode(state), nil)
             } catch {
@@ -109,10 +107,10 @@ import Security
 
     // MARK: - Session Management
 
-    func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void) {
+    func listSessions(clientId: String, reply: @escaping (NSData?, NSError?) -> Void) {
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
 
                 // Query guest agent for actual sessions
                 let vmState = await vmController.currentState()
@@ -143,11 +141,10 @@ import Security
         }
     }
 
-    func closeSession(_ sessionId: NSString, reply: @escaping (NSError?) -> Void) {
-        let id = sessionId as String
+    func closeSession(clientId: String, sessionId: String, reply: @escaping (NSError?) -> Void) {
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
 
                 // Check VM state
                 let vmState = await vmController.currentState()
@@ -163,11 +160,11 @@ import Security
                 }
 
                 // Send close session command to guest
-                try await controlChannel.closeSession(id)
-                logger.info("Closed session \(id)")
+                try await controlChannel.closeSession(sessionId)
+                logger.info("Closed session \(sessionId)")
                 reply(nil)
             } catch let error as SpiceControlError {
-                logger.error("Failed to close session \(id): \(error.description)")
+                logger.error("Failed to close session \(sessionId): \(error.description)")
                 reply(nsError(error))
             } catch {
                 reply(nsError(error))
@@ -177,10 +174,10 @@ import Security
 
     // MARK: - Shortcut Management
 
-    func listShortcuts(_ reply: @escaping (NSData?, NSError?) -> Void) {
+    func listShortcuts(clientId: String, reply: @escaping (NSData?, NSError?) -> Void) {
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
 
                 // Query guest agent for detected shortcuts
                 let vmState = await vmController.currentState()
@@ -211,11 +208,11 @@ import Security
         }
     }
 
-    func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void) {
-        let destinationRoot = URL(fileURLWithPath: destinationPath as String, isDirectory: true)
+    func syncShortcuts(clientId: String, destinationPath: String, reply: @escaping (NSData?, NSError?) -> Void) {
+        let destinationRoot = URL(fileURLWithPath: destinationPath, isDirectory: true)
         Task { [self] in
             do {
-                try await checkThrottle()
+                try await checkThrottle(clientId: clientId)
 
                 // Get shortcuts from guest
                 let vmState = await vmController.currentState()

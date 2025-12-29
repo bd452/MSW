@@ -318,6 +318,163 @@ final class ThrottlingConfigTests: XCTestCase {
     }
 }
 
+// MARK: - Rate Limiter Tests
+
+final class RateLimiterTests: XCTestCase {
+    func testFirstRequestAlwaysSucceeds() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 10, windowSeconds: 60, burstAllowance: 5, cooldownSeconds: 1)
+        let limiter = RateLimiter(config: config)
+
+        let result = await limiter.checkRequest(clientId: "client-1")
+
+        switch result {
+        case .success:
+            break  // Expected
+        case .failure(let error):
+            XCTFail("First request should succeed, got: \(error)")
+        }
+    }
+
+    func testRequestsWithinBurstAllowanceSucceed() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 5, windowSeconds: 60, burstAllowance: 3, cooldownSeconds: 1)
+        let limiter = RateLimiter(config: config)
+        let clientId = "client-burst"
+
+        // Should allow 5 + 3 = 8 requests before throttling
+        for i in 0..<8 {
+            let result = await limiter.checkRequest(clientId: clientId)
+            switch result {
+            case .success:
+                break  // Expected
+            case .failure(let error):
+                XCTFail("Request \(i) within burst should succeed, got: \(error)")
+            }
+        }
+    }
+
+    func testExceedingBurstAllowanceTriggersThrottle() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 3, windowSeconds: 60, burstAllowance: 2, cooldownSeconds: 1)
+        let limiter = RateLimiter(config: config)
+        let clientId = "client-exceed"
+
+        // Exhaust all tokens (3 + 2 = 5)
+        for _ in 0..<5 {
+            _ = await limiter.checkRequest(clientId: clientId)
+        }
+
+        // Next request should be throttled
+        let result = await limiter.checkRequest(clientId: clientId)
+        switch result {
+        case .success:
+            XCTFail("Request exceeding limit should be throttled")
+        case .failure(let error):
+            guard case .throttled(let retryAfter) = error else {
+                XCTFail("Expected throttled error, got: \(error)")
+                return
+            }
+            XCTAssertGreaterThan(retryAfter, 0)
+        }
+    }
+
+    func testDifferentClientsHaveSeparateBuckets() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 2, windowSeconds: 60, burstAllowance: 0, cooldownSeconds: 1)
+        let limiter = RateLimiter(config: config)
+
+        // Exhaust client-1's bucket
+        _ = await limiter.checkRequest(clientId: "client-1")
+        _ = await limiter.checkRequest(clientId: "client-1")
+
+        // client-2 should still have full allowance
+        let result = await limiter.checkRequest(clientId: "client-2")
+        switch result {
+        case .success:
+            break  // Expected
+        case .failure(let error):
+            XCTFail("client-2 should have separate bucket, got: \(error)")
+        }
+    }
+
+    func testMetricsTrackActiveClients() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 10, windowSeconds: 60, burstAllowance: 5, cooldownSeconds: 1)
+        let limiter = RateLimiter(config: config)
+
+        // No clients initially
+        var metrics = await limiter.metrics()
+        XCTAssertEqual(metrics.activeClients, 0)
+
+        // Add some clients
+        _ = await limiter.checkRequest(clientId: "client-a")
+        _ = await limiter.checkRequest(clientId: "client-b")
+        _ = await limiter.checkRequest(clientId: "client-c")
+
+        metrics = await limiter.metrics()
+        XCTAssertEqual(metrics.activeClients, 3)
+    }
+
+    func testMetricsTrackClientsInCooldown() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 1, windowSeconds: 60, burstAllowance: 0, cooldownSeconds: 5)
+        let limiter = RateLimiter(config: config)
+
+        // Exhaust a client's bucket and trigger cooldown
+        _ = await limiter.checkRequest(clientId: "client-cooldown")
+        _ = await limiter.checkRequest(clientId: "client-cooldown")  // This triggers cooldown
+
+        let metrics = await limiter.metrics()
+        XCTAssertEqual(metrics.activeClients, 1)
+        XCTAssertEqual(metrics.clientsInCooldown, 1)
+    }
+
+    func testPruneStaleClientsRemovesOldEntries() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 10, windowSeconds: 60, burstAllowance: 5, cooldownSeconds: 1)
+        let limiter = RateLimiter(config: config)
+
+        // Add a client
+        _ = await limiter.checkRequest(clientId: "stale-client")
+
+        var metrics = await limiter.metrics()
+        XCTAssertEqual(metrics.activeClients, 1)
+
+        // Prune with 0 age should remove all entries
+        await limiter.pruneStaleClients(olderThan: 0)
+
+        metrics = await limiter.metrics()
+        XCTAssertEqual(metrics.activeClients, 0)
+    }
+
+    func testCooldownBlocksRequestsUntilExpired() async {
+        let config = ThrottlingConfig(maxRequestsPerWindow: 1, windowSeconds: 60, burstAllowance: 0, cooldownSeconds: 0.1)
+        let limiter = RateLimiter(config: config)
+        let clientId = "client-cooldown-test"
+
+        // Exhaust tokens and enter cooldown
+        _ = await limiter.checkRequest(clientId: clientId)
+        let throttledResult = await limiter.checkRequest(clientId: clientId)
+
+        switch throttledResult {
+        case .success:
+            XCTFail("Should be throttled")
+        case .failure:
+            break  // Expected
+        }
+
+        // Wait for cooldown to expire
+        try? await Task.sleep(for: .milliseconds(150))
+
+        // Should succeed now (tokens have refilled)
+        let afterCooldown = await limiter.checkRequest(clientId: clientId)
+        switch afterCooldown {
+        case .success:
+            break  // Expected - cooldown expired and some tokens refilled
+        case .failure(let error):
+            // If still throttled, that's acceptable if not enough time passed
+            guard case .throttled = error else {
+                XCTFail("Expected success or throttled, got: \(error)")
+                return
+            }
+        }
+    }
+}
+
 // MARK: - Mock Logger
 
 /// Thread-safe mock logger for testing

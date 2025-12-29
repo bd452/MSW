@@ -368,7 +368,10 @@ public sealed class PerWindowBufferManager : IDisposable
     {
         lock (_lock)
         {
-            if (_config.Mode == mode) return;
+            if (_config.Mode == mode)
+            {
+                return;
+            }
 
             _config = _config with { Mode = mode };
             _logger.Info($"Buffer mode updated to: {mode}. New windows will use this mode.");
