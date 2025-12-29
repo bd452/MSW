@@ -107,9 +107,21 @@ public struct VMNetworkConfiguration: Codable, Hashable {
 }
 
 public extension VMNetworkConfiguration {
+    /// Regex pattern for valid MAC address formats (colon or hyphen separated)
+    private static let macAddressPattern = #"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$"#
+
     func validate() throws {
         if mode == .bridged, interfaceIdentifier?.isEmpty ?? true {
             throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
+        }
+
+        // Validate MAC address format if provided
+        if let macAddress = macAddress, !macAddress.isEmpty {
+            let regex = try? NSRegularExpression(pattern: Self.macAddressPattern)
+            let range = NSRange(macAddress.startIndex..., in: macAddress)
+            if regex?.firstMatch(in: macAddress, range: range) == nil {
+                throw VMConfigurationValidationError.invalidMACAddress(macAddress)
+            }
         }
     }
 }
@@ -352,6 +364,7 @@ public enum VMConfigurationValidationError: Error, CustomStringConvertible {
     case diskSizeTooSmall(actual: Int)
     case bridgedInterfaceNotSpecified
     case bridgedInterfaceUnavailable(String)
+    case invalidMACAddress(String)
     case sharedMemoryTooSmall(actual: Int, minimum: Int)
     case sharedMemoryTooLarge(actual: Int, maximum: Int)
     case invalidVsockPort(UInt32)
@@ -375,6 +388,8 @@ public enum VMConfigurationValidationError: Error, CustomStringConvertible {
             return "Bridged networking requires an interface identifier."
         case .bridgedInterfaceUnavailable(let identifier):
             return "Bridged interface \(identifier) was not found on this host."
+        case .invalidMACAddress(let address):
+            return "MAC address '\(address)' is not valid. Expected format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF."
         case .sharedMemoryTooSmall(let actual, let minimum):
             return "Shared memory size \(actual)MB is below the minimum of \(minimum)MB."
         case .sharedMemoryTooLarge(let actual, let maximum):

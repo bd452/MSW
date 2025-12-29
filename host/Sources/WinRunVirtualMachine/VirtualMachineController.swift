@@ -414,6 +414,14 @@ public actor VirtualMachineController {
         let networkAttachment = try makeNetworkAttachment()
         let networkDevice = VZVirtioNetworkDeviceConfiguration()
         networkDevice.attachment = networkAttachment
+
+        // Apply custom MAC address if configured
+        if let macAddressString = configuration.network.macAddress,
+           let macAddress = VZMACAddress(string: macAddressString) {
+            networkDevice.macAddress = macAddress
+            logger.debug("Applied custom MAC address: \(macAddressString)")
+        }
+
         vmConfig.networkDevices = [networkDevice]
 
         let graphics = VZVirtioGraphicsDeviceConfiguration()

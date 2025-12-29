@@ -78,3 +78,18 @@
   - `testUnexpectedStopWithReasonDescription` and `testUnexpectedStopWithoutReasonDescription` for new error type
   - `testHandleGuestDidStopSetsStateToStopped` and `testHandleGuestDidStopWithErrorSetsStateToStopped` for delegate handlers
 
+### 1.2.2 Persist VM disk/network configuration + validation
+- **Files:** `host/Sources/WinRunVirtualMachine/VirtualMachineController.swift`, `host/Sources/WinRunShared/VMConfiguration.swift`, `host/Sources/WinRunShared/ConfigStore.swift`
+- **Status:** 🔧 Bug found and fixed
+- **Bug Fixed:**
+  1. **macAddress field stored but never applied** - `VMNetworkConfiguration.macAddress` was persisted in JSON but never used when building `VZVirtioNetworkDeviceConfiguration`. Users who configured a custom MAC address would have it silently ignored. Fixed by applying the MAC address via `VZMACAddress(string:)` in `buildNativeConfiguration()`.
+- **Improvements Added:**
+  - Added MAC address format validation in `VMNetworkConfiguration.validate()` using regex pattern `^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$`
+  - Added new error case `VMConfigurationValidationError.invalidMACAddress(String)` with user-friendly description
+- **Tests Added:**
+  - `testMACAddressValidationAcceptsValidFormats` - tests colon-separated, hyphen-separated, and nil MAC addresses
+  - `testMACAddressValidationRejectsInvalidFormats` - tests too short, invalid characters, and no-separator formats
+- **Notes:**
+  - ConfigStore persistence with schema versioning works correctly
+  - All other validation (CPU, memory, disk, network mode, frame streaming) was already properly implemented
+
