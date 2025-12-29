@@ -131,6 +131,24 @@ public sealed class FrameStreamingService : IDisposable
     public bool UsesSharedMemory => _bufferManager.UsesSharedMemory;
 
     /// <summary>
+    /// Gets the current frame buffer mode.
+    /// </summary>
+    public FrameBufferMode CurrentBufferMode => _bufferManager.CurrentMode;
+
+    /// <summary>
+    /// Updates the frame buffer mode for new buffer allocations.
+    /// Existing buffers continue using their original mode until window resize triggers reallocation.
+    /// New windows will use the new mode immediately.
+    /// </summary>
+    /// <param name="mode">The new buffer mode to use.</param>
+    public void UpdateBufferMode(FrameBufferMode mode)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _bufferManager.UpdateBufferMode(mode);
+        _logger.Info($"Frame buffer mode updated to: {mode}");
+    }
+
+    /// <summary>
     /// Starts the frame capture loop.
     /// </summary>
     public void Start()

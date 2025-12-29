@@ -186,28 +186,28 @@
     - [X] Add unit tests for shared memory buffer protocol { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
     - [X] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
 
-- [ ] Settings UI (Preferences Window) { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
+- [X] Settings UI (Preferences Window) { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
   - [X] Settings window infrastructure { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift } <docs/architecture.md>
     - [X] Create settings window with tab view for categories { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift }
     - [X] Wire Cmd+, keyboard shortcut and menu item { host/Sources/WinRunApp/AppMain.swift }
     - [X] Persist window position and selected tab { host/Sources/WinRunShared/ConfigStore.swift }
-  - [ ] Streaming settings tab { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift } <docs/decisions/spice-bridge.md>
-    - [ ] Frame buffer mode picker (Uncompressed / Compressed) { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift }
+  - [X] Streaming settings tab { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift } <docs/decisions/spice-bridge.md>
+    - [X] Frame buffer mode picker (Uncompressed / Compressed) { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift }
       - Uncompressed: exact allocation for frame dimensions, reallocates on window resize
         - ~33MB per 4K window, lowest latency, best for modern machines
       - Compressed: tranche-based allocation (3/8/20/50 MB buckets) with LZ4
         - Reallocates when compressed frame exceeds current tranche
         - Lower memory usage, adds compression/decompression latency
-    - [ ] Show current streaming stats (frames/sec, memory usage per window, total allocation)
-  - [ ] Apply settings changes { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift }
-    - [ ] Save FrameBufferMode to ConfigStore on change { host/Sources/WinRunShared/ConfigStore.swift }
-    - [ ] Send FrameBufferMode to guest agent via control channel { host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift }
-    - [ ] Guest applies mode change on next buffer allocation { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
+    - [X] Show current streaming stats (frames/sec, memory usage per window, total allocation)
+  - [X] Apply settings changes { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift }
+    - [X] Save FrameBufferMode to ConfigStore on change { host/Sources/WinRunShared/ConfigStore.swift }
+    - [X] Send FrameBufferMode to guest agent via control channel { host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift }
+    - [X] Guest applies mode change on next buffer allocation { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
       - Existing buffers continue with old mode until window resize triggers reallocation
       - New windows use new mode immediately
-  - [ ] Settings UI tests { new:host/Tests/WinRunAppTests/SettingsTests.swift }
-    - [ ] Test settings persistence and restoration
-    - [ ] Test config change notification to guest
+  - [X] Settings UI tests { new:host/Tests/WinRunAppTests/SettingsTests.swift }
+    - [X] Test settings persistence and restoration
+    - [X] Test config change notification to guest
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>

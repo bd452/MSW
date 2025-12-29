@@ -9,6 +9,7 @@
     "msgMouseInput": 4,
     "msgKeyboardInput": 5,
     "msgDragDropEvent": 6,
+    "msgConfigureStreaming": 7,
     "msgListSessions": 8,
     "msgCloseSession": 9,
     "msgListShortcuts": 10,
@@ -97,6 +98,9 @@
     "provisionPhaseAgent": "agent",
     "provisionPhaseOptimize": "optimize",
     "provisionPhaseFinalize": "finalize",
-    "provisionPhaseComplete": "complete"
+    "provisionPhaseComplete": "complete"  },
+  "frameBufferModes": {
+    "frameBufferModeUncompressed": 0,
+    "frameBufferModeCompressed": 1
   }
 }

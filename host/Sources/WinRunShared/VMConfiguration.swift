@@ -114,6 +114,48 @@ public extension VMNetworkConfiguration {
     }
 }
 
+// MARK: - Frame Buffer Mode
+
+/// Frame buffer allocation mode for guest-host streaming.
+///
+/// Controls how the guest allocates memory for frame data before sending to host.
+/// This setting affects the tradeoff between memory usage and latency.
+public enum FrameBufferMode: String, Codable, CaseIterable, Hashable {
+    /// Exact allocation for frame dimensions (width × height × 4 bytes).
+    /// - Lowest latency, no compression overhead
+    /// - Higher memory usage (~33MB per 4K window)
+    /// - Reallocates only when window dimensions change
+    /// - Best for modern machines with ample RAM
+    case uncompressed
+
+    /// Tranche-based allocation with LZ4 compression.
+    /// - Lower memory usage (3/8/20/50 MB buckets)
+    /// - Higher latency due to compression/decompression
+    /// - Reallocates when compressed frame exceeds current tranche
+    /// - Best for memory-constrained scenarios
+    case compressed
+
+    /// Human-readable description of the mode.
+    public var displayName: String {
+        switch self {
+        case .uncompressed:
+            return "Uncompressed (Low Latency)"
+        case .compressed:
+            return "Compressed (Lower Memory)"
+        }
+    }
+
+    /// Detailed description of the mode's behavior.
+    public var detailedDescription: String {
+        switch self {
+        case .uncompressed:
+            return "Allocates exact memory for frame dimensions. Best performance, uses ~33MB per 4K window."
+        case .compressed:
+            return "Uses LZ4 compression with size buckets (3/8/20/50 MB). Lower memory usage but adds latency."
+        }
+    }
+}
+
 // MARK: - Frame Streaming Configuration
 
 /// Configuration for guest-host frame streaming communication.
@@ -143,6 +185,10 @@ public struct FrameStreamingConfiguration: Codable, Hashable {
     /// Whether to enable the Spice console port channel.
     public var spiceConsoleEnabled: Bool
 
+    /// Frame buffer allocation mode for guest streaming.
+    /// Controls memory vs latency tradeoff.
+    public var frameBufferMode: FrameBufferMode
+
     /// Creates a new frame streaming configuration.
     /// - Parameters:
     ///   - vsockEnabled: Whether vsock is enabled for frame streaming (default: true)
@@ -152,6 +198,7 @@ public struct FrameStreamingConfiguration: Codable, Hashable {
     ///   - sharedMemoryEnabled: Whether shared memory is enabled (default: true)
     ///   - sharedMemorySizeMB: Size of shared memory in MB (default: 256, max: 512)
     ///   - spiceConsoleEnabled: Whether Spice console port is enabled (default: true)
+    ///   - frameBufferMode: Frame buffer allocation mode (default: uncompressed)
     public init(
         vsockEnabled: Bool = true,
         vsockCID: UInt32? = nil,
@@ -159,7 +206,8 @@ public struct FrameStreamingConfiguration: Codable, Hashable {
         frameDataPort: UInt32 = 5901,
         sharedMemoryEnabled: Bool = true,
         sharedMemorySizeMB: Int = 256,
-        spiceConsoleEnabled: Bool = true
+        spiceConsoleEnabled: Bool = true,
+        frameBufferMode: FrameBufferMode = .uncompressed
     ) {
         self.vsockEnabled = vsockEnabled
         self.vsockCID = vsockCID
@@ -168,6 +216,29 @@ public struct FrameStreamingConfiguration: Codable, Hashable {
         self.sharedMemoryEnabled = sharedMemoryEnabled
         self.sharedMemorySizeMB = sharedMemorySizeMB
         self.spiceConsoleEnabled = spiceConsoleEnabled
+        self.frameBufferMode = frameBufferMode
+    }
+
+    // Custom decoder for backward compatibility with configs that don't have frameBufferMode
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.vsockEnabled = try container.decode(Bool.self, forKey: .vsockEnabled)
+        self.vsockCID = try container.decodeIfPresent(UInt32.self, forKey: .vsockCID)
+        self.controlPort = try container.decode(UInt32.self, forKey: .controlPort)
+        self.frameDataPort = try container.decode(UInt32.self, forKey: .frameDataPort)
+        self.sharedMemoryEnabled = try container.decode(Bool.self, forKey: .sharedMemoryEnabled)
+        self.sharedMemorySizeMB = try container.decode(Int.self, forKey: .sharedMemorySizeMB)
+        self.spiceConsoleEnabled = try container.decode(Bool.self, forKey: .spiceConsoleEnabled)
+        // Default to uncompressed if missing (backward compatibility)
+        self.frameBufferMode = try container.decodeIfPresent(
+            FrameBufferMode.self,
+            forKey: .frameBufferMode
+        ) ?? .uncompressed
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case vsockEnabled, vsockCID, controlPort, frameDataPort
+        case sharedMemoryEnabled, sharedMemorySizeMB, spiceConsoleEnabled, frameBufferMode
     }
 }
 

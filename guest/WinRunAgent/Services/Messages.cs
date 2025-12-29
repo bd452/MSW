@@ -125,6 +125,19 @@ public sealed record CloseSessionMessage : HostMessage
 /// </summary>
 public sealed record ListShortcutsMessage : HostMessage;
 
+/// <summary>
+/// Configure streaming settings on the guest.
+/// Sent when the user changes streaming settings in the host UI.
+/// </summary>
+public sealed record ConfigureStreamingMessage : HostMessage
+{
+    /// <summary>
+    /// The frame buffer mode to use (0=Uncompressed, 1=Compressed).
+    /// The guest applies this on the next buffer allocation.
+    /// </summary>
+    public FrameBufferMode FrameBufferMode { get; init; } = FrameBufferMode.Uncompressed;
+}
+
 // ============================================================================
 // Guest → Host Messages
 // ============================================================================
@@ -586,6 +599,7 @@ public static class SpiceMessageSerializer
             SpiceMessageType.MouseInput => JsonSerializer.Deserialize<MouseInputMessage>(payload, JsonOptions),
             SpiceMessageType.KeyboardInput => JsonSerializer.Deserialize<KeyboardInputMessage>(payload, JsonOptions),
             SpiceMessageType.DragDropEvent => JsonSerializer.Deserialize<DragDropMessage>(payload, JsonOptions),
+            SpiceMessageType.ConfigureStreaming => JsonSerializer.Deserialize<ConfigureStreamingMessage>(payload, JsonOptions),
             SpiceMessageType.ListSessions => JsonSerializer.Deserialize<ListSessionsMessage>(payload, JsonOptions),
             SpiceMessageType.CloseSession => JsonSerializer.Deserialize<CloseSessionMessage>(payload, JsonOptions),
             SpiceMessageType.ListShortcuts => JsonSerializer.Deserialize<ListShortcutsMessage>(payload, JsonOptions),

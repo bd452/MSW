@@ -200,3 +200,51 @@ public struct ListShortcutsSpiceMessage: HostMessage {
         self.messageId = messageId
     }
 }
+
+/// Configure streaming settings on the guest.
+///
+/// Sent when the user changes streaming settings in the host UI.
+/// The guest applies the new settings on the next buffer allocation.
+public struct ConfigureStreamingSpiceMessage: HostMessage {
+    public let messageId: UInt32
+
+    /// The frame buffer mode to use (compressed vs uncompressed).
+    /// Maps to guest's `FrameBufferMode` enum.
+    public let frameBufferMode: FrameBufferModeValue
+
+    public init(messageId: UInt32, frameBufferMode: FrameBufferModeValue) {
+        self.messageId = messageId
+        self.frameBufferMode = frameBufferMode
+    }
+}
+
+/// Wire representation of frame buffer mode for protocol messages.
+///
+/// Matches the guest's `FrameBufferMode` enum values.
+public enum FrameBufferModeValue: Int, Codable {
+    /// Uncompressed: exact allocation for frame dimensions
+    case uncompressed = 0
+
+    /// Compressed: tranche-based allocation with LZ4
+    case compressed = 1
+
+    /// Creates from the shared `FrameBufferMode` type.
+    public init(from mode: FrameBufferMode) {
+        switch mode {
+        case .uncompressed:
+            self = .uncompressed
+        case .compressed:
+            self = .compressed
+        }
+    }
+
+    /// Converts to the shared `FrameBufferMode` type.
+    public var asFrameBufferMode: FrameBufferMode {
+        switch self {
+        case .uncompressed:
+            return .uncompressed
+        case .compressed:
+            return .compressed
+        }
+    }
+}

@@ -335,7 +335,7 @@ public sealed class WindowFrameBuffer : IDisposable
 public sealed class PerWindowBufferManager : IDisposable
 {
     private readonly IAgentLogger _logger;
-    private readonly PerWindowBufferConfig _config;
+    private PerWindowBufferConfig _config;
     private readonly SharedMemoryAllocator? _sharedAllocator;
     private readonly Dictionary<ulong, WindowFrameBuffer> _buffers = [];
     private readonly object _lock = new();
@@ -352,6 +352,27 @@ public sealed class PerWindowBufferManager : IDisposable
 
         var allocMode = sharedAllocator?.IsInitialized == true ? "shared" : "local";
         _logger.Info($"PerWindowBufferManager created: mode={config.Mode}, slots={config.SlotsPerWindow}, allocation={allocMode}");
+    }
+
+    /// <summary>
+    /// Gets the current frame buffer mode.
+    /// </summary>
+    public FrameBufferMode CurrentMode => _config.Mode;
+
+    /// <summary>
+    /// Updates the frame buffer mode for new buffer allocations.
+    /// Existing buffers continue using their original mode until window resize.
+    /// </summary>
+    /// <param name="mode">The new buffer mode to use.</param>
+    public void UpdateBufferMode(FrameBufferMode mode)
+    {
+        lock (_lock)
+        {
+            if (_config.Mode == mode) return;
+
+            _config = _config with { Mode = mode };
+            _logger.Info($"Buffer mode updated to: {mode}. New windows will use this mode.");
+        }
     }
 
     /// <summary>

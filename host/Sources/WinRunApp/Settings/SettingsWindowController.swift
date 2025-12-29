@@ -160,7 +160,15 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
     private func createViewController(for tab: SettingsTab) -> NSViewController {
         switch tab {
         case .streaming:
-            return StreamingSettingsPlaceholderViewController()
+            let controller = StreamingSettingsViewController(
+                configStore: configStore,
+                logger: logger
+            )
+            controller.onFrameBufferModeChanged = { [weak self] mode in
+                self?.logger.info("Frame buffer mode updated: \(mode.rawValue)")
+                // Future: Send mode change to guest agent via control channel
+            }
+            return controller
         }
     }
 
@@ -191,49 +199,5 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
         window = nil
         tabViewController = nil
         logger.debug("Settings window closed")
-    }
-}
-
-// MARK: - Placeholder View Controller
-
-/// Temporary placeholder for the Streaming settings tab.
-/// This will be replaced with StreamingSettingsViewController in a future task.
-@available(macOS 13, *)
-private final class StreamingSettingsPlaceholderViewController: NSViewController {
-    override func loadView() {
-        view = NSView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-
-        let title = NSTextField(labelWithString: "Streaming Settings")
-        title.font = .systemFont(ofSize: 18, weight: .semibold)
-        title.translatesAutoresizingMaskIntoConstraints = false
-
-        let description = NSTextField(wrappingLabelWithString: """
-        Configure frame buffer mode and streaming options.
-
-        Coming soon:
-        • Frame buffer mode picker (Uncompressed / Compressed)
-        • Current streaming statistics
-        • Memory usage per window
-        """)
-        description.font = .systemFont(ofSize: 13)
-        description.textColor = .secondaryLabelColor
-        description.translatesAutoresizingMaskIntoConstraints = false
-
-        view.addSubview(title)
-        view.addSubview(description)
-
-        NSLayoutConstraint.activate([
-            view.widthAnchor.constraint(greaterThanOrEqualToConstant: 400),
-            view.heightAnchor.constraint(greaterThanOrEqualToConstant: 250),
-
-            title.topAnchor.constraint(equalTo: view.topAnchor, constant: 24),
-            title.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            title.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
-
-            description.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 16),
-            description.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            description.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-        ])
     }
 }
