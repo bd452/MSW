@@ -48,13 +48,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache Homebrew downloads (not installed packages - symlinks break)
-      - name: Cache Homebrew downloads
+      # Cache Homebrew installed packages (Cellar + symlinks)
+      # macos-14 runners all use /opt/homebrew so paths are consistent
+      - name: Cache Homebrew packages
+        id: brew-cache
         uses: actions/cache@v4
         with:
-          path: ~/Library/Caches/Homebrew
+          path: |
+            /opt/homebrew/Cellar
+            /opt/homebrew/opt
+            /opt/homebrew/lib
+            /opt/homebrew/include
+            /opt/homebrew/bin
+            /opt/homebrew/share
           key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install dependencies
         timeout-minutes: 10
@@ -63,11 +70,12 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: 1    # Skip cleanup after install
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1  # Skip upgrade checks
         run: |
-          # Install lint deps first (fast) so lint can fail early
+          # On cache hit, packages are already installed - brew bundle is nearly instant
+          # On cache miss, this installs everything fresh
           brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
-          swiftlint version
-          # Install build deps (slow - spice-gtk has many transitive deps)
           brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          # Verify tools are available
+          swiftlint version
           pkg-config --modversion spice-client-glib-2.0
 
       # Lint first (fast, catches issues early)
