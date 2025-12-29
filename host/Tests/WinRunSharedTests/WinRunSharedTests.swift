@@ -82,6 +82,77 @@ final class WinRunSharedTests: XCTestCase {
         }
     }
 
+    func testMACAddressValidationAcceptsValidFormats() throws {
+        let (baseConfig, tempDir) = try provisionedConfig()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Test colon-separated format
+        let colonConfig = VMConfiguration(
+            resources: baseConfig.resources,
+            disk: baseConfig.disk,
+            network: VMNetworkConfiguration(mode: .nat, macAddress: "AA:BB:CC:DD:EE:FF")
+        )
+        XCTAssertNoThrow(try colonConfig.validate())
+
+        // Test hyphen-separated format
+        let hyphenConfig = VMConfiguration(
+            resources: baseConfig.resources,
+            disk: baseConfig.disk,
+            network: VMNetworkConfiguration(mode: .nat, macAddress: "aa-bb-cc-dd-ee-ff")
+        )
+        XCTAssertNoThrow(try hyphenConfig.validate())
+
+        // Test nil MAC address (valid - uses auto-generated)
+        let nilConfig = VMConfiguration(
+            resources: baseConfig.resources,
+            disk: baseConfig.disk,
+            network: VMNetworkConfiguration(mode: .nat, macAddress: nil)
+        )
+        XCTAssertNoThrow(try nilConfig.validate())
+    }
+
+    func testMACAddressValidationRejectsInvalidFormats() throws {
+        let (baseConfig, tempDir) = try provisionedConfig()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Test invalid format - too short
+        let shortConfig = VMConfiguration(
+            resources: baseConfig.resources,
+            disk: baseConfig.disk,
+            network: VMNetworkConfiguration(mode: .nat, macAddress: "AA:BB:CC")
+        )
+        XCTAssertThrowsError(try shortConfig.validate()) { error in
+            guard case VMConfigurationValidationError.invalidMACAddress(let address) = error else {
+                return XCTFail("Expected invalidMACAddress, got \(error)")
+            }
+            XCTAssertEqual(address, "AA:BB:CC")
+        }
+
+        // Test invalid format - wrong characters
+        let invalidCharsConfig = VMConfiguration(
+            resources: baseConfig.resources,
+            disk: baseConfig.disk,
+            network: VMNetworkConfiguration(mode: .nat, macAddress: "GG:HH:II:JJ:KK:LL")
+        )
+        XCTAssertThrowsError(try invalidCharsConfig.validate()) { error in
+            guard case VMConfigurationValidationError.invalidMACAddress = error else {
+                return XCTFail("Expected invalidMACAddress, got \(error)")
+            }
+        }
+
+        // Test invalid format - no separators
+        let noSeparatorConfig = VMConfiguration(
+            resources: baseConfig.resources,
+            disk: baseConfig.disk,
+            network: VMNetworkConfiguration(mode: .nat, macAddress: "AABBCCDDEEFF")
+        )
+        XCTAssertThrowsError(try noSeparatorConfig.validate()) { error in
+            guard case VMConfigurationValidationError.invalidMACAddress = error else {
+                return XCTFail("Expected invalidMACAddress, got \(error)")
+            }
+        }
+    }
+
     func testCPUAndMemoryValidation() throws {
         let (baseConfig, tempDir) = try provisionedConfig()
         defer { try? FileManager.default.removeItem(at: tempDir) }
