@@ -58,3 +58,24 @@
         - Timer for stale client pruning is properly retained by RunLoop
         - Mach service name in plist matches daemon code
         - Connection invalidation/interruption handlers properly set
+    - [X] Enforce authentication + request throttling
+      - **Status:** ✅ No bugs found
+      - **Notes:** Implementation is complete and correct:
+        - Group membership verification via `getgrouplist()` with proper error handling for missing groups
+        - Code signature verification via Security.framework (`SecCodeCopyGuestWithAttributes`, `SecCodeCheckValidity`)
+        - Team identifier and bundle ID prefix checks implemented
+        - Token bucket rate limiting with per-client buckets via `RateLimiter` actor
+        - Cooldown enforcement after token exhaustion
+        - Stale client pruning via hourly scheduled timer
+        - `#if DEBUG` conditional compilation for dev vs production configs
+      - **Test Coverage:** 39 tests covering error types, authentication config, throttling config, and RateLimiter behavior (burst allowance, cooldown, per-client isolation, metrics, pruning)
+    - [X] Automate LaunchDaemon install/upgrade in bootstrap script
+      - **Status:** 🔧 Bug found and fixed
+      - **Bug Fixed:** **Deprecated launchctl command in error message** - `Errors.swift` line 413 used deprecated `launchctl load` in the recovery suggestion for `daemonUnreachable`. This is inconsistent with the modern `launchctl bootstrap` used in bootstrap.sh and docs/development.md.
+        - **Fix:** Changed recovery suggestion to use `sudo launchctl bootstrap system /Library/LaunchDaemons/com.winrun.daemon.plist`
+      - **Verified Correct:**
+        - plist file correctly configured (Label, MachServices, KeepAlive, RunAtLoad)
+        - bootstrap.sh correctly uses `launchctl bootstrap` / `launchctl bootout`
+        - Permissions set correctly (root:wheel, 644 for plist, 755 for binary)
+        - MachServiceName consistent across plist, daemon, and XPC client (`com.winrun.daemon`)
+        - Binary path consistent across plist and bootstrap.sh (`/usr/local/bin/winrund`)

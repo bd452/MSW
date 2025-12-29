@@ -410,7 +410,7 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "Restart the Windows VM and try again."
 
         case .daemonUnreachable:
-            return "Start the WinRun service with 'sudo launchctl load /Library/LaunchDaemons/com.winrun.daemon.plist'."
+            return "Start the WinRun service with 'sudo launchctl bootstrap system /Library/LaunchDaemons/com.winrun.daemon.plist'."
         case .xpcConnectionRejected:
             return "Ensure WinRun is properly installed and the current user has permission to use it."
         case .xpcThrottled:
