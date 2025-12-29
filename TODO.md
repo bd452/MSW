@@ -187,10 +187,10 @@
     - [X] Add integration tests for end-to-end frame delivery { host/Tests/WinRunSpiceBridgeTests/SharedFrameBufferTests.swift } <docs/development.md>
 
 - [ ] Settings UI (Preferences Window) { host/Sources/WinRunApp/Settings/, host/Sources/WinRunShared/ConfigStore.swift } <docs/architecture.md>
-  - [ ] Settings window infrastructure { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift } <docs/architecture.md>
-    - [ ] Create settings window with tab view for categories { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift }
-    - [ ] Wire Cmd+, keyboard shortcut and menu item { host/Sources/WinRunApp/AppMain.swift }
-    - [ ] Persist window position and selected tab { host/Sources/WinRunShared/ConfigStore.swift }
+  - [X] Settings window infrastructure { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift } <docs/architecture.md>
+    - [X] Create settings window with tab view for categories { new:host/Sources/WinRunApp/Settings/SettingsWindowController.swift }
+    - [X] Wire Cmd+, keyboard shortcut and menu item { host/Sources/WinRunApp/AppMain.swift }
+    - [X] Persist window position and selected tab { host/Sources/WinRunShared/ConfigStore.swift }
   - [ ] Streaming settings tab { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift } <docs/decisions/spice-bridge.md>
     - [ ] Frame buffer mode picker (Uncompressed / Compressed) { new:host/Sources/WinRunApp/Settings/StreamingSettingsViewController.swift }
       - Uncompressed: exact allocation for frame dimensions, reallocates on window resize
