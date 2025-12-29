@@ -48,26 +48,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache Homebrew Cellar only - contains packages + receipts
-      # brew bundle will relink on restore (fast) instead of reinstalling (slow)
-      - name: Cache Homebrew Cellar
+      # Cache Homebrew packages AND symlinks for near-instant restore
+      # Without symlinks, brew still needs to relink all deps (slow)
+      - name: Cache Homebrew
         id: brew-cache
         uses: actions/cache@v4
         with:
-          path: /opt/homebrew/Cellar
-          key: brew-cellar-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
+          path: |
+            /opt/homebrew/Cellar
+            /opt/homebrew/opt
+            /opt/homebrew/bin
+            /opt/homebrew/lib
+            /opt/homebrew/include
+            /opt/homebrew/share
+            /opt/homebrew/Frameworks
+          key: brew-installed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
 
       - name: Install dependencies
         timeout-minutes: 10
         env:
-          HOMEBREW_NO_AUTO_UPDATE: 1        # Skip formula updates (biggest win)
-          HOMEBREW_NO_INSTALL_CLEANUP: 1    # Skip cleanup after install
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1  # Skip upgrade checks
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
         run: |
-          # On cache hit: packages exist in Cellar, brew just relinks (~10-30s)
-          # On cache miss: full install, then cache is saved for next run
-          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade --verbose
-          brew bundle install --file=.github/Brewfile.host-build --no-upgrade --verbose
+          # On cache hit: packages + symlinks restored, brew bundle is instant
+          # On cache miss: full install (~3-5min), then cached for next run
+          if brew bundle check --file=.github/Brewfile.host-lint 2>/dev/null && \
+             brew bundle check --file=.github/Brewfile.host-build 2>/dev/null; then
+            echo "✓ All dependencies satisfied from cache"
+          else
+            echo "Installing dependencies..."
+            brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
+            brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          fi
           # Verify tools are available
           swiftlint version
           pkg-config --modversion spice-client-glib-2.0
