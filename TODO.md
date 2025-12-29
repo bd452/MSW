@@ -218,6 +218,13 @@
     - Evaluate whether guest clipboard changes can be pushed immediately vs polled
     - Document any Spice protocol limitations discovered
 
+- [ ] VM Lifecycle Enhancement { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+  - [ ] Implement graceful shutdown before force stop { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+    - Current implementation uses forceful vm.stop() which terminates immediately
+    - Use vm.requestStop() first (sends ACPI power button event) to allow guest graceful shutdown
+    - Add configurable timeout (default 30s) before falling back to force stop
+    - Improves data integrity and user experience
+
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
     - [X] Create script to build complete WinRun.app bundle { new:scripts/package-app.sh } <docs/decisions/operations.md>

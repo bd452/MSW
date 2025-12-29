@@ -32,6 +32,20 @@ final class VirtualMachineLifecycleErrorTests: XCTestCase {
 
         XCTAssertEqual(error.description, "The Windows VM is already stopped.")
     }
+
+    func testUnexpectedStopWithReasonDescription() {
+        let error = VirtualMachineLifecycleError.unexpectedStop("kernel panic")
+
+        XCTAssertTrue(error.description.contains("unexpectedly"))
+        XCTAssertTrue(error.description.contains("kernel panic"))
+    }
+
+    func testUnexpectedStopWithoutReasonDescription() {
+        let error = VirtualMachineLifecycleError.unexpectedStop(nil)
+
+        XCTAssertTrue(error.description.contains("unexpectedly"))
+        XCTAssertFalse(error.description.contains("nil"))
+    }
 }
 
 // MARK: - VMState Tests
@@ -203,6 +217,32 @@ final class VirtualMachineControllerBasicTests: XCTestCase {
         }
     }
     #endif
+
+    func testHandleGuestDidStopSetsStateTtoStopped() async {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        // Call the handler (simulating delegate callback)
+        await controller.handleGuestDidStop()
+
+        let state = await controller.currentState()
+        XCTAssertEqual(state.status, .stopped)
+        XCTAssertEqual(state.uptime, 0)
+        XCTAssertEqual(state.activeSessions, 0)
+    }
+
+    func testHandleGuestDidStopWithErrorSetsStateToStopped() async {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        // Call the handler with an error (simulating delegate callback)
+        let testError = NSError(domain: "Test", code: 42, userInfo: [NSLocalizedDescriptionKey: "VM crashed"])
+        await controller.handleGuestDidStopWithError(testError)
+
+        let state = await controller.currentState()
+        XCTAssertEqual(state.status, .stopped)
+        XCTAssertEqual(state.uptime, 0)
+    }
 }
 
 // MARK: - Shared Memory Tests

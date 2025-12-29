@@ -9,6 +9,7 @@ public enum VirtualMachineLifecycleError: Error, CustomStringConvertible {
     case invalidSnapshot(String)
     case virtualizationUnavailable(String)
     case alreadyStopped
+    case unexpectedStop(String?)
 
     public var description: String {
         switch self {
@@ -20,6 +21,11 @@ public enum VirtualMachineLifecycleError: Error, CustomStringConvertible {
             return "Virtualization.framework is unavailable: \(reason)"
         case .alreadyStopped:
             return "The Windows VM is already stopped."
+        case .unexpectedStop(let reason):
+            if let reason {
+                return "The Windows VM stopped unexpectedly: \(reason)"
+            }
+            return "The Windows VM stopped unexpectedly."
         }
     }
 }
@@ -41,6 +47,8 @@ public actor VirtualMachineController {
     private var nativeVM: VZVirtualMachine?
     @available(macOS 13, *)
     private var cachedConfiguration: VZVirtualMachineConfiguration?
+    @available(macOS 13, *)
+    private var vmDelegate: VirtualMachineDelegate?
 
     /// The vsock device for guest-host communication, available after VM starts.
     @available(macOS 13, *)
@@ -272,7 +280,32 @@ public actor VirtualMachineController {
 #if canImport(Virtualization)
         nativeVM = nil
         cachedConfiguration = nil
+        vmDelegate = nil
 #endif
+    }
+
+    // MARK: - VM Delegate Handlers
+
+    /// Called when the guest VM stops gracefully (e.g., shutdown from within Windows).
+    func handleGuestDidStop() {
+        logger.info("Handling graceful VM stop")
+        cancelIdleSuspendTimer()
+        clearNativeVM()
+        cleanupSharedMemory()
+        uptimeStart = nil
+        state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
+        logMetrics(event: "vm_guest_stopped")
+    }
+
+    /// Called when the guest VM stops unexpectedly with an error.
+    func handleGuestDidStopWithError(_ error: Error) {
+        logger.error("Handling unexpected VM stop: \(error.localizedDescription)")
+        cancelIdleSuspendTimer()
+        clearNativeVM()
+        cleanupSharedMemory()
+        uptimeStart = nil
+        state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
+        logMetrics(event: "vm_unexpected_stop")
     }
 
     private func saveSnapshotInternal(to url: URL) async throws -> URL {
@@ -348,6 +381,11 @@ public actor VirtualMachineController {
         } else {
             vm = VZVirtualMachine(configuration: config)
             nativeVM = vm
+
+            // Set up the delegate to receive VM lifecycle events
+            let delegate = VirtualMachineDelegate(controller: self, logger: logger)
+            vmDelegate = delegate
+            vm.delegate = delegate
         }
 
         if resumeFromSnapshot, let resumeURL = suspendedStateURL, FileManager.default.fileExists(atPath: resumeURL.path) {
@@ -449,41 +487,3 @@ public actor VirtualMachineController {
     }
 #endif
 }
-
-#if canImport(Virtualization)
-@available(macOS 13, *)
-private enum NativeVirtualMachineBridge {
-    static func start(_ vm: VZVirtualMachine) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            vm.start { result in
-                switch result {
-                case .success:
-                    continuation.resume(returning: ())
-                case .failure(let error):
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
-    }
-
-    static func stop(_ vm: VZVirtualMachine) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            vm.stop { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-        }
-    }
-
-    static func saveMachineState(_ vm: VZVirtualMachine, to url: URL) async throws {
-        throw VirtualMachineLifecycleError.virtualizationUnavailable("Saving VM state is not supported on this macOS SDK.")
-    }
-
-    static func restoreMachineState(_ vm: VZVirtualMachine, from url: URL) async throws {
-        throw VirtualMachineLifecycleError.virtualizationUnavailable("Restoring VM state is not supported on this macOS SDK.")
-    }
-}
-#endif

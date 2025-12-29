@@ -64,3 +64,17 @@
   - GFile cleanup in completion callback prevents memory leaks
   - Progress/error reporting not implemented (documented future enhancement)
 
+### 1.2.1 Drive Virtualization.framework boot/stop/snapshot flows
+- **Files:** `host/Sources/WinRunVirtualMachine/VirtualMachineController.swift`, `host/Sources/WinRunVirtualMachine/VirtualMachineBridge.swift`
+- **Status:** 🔧 Bugs found and fixed
+- **Bugs Fixed:**
+  1. **Snapshot save/restore was stubbed out** - `NativeVirtualMachineBridge.saveMachineState` and `restoreMachineState` always threw errors, completely breaking suspend/resume functionality. Fixed by implementing actual macOS 14+ Virtualization.framework APIs (`VZVirtualMachine.saveMachineStateTo(url:)` and `restoreMachineStateFrom(url:)`).
+  2. **No VZVirtualMachineDelegate implementation** - VM controller had no way to detect unexpected VM stops (crashes, guest-initiated shutdowns). Fixed by adding `VirtualMachineDelegate` class that receives lifecycle callbacks and updates controller state.
+- **Files Added:**
+  - `host/Sources/WinRunVirtualMachine/VirtualMachineBridge.swift` - Extracted delegate and bridge code to keep files under line limit
+- **Design Shortcoming Noted:**
+  - Graceful shutdown: Current `stop()` uses forceful termination. Should use `vm.requestStop()` (ACPI power button) first with timeout fallback. Added to TODO.md for future improvement.
+- **Tests Added:**
+  - `testUnexpectedStopWithReasonDescription` and `testUnexpectedStopWithoutReasonDescription` for new error type
+  - `testHandleGuestDidStopSetsStateToStopped` and `testHandleGuestDidStopWithErrorSetsStateToStopped` for delegate handlers
+
