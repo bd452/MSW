@@ -5,7 +5,7 @@
 
 ## Overview
 
-Go through `TODO.md` step-by-step and check for bugs in the implementation of every checked-off item. Track progress in `bugchecks.md`. To find the current/next task, look at the next TODO item that's not covered in bugcheck (the important part of bugchecks.md is the list of checked steps, not the list of remaining items).
+Go through `TODO.md` step-by-step and check for bugs in the implementation of every checked-off item. Track progress in `bugchecks.md`. To find the current/next task, look at the next TODO item that's not covered in bugchecks.md (the important part of bugchecks.md is the list of checked steps, not the list of remaining items).
 
 Be aware that the codebase will have likely changed a lot since the relevant TODO item was addressed and marked completed—be mindful of that when addressing scope and making changes. Also review `SUMMARY.md`, everything in `/docs`, and all build scripts/makefiles/configs to understand the current structure.
 
@@ -17,31 +17,15 @@ Further, assume the app is intended to be fully implemented—any stubs, TODOs, 
 
 ### Branch Scope
 
-One branch corresponds to **one first-level item** in TODO.md (e.g., "Host Platform", "Guest WinRunAgent", "Setup & Provisioning"). All leaf items under that first-level item are checked and fixed within the same branch.
-
-**Example TODO.md structure:**
-```
-- [X] Host Platform                              ← First level (branch scope)
-  - [X] WinRunSpiceBridge production binding     ← Second level
-    - [X] Replace mock timer stream...           ← Third level (leaf item to check)
-    - [X] Add C shim + pkg-config wiring...      ← Third level (leaf item to check)
-  - [X] Virtualization lifecycle management      ← Second level
-    - [X] Drive Virtualization.framework...      ← Third level (leaf item to check)
-```
-
-For the above, you would create branch `bugcheck/host-platform` and check all leaf items under "Host Platform" within that branch.
+One branch corresponds to **one first-level item** in TODO.md. All leaf items under that first-level item are checked and fixed within the same branch.
 
 ### Branch Naming Convention
 
-Use `bugcheck/<first-level-item-slug>` format:
-- `bugcheck/host-platform`
-- `bugcheck/guest-winrunagent`
-- `bugcheck/setup-provisioning`
-- `bugcheck/frame-streaming-pipeline`
+Use `bugcheck/<first-level-item-slug>` format (e.g., `bugcheck/host-platform`).
 
 ### When to Create a PR
 
-Create a PR with title and description **only after all leaf items under the current first-level item have been checked** and recorded in `bugchecks.md`.
+Create a PR **only after all leaf items under the current first-level item have been checked** and recorded in `bugchecks.md`.
 
 ---
 
@@ -94,10 +78,10 @@ Beyond correctness bugs, also identify design shortcomings—implementations tha
 - Check if changes here require updates to dependent code
 - Check if this code depends on assumptions that may no longer hold
 
-### 7. Check Future TODOs in bugcheck.md
+### 7. Check Future TODOs in bugchecks.md
 
 - If a bug is covered in a future TODO, evaluate whether it should be fixed now or deferred
-- If deferring, add an item to bugcheck.md under "Future TODOs" with the hierarchy position and issue details
+- If deferring, note it in bugchecks.md under "Deferred Issues"
 
 ---
 
@@ -143,7 +127,7 @@ Once analysis is exhaustive:
 - Implement fixes across all affected files
 - **Write or update tests** for changed code paths
 - Run **local checks**: `make check` (macOS) or `make check-linux` (Linux)
-- Only use remote tests (`make test-host-remote` / `make test-guest-remote`) when the code genuinely requires its native environment (e.g., Windows-only APIs, CRLF validation) and cannot be tested locally
+- Only use remote tests (`make test-host-remote` / `make test-guest-remote`) when the code genuinely requires its native environment
 
 ### Step 7: Re-Run Full Analysis After Fixing
 
@@ -151,20 +135,19 @@ After all fixes are applied:
 
 - Go back to step 2 and perform the complete iterative analysis again
 - **Re-read all files fresh** — fixes may have introduced new issues or revealed previously obscured bugs
-- This catches issues introduced by fixes
 - If new bugs are found, repeat from step 5 (iterate analysis) then step 6 (fix)
 - **Continue until a full post-fix analysis pass finds NO bugs**
 
-### Step 8: Update bugcheck.md
+### Step 8: Update bugchecks.md
 
 Record all findings in the same format as existing entries (only after clean pass)
 
 ### Step 9: Check if First-Level Item is Complete
 
-After updating bugchecks.md, check if **all leaf items under the current first-level item** have been checked.
+After updating bugchecks.md, check if **all leaf items under the current first-level item** have been checked:
 
-- Compare `TODO.md` first-level item's leaves against `bugchecks.md` entries
-- If more leaves remain under this first-level item → go to Step 10
+- Compare TODO.md first-level item's leaves against bugchecks.md entries
+- If more leaves remain → go to Step 10
 - If all leaves are complete → go to Step 11
 
 ### Step 10: Continue to Next Leaf
@@ -180,29 +163,17 @@ If more leaves remain in the current first-level item:
 
 When all leaves under a first-level item are complete:
 
-1. **Push the branch:**
-   ```bash
-   git push -u origin HEAD
-   ```
-
-2. **Create PR with structured title and description:**
-   ```bash
-   gh pr create --title "<title>" --body "<body>"
-   ```
-
-Use the format specified in "PR Title and Description Format" below.
-
-3. **Report the PR URL to the user**
-
-4. **Ask if user wants to continue to the next first-level item**
-   - If yes, create a new branch for the next first-level item and go to Step 1
+1. Push the branch and create a PR using the format below
+2. Report the PR URL to the user
+3. Ask if user wants to continue to the next first-level item
+   - If yes, create a new branch and go to Step 1
    - If no, summarize overall progress and stop
 
 ---
 
-## Output Format for bugchecks.md
+## Output Formats
 
-Use this format when recording findings:
+### bugchecks.md Entry Format
 
 ```markdown
 - [X] Task name from TODO.md
@@ -212,22 +183,13 @@ Use this format when recording findings:
   - **Test Coverage:** Summary of relevant tests
 ```
 
----
-
-## PR Title and Description Format
-
-### Title Format
+### PR Title Format
 
 ```
 fix(<scope>): bug check for <First-Level Item Name>
 ```
 
-Examples:
-- `fix(host): bug check for Host Platform`
-- `fix(guest): bug check for Guest WinRunAgent`
-- `fix(setup): bug check for Setup & Provisioning`
-
-### Description Template
+### PR Description Format
 
 ```markdown
 ## Summary
@@ -237,76 +199,19 @@ Iterative bug check analysis for **<First-Level Item Name>** per `docs/bugcheck-
 ## Items Checked
 
 | Item | Status | Bugs Found |
-|------|--------|------------|
-| <leaf item 1> | ✅ / 🔧 | <count or "None"> |
-| <leaf item 2> | ✅ / 🔧 | <count or "None"> |
-| ... | ... | ... |
+| ---- | ------ | ---------- |
+| ...  | ✅ / 🔧 | ...        |
 
 ## Bugs Fixed
 
-### 1. <Bug Title>
-- **Location:** `path/to/file.swift`
-- **Issue:** <description of what was wrong>
-- **Fix:** <description of the fix>
-
-### 2. <Bug Title>
-...
-
-(If no bugs found, replace this section with "No bugs found.")
+(List each bug with location, issue description, and fix — or "No bugs found.")
 
 ## Design Shortcomings Identified
 
-- [ ] <shortcoming 1> — added to TODO.md
-- [ ] <shortcoming 2> — added to TODO.md
-
-(If none, replace with "None identified.")
+(List any architectural debt added to TODO.md — or "None identified.")
 
 ## Test Coverage
 
-- <summary of tests added/updated>
+- Summary of tests added/updated
 - All checks passing: `make check` ✅
 ```
-
-### Example PR Description
-
-```markdown
-## Summary
-
-Iterative bug check analysis for **Host Platform** per `docs/bugcheck-protocol.md`.
-
-## Items Checked
-
-| Item | Status | Bugs Found |
-|------|--------|------------|
-| Replace mock timer stream with libspice-glib | ✅ | None |
-| Add C shim + pkg-config wiring | ✅ | None |
-| Implement reconnect/backoff + error metrics | ✅ | None |
-| Drive Virtualization.framework boot/stop/snapshot | 🔧 | 2 |
-| Persist VM disk/network configuration | 🔧 | 1 |
-| Emit uptime + session metrics | ✅ | None |
-| Stand up XPC listener + connect clients | 🔧 | 2 |
-| Enforce authentication + request throttling | ✅ | None |
-| Automate LaunchDaemon install/upgrade | 🔧 | 1 |
-
-## Bugs Fixed
-
-### 1. Snapshot save/restore was stubbed out
-- **Location:** `host/Sources/WinRunVirtualMachine/VirtualMachineBridge.swift`
-- **Issue:** `saveMachineState` and `restoreMachineState` always threw errors
-- **Fix:** Implemented actual macOS 14+ Virtualization.framework APIs
-
-### 2. Deprecated launchctl command in error message
-- **Location:** `host/Sources/WinRunShared/Errors.swift`
-- **Issue:** Used `launchctl load` instead of modern `launchctl bootstrap`
-- **Fix:** Updated recovery suggestion to use correct command
-
-## Design Shortcomings Identified
-
-- [ ] Graceful shutdown uses forceful vm.stop() — added to TODO.md
-
-## Test Coverage
-
-- Added RateLimiter tests (9 tests covering token bucket behavior)
-- All checks passing: `make check` ✅
-```
-
