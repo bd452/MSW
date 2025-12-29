@@ -115,14 +115,7 @@ bootstrap() {
   fi
 
   echo "[bootstrap] Installing brew dependencies..."
-  brew bundle --file=- <<'BUNDLE'
-brew 'cmake'
-brew 'ninja'
-brew 'glib'
-brew 'pkg-config'
-brew 'spice-protocol'
-brew 'spice-gtk'
-BUNDLE
+  brew bundle --file="${REPO_ROOT}/Brewfile"
 
   echo "[bootstrap] Creating Application Support directory..."
   mkdir -p "${HOME}/Library/Application Support/WinRun"

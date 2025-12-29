@@ -30,7 +30,8 @@ jobs:
               - 'host/**'
               - 'shared/**'
               - '.github/workflows/ci.yml'
-              - '.github/Brewfile.host-*'
+              - 'Brewfile'
+              - 'Brewfile.lock'
             guest:
               - 'guest/**'
               - 'shared/**'
@@ -48,14 +49,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache Homebrew packages AND symlinks for near-instant restore
-      # Without symlinks, brew still needs to relink all deps (slow)
-      # To bust cache: increment BREW_CACHE_VERSION below
+      # Cache Homebrew packages and symlinks for near-instant restore
+      # Cache key is based on Brewfile.lock - run 'make brew-sync' to update
       - name: Cache Homebrew
         id: brew-cache
         uses: actions/cache@v4
-        env:
-          BREW_CACHE_VERSION: v1  # Increment to force cache refresh
         with:
           path: |
             /opt/homebrew/Cellar
@@ -65,7 +63,7 @@ jobs:
             /opt/homebrew/include
             /opt/homebrew/share
             /opt/homebrew/Frameworks
-          key: brew-${{ env.BREW_CACHE_VERSION }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
+          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Brewfile.lock') }}
 
       - name: Install dependencies
         timeout-minutes: 10
@@ -85,9 +83,7 @@ jobs:
             echo "✓ Cache valid - all tools working"
           else
             echo "Cache miss or invalid - installing dependencies..."
-            # Clean up any partial/broken state before fresh install
-            brew bundle install --file=.github/Brewfile.host-lint --no-upgrade --force
-            brew bundle install --file=.github/Brewfile.host-build --no-upgrade --force
+            brew bundle install --file=Brewfile --force
           fi
           
           # Final verification (fail the job if tools don't work)
