@@ -71,8 +71,12 @@ final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
     private func verifyGroupMembership(uid: uid_t, groupName: String) throws {
         // Get the group entry
         guard let group = getgrnam(groupName) else {
-            logger.warn("Group '\(groupName)' not found, skipping group check")
-            return
+            // SECURITY: Do not silently skip group check if group doesn't exist.
+            // This prevents misconfiguration from bypassing authentication.
+            logger.error("Required group '\(groupName)' not found on system - rejecting connection")
+            throw XPCAuthenticationError.connectionRejected(
+                reason: "Required group '\(groupName)' not found on system"
+            )
         }
 
         let gid = group.pointee.gr_gid
