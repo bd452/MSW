@@ -39,3 +39,15 @@
     - [X] Emit uptime + session metrics to logger
       - **Status:** ✅ No bugs found
       - **Notes:** `logMetrics(event:)` called at all 8 lifecycle points. VMMetricsSnapshot captures event, uptimeSeconds, activeSessions, totalSessions, bootCount, suspendCount. Logging infrastructure includes OSLogLogger, FileLogger, TelemetryLogger, CompositeLogger.
+  - [X] Daemon + XPC integration
+    - [X] Stand up XPC listener + connect CLI/app clients
+      - **Status:** 🔧 Bug found and fixed
+      - **Bug Fixed:** **Race condition in currentClientId handling** - `WinRunDaemonService.currentClientId` was a mutable `var` property that could be overwritten by concurrent XPC connections. When a connection set the property and then spawned a Task, another connection could overwrite it before the Task's `checkThrottle()` read it, causing rate limiting to be applied against the wrong client bucket.
+      - **Fix Applied:** Removed the shared mutable `currentClientId` property. Changed all service methods to accept `clientId` as an explicit parameter. `ConnectionServiceWrapper` now passes its immutable `clientId` to each method call, ensuring thread-safe rate limiting.
+      - **Tests Added:** Comprehensive unit tests for `RateLimiter` actor including:
+        - Token bucket behavior (first request succeeds, burst allowance)
+        - Throttling when exceeding limits
+        - Per-client bucket isolation
+        - Cooldown enforcement
+        - Metrics tracking
+        - Stale client pruning
