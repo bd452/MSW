@@ -28,6 +28,7 @@ public enum SpiceMessageType: UInt8, CaseIterable, Codable, Sendable {
     case mouseInput = 0x04
     case keyboardInput = 0x05
     case dragDropEvent = 0x06
+    case configureStreaming = 0x07
     case listSessions = 0x08
     case closeSession = 0x09
     case listShortcuts = 0x0A

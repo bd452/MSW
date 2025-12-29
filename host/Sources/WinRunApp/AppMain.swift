@@ -10,6 +10,7 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
     private let logger = StandardLogger(subsystem: "WinRunApp")
     private let windowController = WinRunWindowController()
     private var setupFlowController: SetupFlowController?
+    private let settingsController = SettingsWindowController.shared
 
     func start(arguments: [String]) {
         setupMenuBar()
@@ -57,6 +58,9 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
 
         appMenu.addItem(
             NSMenuItem(title: "About WinRun", action: #selector(showAbout), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(
+            NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
             NSMenuItem(
@@ -165,6 +169,10 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+
+    @objc private func showSettings() {
+        settingsController.showSettings()
     }
 
     @objc private func showHelp() {

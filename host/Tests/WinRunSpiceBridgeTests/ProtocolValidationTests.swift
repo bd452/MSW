@@ -129,8 +129,8 @@ final class ProtocolValidationTests: XCTestCase {
     func testHostToGuestMessagesAreInCorrectRange() {
         let hostMessages: [SpiceMessageType] = [
             .launchProgram, .requestIcon, .clipboardData, .mouseInput,
-            .keyboardInput, .dragDropEvent, .listSessions, .closeSession,
-            .listShortcuts, .shutdown,
+            .keyboardInput, .dragDropEvent, .configureStreaming, .listSessions,
+            .closeSession, .listShortcuts, .shutdown,
         ]
 
         for msg in hostMessages {
@@ -247,7 +247,7 @@ final class ProtocolValidationTests: XCTestCase {
     func testAllMessageTypesExist() {
         // Verify we have all expected message types
         let allCases = SpiceMessageType.allCases
-        XCTAssertEqual(allCases.count, 28, "Expected 28 message types (includes FrameReady and WindowBufferAllocated)")
+        XCTAssertEqual(allCases.count, 29, "Expected 29 message types (includes ConfigureStreaming, FrameReady, and WindowBufferAllocated)")
 
         // Verify no duplicate raw values
         let rawValues = allCases.map { $0.rawValue }

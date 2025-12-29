@@ -272,6 +272,10 @@ public sealed class WinRunAgentService : IDisposable
                 await HandleListShortcutsAsync(listShortcuts);
                 break;
 
+            case ConfigureStreamingMessage configureStreaming:
+                HandleConfigureStreaming(configureStreaming);
+                break;
+
             default:
                 _logger.Warn($"Unhandled message type {message.GetType().Name}");
                 await SendAckAsync(message.MessageId, success: false, "Unknown message type");
@@ -458,6 +462,24 @@ public sealed class WinRunAgentService : IDisposable
 
         _logger.Info($"Returning {response.Shortcuts.Length} detected shortcuts");
         await SendMessageAsync(response);
+    }
+
+    private void HandleConfigureStreaming(ConfigureStreamingMessage request)
+    {
+        _logger.Info($"Configure streaming request: FrameBufferMode={request.FrameBufferMode}");
+
+        if (FrameStreaming != null)
+        {
+            FrameStreaming.UpdateBufferMode(request.FrameBufferMode);
+            _logger.Info($"Frame buffer mode updated to: {request.FrameBufferMode}");
+        }
+        else
+        {
+            _logger.Warn("Frame streaming not enabled, ignoring configure streaming request");
+        }
+
+        // Send acknowledgement (fire and forget - can't await from non-async method)
+        _ = SendAckAsync(request.MessageId, success: true);
     }
 
     private async Task SendCapabilityAnnouncementAsync()

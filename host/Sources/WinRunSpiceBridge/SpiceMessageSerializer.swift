@@ -58,6 +58,8 @@ public enum SpiceMessageSerializer {
             type = .keyboardInput
         case is DragDropSpiceMessage:
             type = .dragDropEvent
+        case is ConfigureStreamingSpiceMessage:
+            type = .configureStreaming
         case is ListSessionsSpiceMessage:
             type = .listSessions
         case is CloseSessionSpiceMessage:
