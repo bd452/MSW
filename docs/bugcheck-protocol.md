@@ -13,6 +13,38 @@ Further, assume the app is intended to be fully implemented—any stubs, TODOs, 
 
 ---
 
+## Branch & PR Strategy
+
+### Branch Scope
+
+One branch corresponds to **one first-level item** in TODO.md (e.g., "Host Platform", "Guest WinRunAgent", "Setup & Provisioning"). All leaf items under that first-level item are checked and fixed within the same branch.
+
+**Example TODO.md structure:**
+```
+- [X] Host Platform                              ← First level (branch scope)
+  - [X] WinRunSpiceBridge production binding     ← Second level
+    - [X] Replace mock timer stream...           ← Third level (leaf item to check)
+    - [X] Add C shim + pkg-config wiring...      ← Third level (leaf item to check)
+  - [X] Virtualization lifecycle management      ← Second level
+    - [X] Drive Virtualization.framework...      ← Third level (leaf item to check)
+```
+
+For the above, you would create branch `bugcheck/host-platform` and check all leaf items under "Host Platform" within that branch.
+
+### Branch Naming Convention
+
+Use `bugcheck/<first-level-item-slug>` format:
+- `bugcheck/host-platform`
+- `bugcheck/guest-winrunagent`
+- `bugcheck/setup-provisioning`
+- `bugcheck/frame-streaming-pipeline`
+
+### When to Create a PR
+
+Create a PR with title and description **only after all leaf items under the current first-level item have been checked** and recorded in `bugchecks.md`.
+
+---
+
 ## Analysis Depth Requirements
 
 Beyond correctness bugs, also identify design shortcomings—implementations that work correctly but use suboptimal patterns (e.g., polling when push-based notification is available, synchronous blocking when async is appropriate, timer-based detection when event-driven is possible). These are architectural debt to be flagged and added to `TODO.md` for future improvement.
@@ -127,13 +159,44 @@ After all fixes are applied:
 
 Record all findings in the same format as existing entries (only after clean pass)
 
-### Step 9: Stop and Ask
+### Step 9: Check if First-Level Item is Complete
 
-Ask if user wants to continue to next item
+After updating bugchecks.md, check if **all leaf items under the current first-level item** have been checked.
 
-### Step 10: If Continuing
+- Compare `TODO.md` first-level item's leaves against `bugchecks.md` entries
+- If more leaves remain under this first-level item → go to Step 10
+- If all leaves are complete → go to Step 11
 
-Go to step 1. If not, commit changes and summarize.
+### Step 10: Continue to Next Leaf
+
+If more leaves remain in the current first-level item:
+
+- Commit current changes
+- Ask user if they want to continue to the next leaf item
+- If yes, go to Step 1
+- If no, summarize progress and stop
+
+### Step 11: Create Pull Request
+
+When all leaves under a first-level item are complete:
+
+1. **Push the branch:**
+   ```bash
+   git push -u origin HEAD
+   ```
+
+2. **Create PR with structured title and description:**
+   ```bash
+   gh pr create --title "<title>" --body "<body>"
+   ```
+
+Use the format specified in "PR Title and Description Format" below.
+
+3. **Report the PR URL to the user**
+
+4. **Ask if user wants to continue to the next first-level item**
+   - If yes, create a new branch for the next first-level item and go to Step 1
+   - If no, summarize overall progress and stop
 
 ---
 
@@ -147,5 +210,103 @@ Use this format when recording findings:
   - **Bug Fixed:** (if applicable) **Brief title** - Description of the bug and fix
   - **Notes:** (if no bugs) Brief summary of what was verified
   - **Test Coverage:** Summary of relevant tests
+```
+
+---
+
+## PR Title and Description Format
+
+### Title Format
+
+```
+fix(<scope>): bug check for <First-Level Item Name>
+```
+
+Examples:
+- `fix(host): bug check for Host Platform`
+- `fix(guest): bug check for Guest WinRunAgent`
+- `fix(setup): bug check for Setup & Provisioning`
+
+### Description Template
+
+```markdown
+## Summary
+
+Iterative bug check analysis for **<First-Level Item Name>** per `docs/bugcheck-protocol.md`.
+
+## Items Checked
+
+| Item | Status | Bugs Found |
+|------|--------|------------|
+| <leaf item 1> | ✅ / 🔧 | <count or "None"> |
+| <leaf item 2> | ✅ / 🔧 | <count or "None"> |
+| ... | ... | ... |
+
+## Bugs Fixed
+
+### 1. <Bug Title>
+- **Location:** `path/to/file.swift`
+- **Issue:** <description of what was wrong>
+- **Fix:** <description of the fix>
+
+### 2. <Bug Title>
+...
+
+(If no bugs found, replace this section with "No bugs found.")
+
+## Design Shortcomings Identified
+
+- [ ] <shortcoming 1> — added to TODO.md
+- [ ] <shortcoming 2> — added to TODO.md
+
+(If none, replace with "None identified.")
+
+## Test Coverage
+
+- <summary of tests added/updated>
+- All checks passing: `make check` ✅
+```
+
+### Example PR Description
+
+```markdown
+## Summary
+
+Iterative bug check analysis for **Host Platform** per `docs/bugcheck-protocol.md`.
+
+## Items Checked
+
+| Item | Status | Bugs Found |
+|------|--------|------------|
+| Replace mock timer stream with libspice-glib | ✅ | None |
+| Add C shim + pkg-config wiring | ✅ | None |
+| Implement reconnect/backoff + error metrics | ✅ | None |
+| Drive Virtualization.framework boot/stop/snapshot | 🔧 | 2 |
+| Persist VM disk/network configuration | 🔧 | 1 |
+| Emit uptime + session metrics | ✅ | None |
+| Stand up XPC listener + connect clients | 🔧 | 2 |
+| Enforce authentication + request throttling | ✅ | None |
+| Automate LaunchDaemon install/upgrade | 🔧 | 1 |
+
+## Bugs Fixed
+
+### 1. Snapshot save/restore was stubbed out
+- **Location:** `host/Sources/WinRunVirtualMachine/VirtualMachineBridge.swift`
+- **Issue:** `saveMachineState` and `restoreMachineState` always threw errors
+- **Fix:** Implemented actual macOS 14+ Virtualization.framework APIs
+
+### 2. Deprecated launchctl command in error message
+- **Location:** `host/Sources/WinRunShared/Errors.swift`
+- **Issue:** Used `launchctl load` instead of modern `launchctl bootstrap`
+- **Fix:** Updated recovery suggestion to use correct command
+
+## Design Shortcomings Identified
+
+- [ ] Graceful shutdown uses forceful vm.stop() — added to TODO.md
+
+## Test Coverage
+
+- Added RateLimiter tests (9 tests covering token bucket behavior)
+- All checks passing: `make check` ✅
 ```
 
