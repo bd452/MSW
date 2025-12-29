@@ -58,12 +58,17 @@ jobs:
 
       - name: Install dependencies
         timeout-minutes: 10
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1        # Skip formula updates (biggest win)
+          HOMEBREW_NO_INSTALL_CLEANUP: 1    # Skip cleanup after install
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1  # Skip upgrade checks
         run: |
-          # Install both build and lint dependencies together
-          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          # Install lint deps first (fast) so lint can fail early
           brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
-          pkg-config --modversion spice-client-glib-2.0
           swiftlint version
+          # Install build deps (slow - spice-gtk has many transitive deps)
+          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          pkg-config --modversion spice-client-glib-2.0
 
       # Lint first (fast, catches issues early)
       - name: Lint (SwiftLint)
