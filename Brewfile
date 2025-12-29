@@ -3,7 +3,7 @@
 
 # Build dependencies
 brew "spice-gtk"
-brew "pkg-config"
+brew "pkgconf"
 brew "cmake"
 brew "ninja"
 brew "glib"
