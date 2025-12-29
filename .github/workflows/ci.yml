@@ -48,20 +48,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache Homebrew installed packages (Cellar + symlinks)
-      # macos-14 runners all use /opt/homebrew so paths are consistent
-      - name: Cache Homebrew packages
+      # Cache Homebrew Cellar only - contains packages + receipts
+      # brew bundle will relink on restore (fast) instead of reinstalling (slow)
+      - name: Cache Homebrew Cellar
         id: brew-cache
         uses: actions/cache@v4
         with:
-          path: |
-            /opt/homebrew/Cellar
-            /opt/homebrew/opt
-            /opt/homebrew/lib
-            /opt/homebrew/include
-            /opt/homebrew/bin
-            /opt/homebrew/share
-          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
+          path: /opt/homebrew/Cellar
+          key: brew-cellar-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
 
       - name: Install dependencies
         timeout-minutes: 10
@@ -70,10 +64,10 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: 1    # Skip cleanup after install
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1  # Skip upgrade checks
         run: |
-          # On cache hit, packages are already installed - brew bundle is nearly instant
-          # On cache miss, this installs everything fresh
-          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
-          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
+          # On cache hit: packages exist in Cellar, brew just relinks (~10-30s)
+          # On cache miss: full install, then cache is saved for next run
+          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade --verbose
+          brew bundle install --file=.github/Brewfile.host-build --no-upgrade --verbose
           # Verify tools are available
           swiftlint version
           pkg-config --modversion spice-client-glib-2.0
