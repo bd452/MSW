@@ -1,3 +1,0 @@
-# Minimal deps for building - transitive deps handled by Homebrew
-brew "spice-gtk"
-brew "pkg-config"

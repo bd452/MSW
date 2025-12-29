@@ -30,7 +30,8 @@ jobs:
               - 'host/**'
               - 'shared/**'
               - '.github/workflows/ci.yml'
-              - '.github/Brewfile.host-*'
+              - 'Brewfile'
+              - 'Brewfile.lock'
             guest:
               - 'guest/**'
               - 'shared/**'
@@ -48,22 +49,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache Homebrew downloads (not installed packages - symlinks break)
-      - name: Cache Homebrew downloads
+      # Cache Homebrew packages and symlinks for near-instant restore
+      # Cache key is based on Brewfile.lock - run 'make brew-sync' to update
+      - name: Cache Homebrew
+        id: brew-cache
         uses: actions/cache@v4
         with:
-          path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/Brewfile.host-build', '.github/Brewfile.host-lint') }}
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
+          path: |
+            /opt/homebrew/Cellar
+            /opt/homebrew/opt
+            /opt/homebrew/bin
+            /opt/homebrew/lib
+            /opt/homebrew/include
+            /opt/homebrew/share
+            /opt/homebrew/Frameworks
+          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Brewfile.lock') }}
 
       - name: Install dependencies
         timeout-minutes: 10
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
         run: |
-          # Install both build and lint dependencies together
-          brew bundle install --file=.github/Brewfile.host-build --no-upgrade
-          brew bundle install --file=.github/Brewfile.host-lint --no-upgrade
-          pkg-config --modversion spice-client-glib-2.0
+          # Verify cache is valid by actually running the tools
+          # This catches corruption, partial restores, and broken symlinks
+          verify_cache() {
+            swiftlint version >/dev/null 2>&1 && \
+            pkg-config --exists spice-client-glib-2.0 2>/dev/null
+          }
+          
+          if verify_cache; then
+            echo "✓ Cache valid - all tools working"
+          else
+            echo "Cache miss or invalid - installing dependencies..."
+            brew bundle install --file=Brewfile --force
+          fi
+          
+          # Final verification (fail the job if tools don't work)
+          echo "Verifying installations..."
           swiftlint version
+          pkg-config --modversion spice-client-glib-2.0
 
       # Lint first (fast, catches issues early)
       - name: Lint (SwiftLint)

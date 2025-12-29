@@ -5,8 +5,8 @@
 ### macOS Host
 - Xcode 15+
 - Swift 5.9 toolchain
-- Homebrew packages (`scripts/bootstrap.sh` handles install)
-- libspice-glib development headers (installed via brew)
+- Homebrew packages (run `./scripts/bootstrap.sh` or `make brew-sync` to install)
+- libspice-glib development headers (included in Brewfile)
 - (Optional) .NET 9 SDK for running guest linting locally: `brew install dotnet`
 
 ### Windows Guest
@@ -171,6 +171,34 @@ This allows gradual migration to the generated types while maintaining backwards
 ```
 ./scripts/bootstrap.sh
 ```
+
+### Managing Homebrew Dependencies
+
+All Homebrew dependencies are defined in `Brewfile` at the project root. The `Brewfile.lock` tracks installed versions and is used for CI cache keys.
+
+**Install dependencies (first time or after Brewfile changes):**
+```bash
+make brew-sync
+```
+
+**Upgrade all packages:**
+```bash
+make brew-sync
+git add Brewfile.lock
+git commit -m "Upgrade Homebrew dependencies"
+```
+
+**Add a new package:**
+1. Edit `Brewfile` to add: `brew "package-name"`
+2. Run `make brew-sync`
+3. Commit both `Brewfile` and `Brewfile.lock`
+
+**Remove a package:**
+1. Edit `Brewfile` to remove the line
+2. Run `make brew-sync`
+3. Commit both `Brewfile` and `Brewfile.lock`
+
+> **Note:** `make brew-sync` requires macOS. The `Brewfile.lock` ensures CI uses the same package versions.
 
 ### Build Everything
 ```
