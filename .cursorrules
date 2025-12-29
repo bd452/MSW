@@ -59,10 +59,14 @@ After completing a task:
 1. Verify implementation matches documentation
 2. **Write tests** if the new code meets testing criteria (see [Testing](#testing) section)
    2.a. If the new code makes changes to areas with existing test coverage, update the relevant tests if necessary.
-3. **Run `make check-linux`** to verify lint and tests pass locally
+3. **Run local checks**:
+   - On macOS: `make check` (full lint + build + test for host and guest)
+   - On Linux (cloud agents): `make check-linux` (lint + guest build/test; host build/test skipped)
 4. **Run remote tests and iterate until they pass**:
-   - For host changes: `make test-host-remote`
-   - For guest changes: `make test-guest-remote`
+   - **For host changes**:
+     - From Linux (cloud agents): `make test-host-remote` — **required** (can't build locally)
+     - From macOS: optional, but validates against CI's macOS version
+   - **For guest changes (both platforms)**: `make test-guest-remote` — **required** (CRLF and Windows-only behaviors only validated on Windows CI)
    - **Prefer remote builds over CI tailing**: Always use `make test-*-remote` scripts first — they trigger builds, wait for completion, and stream errors directly. Only fall back to `make ci-watch` if the remote scripts fail due to permission issues.
    - **Note**: The gh CLI uses its config file (`~/.config/gh/hosts.yml`) for auth.
      Cursor cloud agents authenticate gh via config file, not environment variables.
@@ -225,29 +229,32 @@ Tests are not optional for qualifying code — CI will enforce this by requiring
 
 #### Running Tests & Checks
 ```bash
-# Full CI check (lint + build + test) — run before pushing
-make check
+# Full CI check — run before pushing
+make check           # macOS: full host + guest coverage
+make check-linux     # Linux: lint + guest build/test (host build/test skipped)
 
 # All tests only
 make test
 
 # Host only
-make check-host   # lint + build + test
-make test-host    # test only
+make check-host   # lint + build + test (requires macOS)
+make test-host    # test only (requires macOS)
 
-# Guest only (requires .NET 8 SDK or use remote)
-make check-guest        # lint + build + test (local)
-make test-guest         # test only (local)
+# Guest only (local)
+make check-guest        # lint + build + test (NOTE: doesn't catch CRLF issues)
+make test-guest         # test only
 
-# Remote tests (PREFERRED for CI validation)
+# Remote tests (platform-specific validation)
 make test-host-remote   # triggers macOS build, waits, streams errors
-make test-guest-remote  # triggers Windows build, waits, streams errors
+make test-guest-remote  # triggers Windows build, waits, streams errors (REQUIRED for guest changes)
 
 # Fallback: watch existing CI run (only if remote scripts fail due to permissions)
 make ci-watch           # tails latest run for current branch, shows errors on failure
 ```
 
-> **Line Endings**: The `.gitattributes` file automatically handles line endings. New files created on macOS will be normalized to CRLF for C# files when committed.
+> **Critical for Guest Code**: Always run `make test-guest-remote` after modifying guest code. Local `dotnet format` on macOS/Linux does NOT enforce CRLF line endings — this is only validated on Windows CI. The `.gitattributes` file normalizes line endings on commit, but format verification requires Windows.
+
+> **Note (Cursor)**: Host tests (`swift test`) require write access to cache directories outside the workspace (e.g., `~/.cache/clang/ModuleCache`). When running tests via Cursor's shell tool, use `required_permissions: ["all"]` to disable sandboxing.
 
 #### CI Requirements
 GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`:
@@ -256,7 +263,7 @@ GitHub Actions enforces quality gates on every PR via `.github/workflows/ci.yml`
 - **Guest Build & Test** — `dotnet build` + `dotnet test` on Windows
 - **Guest Lint** — `dotnet format --verify-no-changes` on Windows
 
-All four jobs run in parallel. The final **CI** gate job requires all to pass before merge. Run `make check` locally before pushing to catch issues early.
+All four jobs run in parallel. The final **CI** gate job requires all to pass before merge. Run `make check` (macOS) or `make check-linux` (Linux) locally before pushing to catch issues early.
 
 ## File Organization
 
