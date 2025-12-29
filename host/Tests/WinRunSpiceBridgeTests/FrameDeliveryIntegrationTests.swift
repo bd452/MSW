@@ -180,8 +180,12 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
         router.registerStream(stream, forWindowID: 100)
         waitForSetup()
 
-        // Initialize buffer with frame data (we'll update writeIndex for each frame)
-        initializePerWindowBuffer(at: regionPointer, offset: 0, config: config, windowID: 100, frameNumber: 1)
+        // Initialize buffer header
+        let headerPtr = regionPointer.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
+        var header = config.createHeader()
+        header.writeIndex = 0
+        header.readIndex = 0
+        headerPtr.pointee = header
 
         // Allocate per-window buffer
         router.handleBufferAllocation(WindowBufferAllocatedMessage(
@@ -196,19 +200,34 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
         ))
         try? await Task.sleep(for: .milliseconds(100))
 
-        // Send 3 frame notifications (updating buffer state for each)
-        for i in 1...3 {
-            // Update the frame in the buffer
-            updateFrameInBuffer(at: regionPointer, config: config, frameNumber: UInt32(i))
+        // Write all 3 frames to the ring buffer slots first
+        for i in 0..<3 {
+            let slotOffset = SharedFrameBufferHeader.size + i * config.slotSize
+            let slotPtr = regionPointer.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
+            var slotHeader = FrameSlotHeader()
+            slotHeader.windowId = 100
+            slotHeader.frameNumber = UInt32(i + 1)
+            slotHeader.width = UInt32(config.maxWidth)
+            slotHeader.height = UInt32(config.maxHeight)
+            slotHeader.stride = UInt32(config.maxWidth * config.bytesPerPixel)
+            slotHeader.format = UInt32(SpicePixelFormat.bgra32.rawValue)
+            slotHeader.dataSize = UInt32(config.maxWidth * config.maxHeight * config.bytesPerPixel)
+            slotHeader.flags = i == 0 ? FrameSlotFlags.keyFrame.rawValue : 0
+            slotPtr.pointee = slotHeader
+        }
+        // Set writeIndex to 3 (all frames written)
+        headerPtr.pointee.writeIndex = 3
 
+        // Now send frame notifications - each read will advance readIndex
+        for i in 1...3 {
             router.routeFrameReady(FrameReadyMessage(
                 windowId: 100,
-                slotIndex: 0,  // Always slot 0 for simplicity
+                slotIndex: UInt32(i - 1),
                 frameNumber: UInt32(i),
                 isKeyFrame: i == 1
             ))
+            waitForDelivery(delay: 0.1)  // Wait for each frame to be processed
         }
-        waitForDelivery(delay: 0.3)
 
         let metrics = stream.metricsSnapshot()
         XCTAssertEqual(metrics.framesReceived, 3)
@@ -247,23 +266,6 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
         slotHeader.dataSize = UInt32(config.maxWidth * config.maxHeight * config.bytesPerPixel)
         slotHeader.flags = FrameSlotFlags.keyFrame.rawValue
         slotPtr.pointee = slotHeader
-    }
-
-    /// Updates the frame number in the buffer and resets read/write indices
-    private func updateFrameInBuffer(
-        at regionPointer: UnsafeMutableRawPointer,
-        config: SharedFrameBufferConfig,
-        frameNumber: UInt32
-    ) {
-        // Reset header indices
-        let headerPtr = regionPointer.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
-        headerPtr.pointee.writeIndex = 1
-        headerPtr.pointee.readIndex = 0
-
-        // Update frame slot
-        let slotOffset = SharedFrameBufferHeader.size
-        let slotPtr = regionPointer.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
-        slotPtr.pointee.frameNumber = frameNumber
     }
 
     private func createConnectedStream(
