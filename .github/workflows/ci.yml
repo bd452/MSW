@@ -94,6 +94,11 @@ jobs:
           echo "Verifying installations..."
           swiftlint version
           pkg-config --modversion spice-client-glib-2.0
+          
+          # Log installed versions for reproducibility tracking
+          echo ""
+          echo "📦 Installed package versions:"
+          brew list --versions swiftlint spice-gtk pkg-config 2>/dev/null || true
 
       # Lint first (fast, catches issues early)
       - name: Lint (SwiftLint)
