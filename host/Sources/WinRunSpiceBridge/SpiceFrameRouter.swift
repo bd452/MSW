@@ -19,8 +19,50 @@ public final class SpiceFrameRouter {
     /// Per-window buffer info for tracking allocations
     private var windowBufferInfo: [UInt64: WindowBufferInfo] = [:]
 
+    /// Shared memory region base pointer (for per-window buffer mapping)
+    private var sharedMemoryBasePointer: UnsafeMutableRawPointer?
+
+    /// Shared memory region size in bytes
+    private var sharedMemorySize: Int = 0
+
     public init(logger: Logger = StandardLogger(subsystem: "SpiceFrameRouter")) {
         self.logger = logger
+    }
+
+    // MARK: - Shared Memory Region Configuration
+
+    /// Sets the shared memory region for per-window buffer mapping.
+    /// Call this after the VM's shared memory region is initialized.
+    /// - Parameters:
+    ///   - basePointer: Base pointer to the shared memory region
+    ///   - size: Size of the shared memory region in bytes
+    public func setSharedMemoryRegion(basePointer: UnsafeMutableRawPointer, size: Int) {
+        routingQueue.async {
+            self.sharedMemoryBasePointer = basePointer
+            self.sharedMemorySize = size
+            self.logger.info("Shared memory region configured: \(size / 1024 / 1024) MB")
+
+            // Re-process any existing buffer allocations that use shared memory
+            // This handles the case where allocations arrived before the region was set
+            for (windowId, info) in self.windowBufferInfo where info.usesSharedMemory {
+                self.createReaderForBuffer(windowId: windowId, info: info)
+            }
+        }
+    }
+
+    /// Clears the shared memory region reference.
+    /// Call this when the VM is stopped or the region is deallocated.
+    public func clearSharedMemoryRegion() {
+        routingQueue.async {
+            self.sharedMemoryBasePointer = nil
+            self.sharedMemorySize = 0
+            self.logger.debug("Shared memory region cleared")
+        }
+    }
+
+    /// Whether a shared memory region has been configured.
+    public var hasSharedMemoryRegion: Bool {
+        routingQueue.sync { sharedMemoryBasePointer != nil }
     }
 
     // MARK: - Per-Window Buffer Management
@@ -33,7 +75,7 @@ public final class SpiceFrameRouter {
             let windowId = notification.windowId
 
             // Store buffer info
-            self.windowBufferInfo[windowId] = WindowBufferInfo(
+            let info = WindowBufferInfo(
                 bufferPointer: notification.bufferPointer,
                 bufferSize: Int(notification.bufferSize),
                 slotSize: Int(notification.slotSize),
@@ -41,6 +83,7 @@ public final class SpiceFrameRouter {
                 isCompressed: notification.isCompressed,
                 usesSharedMemory: notification.usesSharedMemory
             )
+            self.windowBufferInfo[windowId] = info
 
             let action = notification.isReallocation ? "reallocated" : "allocated"
             let memoryType = notification.usesSharedMemory ? "shared" : "local"
@@ -49,13 +92,68 @@ public final class SpiceFrameRouter {
                 "\(notification.bufferSize / 1024) KB, \(notification.slotCount) slots (\(memoryType))"
             )
 
-            // If there's a stream registered for this window, notify it of the new buffer
-            if let stream = self.windowStreams[windowId] {
-                // In a full implementation, we would create a reader for this buffer
-                // and attach it to the stream. For now, the stream uses its own reader.
-                self.logger.debug("Stream registered for window \(windowId), buffer info updated")
-                _ = stream // Silence unused warning
+            // Create reader for shared memory buffers
+            if notification.usesSharedMemory {
+                self.createReaderForBuffer(windowId: windowId, info: info)
             }
+        }
+    }
+
+    /// Creates a SharedFrameBufferReader for a per-window buffer and attaches it to the stream.
+    /// This is called when a buffer allocation is received or when the shared memory region is set.
+    /// - Parameters:
+    ///   - windowId: The window ID
+    ///   - info: The buffer info containing offset and size
+    private func createReaderForBuffer(windowId: UInt64, info: WindowBufferInfo) {
+        // Must be called on routingQueue
+        guard info.usesSharedMemory else {
+            logger.debug("Skipping reader creation for window \(windowId) - not using shared memory")
+            return
+        }
+
+        guard let basePointer = sharedMemoryBasePointer else {
+            logger.debug(
+                "Deferring reader creation for window \(windowId) - " +
+                "shared memory region not yet configured"
+            )
+            return
+        }
+
+        // Validate that the buffer offset + size fits within the shared region
+        let offset = Int(info.bufferPointer)
+        let endOffset = offset + info.bufferSize
+
+        guard offset >= 0 && endOffset <= sharedMemorySize else {
+            logger.error(
+                "Invalid buffer allocation for window \(windowId): " +
+                "offset \(offset) + size \(info.bufferSize) exceeds region size \(sharedMemorySize)"
+            )
+            return
+        }
+
+        // Calculate the host pointer for this buffer
+        let bufferPointer = basePointer.advanced(by: offset)
+
+        // Create the reader for this per-window buffer
+        let reader = SharedFrameBufferReader(
+            pointer: bufferPointer,
+            size: info.bufferSize,
+            ownsMemory: false, // Shared memory region owns the memory
+            logger: logger
+        )
+
+        // Store the reader
+        windowBufferReaders[windowId] = reader
+
+        logger.debug(
+            "Created buffer reader for window \(windowId): " +
+            "offset=\(offset), size=\(info.bufferSize / 1024) KB"
+        )
+
+        // Attach reader to the stream if registered
+        if let stream = windowStreams[windowId] {
+            stream.setFrameBufferReader(reader)
+            logger.debug("Attached buffer reader to stream for window \(windowId)")
         }
     }
 
@@ -64,24 +162,6 @@ public final class SpiceFrameRouter {
     /// - Returns: Buffer info if allocated, nil otherwise
     public func bufferInfo(forWindowID windowID: UInt64) -> WindowBufferInfo? {
         routingQueue.sync { windowBufferInfo[windowID] }
-    }
-
-    // MARK: - Legacy Shared Buffer Support
-
-    /// Sets a shared frame buffer reader (legacy mode for single shared buffer).
-    /// - Parameter reader: The shared memory buffer reader
-    @available(*, deprecated, message: "Use per-window buffer allocation instead")
-    public func setFrameBufferReader(_ reader: SharedFrameBufferReader?) {
-        routingQueue.async {
-            // In legacy mode, apply the same reader to all streams
-            for (_, stream) in self.windowStreams {
-                stream.setFrameBufferReader(reader)
-            }
-
-            if reader != nil {
-                self.logger.info("Legacy shared buffer reader set for \(self.windowStreams.count) streams")
-            }
-        }
     }
 
     // MARK: - Stream Registration
@@ -100,6 +180,15 @@ public final class SpiceFrameRouter {
                     "Registered stream for window \(windowID) with existing buffer: " +
                     "\(bufferInfo.bufferSize / 1024) KB"
                 )
+
+                // Attach existing reader to the stream
+                if let reader = self.windowBufferReaders[windowID] {
+                    stream.setFrameBufferReader(reader)
+                    self.logger.debug("Attached existing buffer reader to stream for window \(windowID)")
+                } else if bufferInfo.usesSharedMemory && self.sharedMemoryBasePointer != nil {
+                    // Buffer uses shared memory but reader wasn't created yet - create it now
+                    self.createReaderForBuffer(windowId: windowID, info: bufferInfo)
+                }
             } else {
                 self.logger.debug("Registered stream for window \(windowID), awaiting buffer allocation")
             }
@@ -110,6 +199,11 @@ public final class SpiceFrameRouter {
     /// - Parameter windowID: The window ID to unregister
     public func unregisterStream(forWindowID windowID: UInt64) {
         routingQueue.async {
+            // Clear the reader from the stream before removing
+            if let stream = self.windowStreams[windowID] {
+                stream.setFrameBufferReader(nil)
+            }
+
             if self.windowStreams.removeValue(forKey: windowID) != nil {
                 self.logger.debug("Unregistered stream for window \(windowID)")
             }
@@ -118,12 +212,20 @@ public final class SpiceFrameRouter {
             if self.windowBufferReaders.removeValue(forKey: windowID) != nil {
                 self.logger.debug("Cleaned up buffer reader for window \(windowID)")
             }
+
+            // Clean up buffer info
+            self.windowBufferInfo.removeValue(forKey: windowID)
         }
     }
 
     /// Unregisters all window streams.
     public func unregisterAllStreams() {
         routingQueue.async {
+            // Clear readers from all streams
+            for (_, stream) in self.windowStreams {
+                stream.setFrameBufferReader(nil)
+            }
+
             self.windowStreams.removeAll()
             self.windowBufferReaders.removeAll()
             self.windowBufferInfo.removeAll()
@@ -139,6 +241,18 @@ public final class SpiceFrameRouter {
     /// Returns the number of allocated buffers.
     public var allocatedBufferCount: Int {
         routingQueue.sync { windowBufferInfo.count }
+    }
+
+    /// Returns the number of active buffer readers.
+    public var activeReaderCount: Int {
+        routingQueue.sync { windowBufferReaders.count }
+    }
+
+    /// Gets the buffer reader for a specific window (for testing).
+    /// - Parameter windowID: The window ID
+    /// - Returns: The buffer reader if created, nil otherwise
+    public func bufferReader(forWindowID windowID: UInt64) -> SharedFrameBufferReader? {
+        routingQueue.sync { windowBufferReaders[windowID] }
     }
 
     // MARK: - Frame Routing
