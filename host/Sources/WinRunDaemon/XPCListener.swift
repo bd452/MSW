@@ -172,7 +172,9 @@ final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
     }
 }
 
-/// Wrapper that sets client ID on the service for each request
+/// Wrapper that passes client ID to the service for each request.
+/// Each connection gets its own wrapper instance with an immutable clientId,
+/// ensuring thread-safe rate limiting across concurrent connections.
 @objc final class ConnectionServiceWrapper: NSObject, WinRunDaemonXPC {
     private let service: WinRunDaemonService
     private let clientId: String
@@ -183,47 +185,38 @@ final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
     }
 
     func ensureVMRunning(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.ensureVMRunning(reply)
+        service.ensureVMRunning(clientId: clientId, reply: reply)
     }
 
     func executeProgram(_ requestData: NSData, reply: @escaping (NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.executeProgram(requestData, reply: reply)
+        service.executeProgram(clientId: clientId, requestData: requestData, reply: reply)
     }
 
     func getStatus(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.getStatus(reply)
+        service.getStatus(clientId: clientId, reply: reply)
     }
 
     func suspendIfIdle(_ reply: @escaping (NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.suspendIfIdle(reply)
+        service.suspendIfIdle(clientId: clientId, reply: reply)
     }
 
     func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.stopVM(reply)
+        service.stopVM(clientId: clientId, reply: reply)
     }
 
     func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.listSessions(reply)
+        service.listSessions(clientId: clientId, reply: reply)
     }
 
     func closeSession(_ sessionId: NSString, reply: @escaping (NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.closeSession(sessionId, reply: reply)
+        service.closeSession(clientId: clientId, sessionId: sessionId as String, reply: reply)
     }
 
     func listShortcuts(_ reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.listShortcuts(reply)
+        service.listShortcuts(clientId: clientId, reply: reply)
     }
 
     func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void) {
-        service.currentClientId = clientId
-        service.syncShortcuts(destinationPath, reply: reply)
+        service.syncShortcuts(clientId: clientId, destinationPath: destinationPath as String, reply: reply)
     }
 }
