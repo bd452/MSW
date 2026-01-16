@@ -210,7 +210,7 @@
     - [X] Test config change notification to guest
 
 - [ ] Clipboard Architecture Enhancement { host/Sources/WinRunApp/ClipboardManager.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/protocols.md>
-  - [ ] Replace timer-based clipboard polling with NSPasteboard change notification { host/Sources/WinRunApp/ClipboardManager.swift }
+  - [X] Replace timer-based clipboard polling with NSPasteboard change notification { host/Sources/WinRunApp/ClipboardManager.swift }
     - Current implementation polls NSPasteboard on a timer, which wastes CPU and delays sync
     - Use NSPasteboard.general.changeCount observation or DistributedNotificationCenter for instant detection
     - Remove polling timer in favor of push-based architecture
