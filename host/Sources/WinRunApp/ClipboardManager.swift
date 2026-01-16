@@ -16,32 +16,72 @@ protocol ClipboardManagerDelegate: AnyObject {
 /// This class monitors the macOS pasteboard for changes and notifies the delegate
 /// when the host clipboard changes, enabling synchronization with the Windows guest.
 /// It also handles setting the macOS clipboard from guest clipboard data.
+///
+/// ## Architecture
+///
+/// macOS does not provide a push notification for pasteboard changes. Instead of
+/// inefficient timer-based polling, this implementation uses an event-driven approach:
+///
+/// 1. **Application activation** - Checks clipboard when the app becomes active
+///    (the most common clipboard change scenario is copy from another app → switch back)
+/// 2. **Window focus** - Checks clipboard when the window becomes key
+/// 3. **Explicit checks** - Provides `checkForChanges()` for controllers to call on demand
+///
+/// This eliminates unnecessary CPU wake-ups while providing responsive clipboard sync.
 final class ClipboardManager {
     weak var delegate: ClipboardManagerDelegate?
 
     private let pasteboard = NSPasteboard.general
     private var lastChangeCount: Int = 0
-    private var monitorTimer: Timer?
     private var sequenceNumber: UInt64 = 0
     private var isSettingFromGuest = false
+    private var isMonitoring = false
+    private var notificationObserver: NSObjectProtocol?
 
     // MARK: - Monitoring
 
+    /// Start monitoring for clipboard changes using event-based detection.
+    ///
+    /// This observes application activation events rather than polling on a timer.
+    /// Call `checkForChanges()` explicitly when the window becomes key for
+    /// additional responsiveness.
     func startMonitoring() {
+        guard !isMonitoring else { return }
+        isMonitoring = true
         lastChangeCount = pasteboard.changeCount
 
-        // Monitor pasteboard changes periodically
-        monitorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // Observe application activation - the primary event for clipboard changes
+        // (user copies in another app, then switches back to WinRun)
+        notificationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
             self?.checkForChanges()
         }
     }
 
+    /// Stop monitoring for clipboard changes.
     func stopMonitoring() {
-        monitorTimer?.invalidate()
-        monitorTimer = nil
+        guard isMonitoring else { return }
+        isMonitoring = false
+
+        if let observer = notificationObserver {
+            NotificationCenter.default.removeObserver(observer)
+            notificationObserver = nil
+        }
     }
 
-    private func checkForChanges() {
+    /// Check for clipboard changes and notify delegate if changed.
+    ///
+    /// Call this method when:
+    /// - The window becomes key (`windowDidBecomeKey`)
+    /// - Before performing paste operations
+    /// - Any other event that might indicate clipboard activity
+    ///
+    /// This is safe to call frequently as it only performs a lightweight
+    /// comparison of the pasteboard's change count.
+    func checkForChanges() {
         guard !isSettingFromGuest else { return }
 
         let currentCount = pasteboard.changeCount
