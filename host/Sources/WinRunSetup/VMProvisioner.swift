@@ -111,11 +111,13 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
 public final class VMProvisioner: Sendable {
     private let resourcesDirectory: URL?
     private let floppyImageCreator: FloppyImageCreator
+    private let isoModifier: ISOModifier
     private let installationTask = InstallationTaskHolder()
 
     public init(resourcesDirectory: URL? = nil) {
         self.resourcesDirectory = resourcesDirectory
         self.floppyImageCreator = FloppyImageCreator()
+        self.isoModifier = ISOModifier()
     }
 
     // MARK: - Configuration Creation
@@ -137,6 +139,7 @@ public final class VMProvisioner: Sendable {
                 isBootable: false
             ))
 
+        // Add Windows installation ISO as first CD-ROM (bootable)
         storageDevices.append(
             ProvisioningStorageDevice(
                 type: .cdrom,
@@ -145,12 +148,41 @@ public final class VMProvisioner: Sendable {
                 isBootable: true
             ))
 
+        // Create small autounattend ISO and mount as second CD-ROM if provided
         if let autounattendPath = configuration.autounattendPath {
-            let floppyImage = try await createAutounattendFloppy(from: autounattendPath)
+            // Collect provisioning scripts if available in resources
+            var provisionScripts: [URL] = []
+            if let resources = resourcesDirectory {
+                let provisionDir = resources.appendingPathComponent("provision")
+                if FileManager.default.fileExists(atPath: provisionDir.path) {
+                    let scriptNames = [
+                        "provision.ps1",
+                        "install-drivers.ps1",
+                        "install-agent.ps1",
+                        "optimize-windows.ps1",
+                        "finalize.ps1",
+                    ]
+                    for scriptName in scriptNames {
+                        let scriptPath = provisionDir.appendingPathComponent(scriptName)
+                        if FileManager.default.fileExists(atPath: scriptPath.path) {
+                            provisionScripts.append(scriptPath)
+                        }
+                    }
+                }
+            }
+
+            // Create small ISO with autounattend.xml and scripts
+            // Cache is managed inside ISOModifier actor
+            let autounattendISO = try await isoModifier.createAutounattendISO(
+                autounattendPath: autounattendPath,
+                provisionScripts: provisionScripts
+            )
+
+            // Add as second CD-ROM (non-bootable)
             storageDevices.append(
                 ProvisioningStorageDevice(
-                    type: .floppy,
-                    path: floppyImage,
+                    type: .cdrom,
+                    path: autounattendISO,
                     isReadOnly: true,
                     isBootable: false
                 ))

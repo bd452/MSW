@@ -71,11 +71,11 @@
       - [X] Monitor Windows installation progress via VM state and disk usage { host/Sources/WinRunSetup/VMProvisioner.swift }
       - [X] Detect installation completion (VM shutdown or disk usage threshold) { host/Sources/WinRunSetup/VMProvisioner.swift }
       - [X] Handle installation errors and timeouts { host/Sources/WinRunSetup/VMProvisioner.swift }
-      - [ ] Fix autounattend.xml injection for Virtualization.framework { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
-        - [ ] Research alternative to floppy drive (Virtualization.framework doesn't support floppy)
-        - [ ] Implement autounattend.xml injection via ISO modification or alternative method
-        - [ ] Update buildVZConfiguration to attach autounattend.xml to VM
-        - [ ] Verify Windows Setup detects and uses autounattend.xml during installation
+      - [X] Fix autounattend.xml injection for Virtualization.framework { host/Sources/WinRunSetup/VMProvisioner.swift, host/Sources/WinRunSetup/ISOModifier.swift, infrastructure/windows/autounattend.xml } <docs/decisions/windows-provisioning.md>
+        - [X] Research alternative to floppy drive (Virtualization.framework doesn't support floppy)
+        - [X] Implement autounattend.xml injection via minimal ISO as second CD-ROM
+        - [X] Update buildVZConfiguration to attach autounattend ISO to VM as second CD-ROM
+        - [X] Update autounattend.xml to look for scripts on CD-ROM drives (E:, F:, G:, H:) instead of floppy (A:)
       - [ ] Handle multiple reboots during Windows installation { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
         - [ ] Detect intermediate VM stops (reboots) vs final completion
         - [ ] Wait for VM to automatically restart after reboot or manually restart VM
