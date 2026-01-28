@@ -1,5 +1,8 @@
 import Foundation
 import WinRunShared
+#if canImport(Virtualization)
+import Virtualization
+#endif
 
 // MARK: - Provisioning Configuration
 
@@ -196,6 +199,9 @@ public final class VMProvisioner: Sendable {
         configuration: ProvisioningConfiguration,
         delegate: (any InstallationDelegate)? = nil
     ) async throws -> InstallationResult {
+        installationTask.start()
+        defer { installationTask.stop() }
+
         let startTime = Date()
 
         // Validate configuration early, returning error result if invalid
@@ -221,7 +227,7 @@ public final class VMProvisioner: Sendable {
         }
 
         do {
-            _ = try await createProvisioningConfiguration(configuration)
+            let vmConfig = try await createProvisioningConfiguration(configuration)
 
             reportProgress(
                 delegate,
@@ -235,7 +241,12 @@ public final class VMProvisioner: Sendable {
                     startTime: startTime, diskPath: configuration.diskImagePath)
             }
 
-            try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
+            try await runInstallationPhases(
+                configuration: configuration,
+                vmConfig: vmConfig,
+                delegate: delegate,
+                isCancelled: isCancelled
+            )
 
             let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
             let result = InstallationResult(
@@ -326,56 +337,400 @@ public final class VMProvisioner: Sendable {
     }
 
     private func runInstallationPhases(
+        configuration: ProvisioningConfiguration,
+        vmConfig: ProvisioningVMConfiguration,
         delegate: (any InstallationDelegate)?,
         isCancelled: @Sendable () -> Bool
     ) async throws {
-        let phases: [InstallationPhaseInfo] = [
-            InstallationPhaseInfo(
-                phase: .copyingFiles, weight: 0.30, message: "Copying Windows files..."),
-            InstallationPhaseInfo(
-                phase: .installingFeatures, weight: 0.25, message: "Installing features..."),
-            InstallationPhaseInfo(
-                phase: .firstBoot, weight: 0.20, message: "Completing first-time setup..."),
-            InstallationPhaseInfo(
-                phase: .postInstall, weight: 0.20, message: "Configuring Windows..."),
-        ]
-
-        var overallProgress = 0.05
-
-        for phaseInfo in phases {
-            if isCancelled() { throw WinRunError.cancelled }
-
-            try await runSinglePhase(
-                phaseInfo,
-                baseProgress: overallProgress,
+        #if canImport(Virtualization)
+        if #available(macOS 13, *) {
+            try await runInstallationPhasesWithVirtualization(
+                configuration: configuration,
+                vmConfig: vmConfig,
                 delegate: delegate,
                 isCancelled: isCancelled
             )
-            overallProgress += phaseInfo.weight
+        } else {
+            throw WinRunError.configInvalid(
+                reason: "Windows installation requires macOS 13 or later")
         }
+        #else
+        throw WinRunError.configInvalid(
+            reason: "Virtualization.framework is not available on this platform")
+        #endif
     }
 
-    private func runSinglePhase(
-        _ phaseInfo: InstallationPhaseInfo,
-        baseProgress: Double,
+    #if canImport(Virtualization)
+    @available(macOS 13, *)
+    private func runInstallationPhasesWithVirtualization(
+        configuration: ProvisioningConfiguration,
+        vmConfig: ProvisioningVMConfiguration,
         delegate: (any InstallationDelegate)?,
         isCancelled: @Sendable () -> Bool
     ) async throws {
-        for step in 1...10 {
+        // Convert ProvisioningVMConfiguration to VZVirtualMachineConfiguration
+        // This may fail if disk images are invalid (e.g., in unit tests with fake files)
+        let vzConfig: VZVirtualMachineConfiguration
+        do {
+            vzConfig = try buildVZConfiguration(from: vmConfig)
+        } catch {
+            // Re-throw as WinRunError for consistent error handling
+            if let winRunError = error as? WinRunError {
+                throw winRunError
+            }
+            throw WinRunError.configInvalid(
+                reason: "Failed to create VM configuration: \(error.localizedDescription)")
+        }
+
+        // Validate configuration before creating VM
+        do {
+            try vzConfig.validate()
+        } catch {
+            throw WinRunError.configInvalid(
+                reason: "VM configuration validation failed: \(error.localizedDescription)")
+        }
+
+        // Create the VM
+        // Note: VZVirtualMachine initializer doesn't throw, but validation may have caught issues
+        let vm = VZVirtualMachine(configuration: vzConfig)
+
+        // Track initial disk usage
+        let initialDiskUsage = try? getDiskUsage(at: configuration.diskImagePath)
+        let minimumExpectedDiskUsage: UInt64 = 2 * 1024 * 1024 * 1024 // 2GB minimum for Windows
+
+        // Start the VM
+        reportProgress(
+            delegate,
+            phase: .copyingFiles,
+            overall: 0.10,
+            message: "Booting Windows Setup..."
+        )
+
             if isCancelled() { throw WinRunError.cancelled }
 
-            try await Task.sleep(nanoseconds: 10_000_000)
+        // Set up VM delegate to monitor state changes
+        let vmDelegate = InstallationVMDelegate(
+            onStateChange: { [weak self] state in
+                guard let self else { return }
+                // Update progress based on VM state
+                if state == .running {
+                    self.reportProgress(
+                        delegate,
+                        phase: .copyingFiles,
+                        overall: 0.15,
+                        message: "Windows Setup is running..."
+                    )
+                } else if state == .stopped {
+                    self.reportProgress(
+                        delegate,
+                        phase: .firstBoot,
+                        overall: 0.80,
+                        message: "Windows installation completed, preparing first boot..."
+                    )
+                }
+            }
+        )
+        vm.delegate = vmDelegate
 
-            let phaseProgress = Double(step) / 10.0
-            let progress = InstallationProgress(
-                phase: phaseInfo.phase,
-                phaseProgress: phaseProgress,
-                overallProgress: baseProgress + (phaseInfo.weight * phaseProgress),
-                message: phaseInfo.message
-            )
-            delegate?.installationDidUpdateProgress(progress)
+        // Start the VM (this may fail if disk images are invalid)
+        do {
+            try await vm.start()
+        } catch {
+            throw WinRunError.internalError(
+                message: "Failed to start VM: \(error.localizedDescription)")
+        }
+
+        reportProgress(
+            delegate,
+            phase: .copyingFiles,
+            overall: 0.20,
+            message: "Windows Setup is copying files..."
+        )
+
+        // Monitor installation progress by watching disk usage
+        try await monitorInstallationProgress(
+            vm: vm,
+            configuration: configuration,
+            initialDiskUsage: initialDiskUsage,
+            minimumExpectedDiskUsage: minimumExpectedDiskUsage,
+            delegate: delegate,
+            isCancelled: isCancelled
+        )
+
+        // Installation phase complete
+        reportProgress(
+            delegate,
+            phase: .postInstall,
+            overall: 0.90,
+            message: "Windows installation completed, ready for provisioning"
+        )
+    }
+
+    @available(macOS 13, *)
+    private func monitorInstallationProgress(
+        vm: VZVirtualMachine,
+        configuration: ProvisioningConfiguration,
+        initialDiskUsage: UInt64?,
+        minimumExpectedDiskUsage: UInt64,
+        delegate: (any InstallationDelegate)?,
+        isCancelled: @Sendable () -> Bool
+    ) async throws {
+        var lastDiskUsage = initialDiskUsage ?? 0
+        var lastProgressUpdate = Date()
+        let progressUpdateInterval: TimeInterval = 5.0 // Update every 5 seconds
+        let maxInstallationTime: TimeInterval = 3600 // 1 hour max
+        let installationStartTime = Date()
+
+        while true {
+            if isCancelled() {
+                try? await vm.stop()
+                throw WinRunError.cancelled
+            }
+
+            // Check for timeout
+            let elapsed = Date().timeIntervalSince(installationStartTime)
+            if elapsed > maxInstallationTime {
+                try? await vm.stop()
+                throw WinRunError.internalError(
+                    message: "Windows installation timed out after \(Int(maxInstallationTime)) seconds")
+            }
+
+            // Check current disk usage
+            let currentDiskUsage = try? getDiskUsage(at: configuration.diskImagePath)
+            let vmState = vm.state
+
+            // Update progress based on disk usage growth
+            if let currentUsage = currentDiskUsage, currentUsage > lastDiskUsage {
+                lastDiskUsage = currentUsage
+                updateProgressFromDiskUsage(
+                    currentUsage: currentUsage,
+                    delegate: delegate
+                )
+            }
+
+            // Check if installation is complete
+            if try await checkInstallationComplete(
+                vmState: vmState,
+                vm: vm,
+                configuration: configuration,
+                initialDiskUsage: initialDiskUsage,
+                minimumExpectedDiskUsage: minimumExpectedDiskUsage,
+                delegate: delegate
+            ) {
+                break
+            }
+
+            // Update progress periodically even if disk usage hasn't changed
+            if Date().timeIntervalSince(lastProgressUpdate) >= progressUpdateInterval {
+                updatePeriodicProgress(
+                    currentDiskUsage: currentDiskUsage,
+                    delegate: delegate
+                )
+                lastProgressUpdate = Date()
+            }
+
+            // Sleep before next check
+            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
         }
     }
+
+    @available(macOS 13, *)
+    private func updateProgressFromDiskUsage(
+        currentUsage: UInt64,
+        delegate: (any InstallationDelegate)?
+    ) {
+        // Estimate progress: 0.2 (booting) to 0.7 (installation complete)
+        // Assume installation uses ~15GB, so map 0-15GB to 0.2-0.7 progress
+        let estimatedGB = Double(currentUsage) / (1024 * 1024 * 1024)
+        let installationProgress = min(0.7, 0.2 + (estimatedGB / 15.0) * 0.5)
+
+        // Determine phase based on disk usage
+        let phase: InstallationPhase
+        let message: String
+        if estimatedGB < 2 {
+            phase = .copyingFiles
+            message = "Copying Windows files..."
+        } else if estimatedGB < 8 {
+            phase = .installingFeatures
+            message = "Installing Windows features..."
+        } else {
+            phase = .firstBoot
+            message = "Completing installation..."
+        }
+
+        reportProgress(
+            delegate,
+            phase: phase,
+            overall: installationProgress,
+            message: message
+        )
+    }
+
+    @available(macOS 13, *)
+    private func checkInstallationComplete(
+        vmState: VZVirtualMachine.State,
+        vm: VZVirtualMachine,
+        configuration: ProvisioningConfiguration,
+        initialDiskUsage: UInt64?,
+        minimumExpectedDiskUsage: UInt64,
+        delegate: (any InstallationDelegate)?
+    ) async throws -> Bool {
+        // Installation is complete when:
+        // 1. VM has stopped (Windows Setup completed and shut down)
+        // 2. Disk usage has grown significantly (Windows is installed)
+        guard vmState == .stopped else { return false }
+
+        let finalDiskUsage = try? getDiskUsage(at: configuration.diskImagePath)
+        if let finalUsage = finalDiskUsage,
+           finalUsage >= minimumExpectedDiskUsage {
+            // Installation appears complete
+            reportProgress(
+                delegate,
+                phase: .firstBoot,
+                overall: 0.85,
+                message: "Windows installation completed successfully"
+            )
+            return true
+        } else if let finalUsage = finalDiskUsage,
+                  finalUsage > (initialDiskUsage ?? 0) {
+            // Some installation occurred but may not be complete
+            // Wait a bit more to see if VM restarts
+            try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+            if vm.state == .stopped {
+                // Still stopped, assume installation complete
+                return true
+            }
+        }
+        return false
+    }
+
+    @available(macOS 13, *)
+    private func updatePeriodicProgress(
+        currentDiskUsage: UInt64?,
+        delegate: (any InstallationDelegate)?
+    ) {
+        if let currentUsage = currentDiskUsage {
+            let estimatedGB = Double(currentUsage) / (1024 * 1024 * 1024)
+            let message = "Installing Windows... (\(String(format: "%.1f", estimatedGB)) GB used)"
+            reportProgress(
+                delegate,
+                phase: .installingFeatures,
+                overall: 0.50,
+                message: message
+            )
+        }
+    }
+
+    @available(macOS 13, *)
+    private func buildVZConfiguration(from vmConfig: ProvisioningVMConfiguration) throws -> VZVirtualMachineConfiguration {
+        let vzConfig = VZVirtualMachineConfiguration()
+
+        // CPU and memory
+        vzConfig.cpuCount = vmConfig.cpuCount
+        vzConfig.memorySize = vmConfig.memorySizeBytes
+
+        // Platform
+        let platform = VZGenericPlatformConfiguration()
+        platform.machineIdentifier = VZGenericMachineIdentifier()
+        vzConfig.platform = platform
+
+        // Boot loader
+        if vmConfig.useEFIBoot {
+            vzConfig.bootLoader = VZEFIBootLoader()
+        } else {
+            throw WinRunError.configInvalid(
+                reason: "Windows installation requires EFI boot")
+        }
+
+        // Storage devices
+        var storageDevices: [VZStorageDeviceConfiguration] = []
+        for device in vmConfig.storageDevices {
+            switch device.type {
+            case .disk:
+                do {
+                    let attachment = try VZDiskImageStorageDeviceAttachment(
+                        url: device.path,
+                        readOnly: device.isReadOnly
+                    )
+                    let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: attachment)
+                    storageDevices.append(blockDevice)
+                } catch {
+                    throw WinRunError.configInvalid(
+                        reason: "Invalid disk image at \(device.path.path): \(error.localizedDescription)")
+                }
+
+            case .cdrom:
+                do {
+                    let attachment = try VZDiskImageStorageDeviceAttachment(
+                        url: device.path,
+                        readOnly: true
+                    )
+                    let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: attachment)
+                    storageDevices.append(blockDevice)
+                } catch {
+                    throw WinRunError.configInvalid(
+                        reason: "Invalid ISO image at \(device.path.path): \(error.localizedDescription)")
+                }
+
+            case .floppy:
+                // Virtualization.framework doesn't support floppy drives directly
+                // Autounattend.xml should be injected via ISO or other means
+                // For now, skip floppy devices
+                break
+            }
+        }
+        vzConfig.storageDevices = storageDevices
+
+        // Network (minimal for installation)
+        let networkAttachment = VZNATNetworkDeviceAttachment()
+        let networkDevice = VZVirtioNetworkDeviceConfiguration()
+        networkDevice.attachment = networkAttachment
+        vzConfig.networkDevices = [networkDevice]
+
+        // Graphics (minimal for installation)
+        let graphics = VZVirtioGraphicsDeviceConfiguration()
+        graphics.scanouts = [VZVirtioGraphicsScanoutConfiguration(widthInPixels: 1024, heightInPixels: 768)]
+        vzConfig.graphicsDevices = [graphics]
+
+        // Input devices
+        vzConfig.pointingDevices = [VZUSBScreenCoordinatePointingDeviceConfiguration()]
+        vzConfig.keyboards = [VZUSBKeyboardConfiguration()]
+
+        // Other devices
+        vzConfig.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
+
+        // Validate configuration
+        try vzConfig.validate()
+
+        return vzConfig
+    }
+
+    // Helper class to monitor VM state during installation
+    @available(macOS 13, *)
+    private class InstallationVMDelegate: NSObject, VZVirtualMachineDelegate {
+        let onStateChange: (VZVirtualMachine.State) -> Void
+
+        init(onStateChange: @escaping (VZVirtualMachine.State) -> Void) {
+            self.onStateChange = onStateChange
+        }
+
+        func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: Error) {
+            onStateChange(.stopped)
+        }
+
+        func guestDidStop(_ virtualMachine: VZVirtualMachine) {
+            onStateChange(.stopped)
+        }
+
+        func virtualMachine(
+            _ virtualMachine: VZVirtualMachine,
+            networkDevice: VZNetworkDevice,
+            attachmentWasDisconnectedWithError error: Error
+        ) {
+            // Ignore network errors during installation
+        }
+    }
+    #endif
 
     private func createCancelledResult(startTime: Date, diskPath: URL) -> InstallationResult {
         InstallationResult(
