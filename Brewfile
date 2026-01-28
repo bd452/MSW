@@ -17,6 +17,7 @@ brew "cmake"
 brew "ninja"
 brew "glib"
 brew "spice-protocol"
+brew "wimlib"
 
 # Development tools
 brew "swiftlint"
