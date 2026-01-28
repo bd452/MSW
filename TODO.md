@@ -71,6 +71,25 @@
       - [X] Monitor Windows installation progress via VM state and disk usage { host/Sources/WinRunSetup/VMProvisioner.swift }
       - [X] Detect installation completion (VM shutdown or disk usage threshold) { host/Sources/WinRunSetup/VMProvisioner.swift }
       - [X] Handle installation errors and timeouts { host/Sources/WinRunSetup/VMProvisioner.swift }
+      - [ ] Fix autounattend.xml injection for Virtualization.framework { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+        - [ ] Research alternative to floppy drive (Virtualization.framework doesn't support floppy)
+        - [ ] Implement autounattend.xml injection via ISO modification or alternative method
+        - [ ] Update buildVZConfiguration to attach autounattend.xml to VM
+        - [ ] Verify Windows Setup detects and uses autounattend.xml during installation
+      - [ ] Handle multiple reboots during Windows installation { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+        - [ ] Detect intermediate VM stops (reboots) vs final completion
+        - [ ] Wait for VM to automatically restart after reboot or manually restart VM
+        - [ ] Continue monitoring installation progress across multiple boot cycles
+        - [ ] Distinguish Windows Setup reboots from final installation completion
+      - [ ] Improve installation completion detection { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+        - [ ] Add logic to distinguish intermediate reboots from final completion
+        - [ ] Verify Windows is fully installed (not just first reboot) before marking complete
+        - [ ] Consider checking for Windows boot completion indicators (e.g., registry, file system state)
+      - [ ] Boot VM for post-install provisioning phase { host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+        - [ ] After installation completes, create new VM instance with same disk image
+        - [ ] Boot VM and wait for Windows to fully start
+        - [ ] Wait for guest agent to connect via Spice and begin provisioning scripts
+        - [ ] Monitor provisioning progress via Spice messages until completion
     - [X] Add unit tests for disk creation and provisioning state machine { new:host/Tests/WinRunSetupTests/DiskImageCreatorTests.swift, new:host/Tests/WinRunSetupTests/VMProvisionerTests.swift } <docs/development.md>
   - [X] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [X] Define provisioning phases and state transitions { new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
