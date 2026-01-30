@@ -196,6 +196,18 @@ public final class VMProvisioner: Sendable {
     // MARK: - Installation Lifecycle
 
     /// Starts the Windows installation process.
+    ///
+    /// This method:
+    /// 1. Validates the provisioning configuration
+    /// 2. Creates the VM configuration with ISO and autounattend media
+    /// 3. Boots the VM from the Windows ISO
+    /// 4. Monitors installation progress
+    /// 5. Shuts down the VM when complete
+    ///
+    /// - Parameters:
+    ///   - configuration: The provisioning configuration with ISO and disk paths
+    ///   - delegate: Optional delegate for progress updates
+    /// - Returns: The installation result
     public func startInstallation(
         configuration: ProvisioningConfiguration,
         delegate: (any InstallationDelegate)? = nil
@@ -225,7 +237,8 @@ public final class VMProvisioner: Sendable {
         }
 
         do {
-            _ = try await createProvisioningConfiguration(configuration)
+            // Create VM configuration with all storage devices
+            let vmConfiguration = try await createProvisioningConfiguration(configuration)
 
             reportProgress(
                 delegate,
@@ -239,7 +252,13 @@ public final class VMProvisioner: Sendable {
                     startTime: startTime, diskPath: configuration.diskImagePath)
             }
 
-            try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
+            // Run the actual Windows installation
+            try await runInstallationPhases(
+                configuration: configuration,
+                vmConfiguration: vmConfiguration,
+                delegate: delegate,
+                isCancelled: isCancelled
+            )
 
             let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
             let result = InstallationResult(
@@ -268,6 +287,13 @@ public final class VMProvisioner: Sendable {
     /// Cancels the current installation if one is in progress.
     public func cancelInstallation() {
         installationTask.cancel()
+
+        // Also cancel the provisioning VM if running
+        if let provisioningVM = currentProvisioningVM {
+            Task {
+                await provisioningVM.cancel()
+            }
+        }
     }
 
     /// Checks if an installation is currently in progress.
@@ -345,6 +371,36 @@ public final class VMProvisioner: Sendable {
     }
 
     private func runInstallationPhases(
+        configuration: ProvisioningConfiguration,
+        vmConfiguration: ProvisioningVMConfiguration,
+        delegate: (any InstallationDelegate)?,
+        isCancelled: @Sendable () -> Bool
+    ) async throws {
+        // Create and run the provisioning VM
+        let provisioningVM = ProvisioningVirtualMachine(configuration: vmConfiguration)
+
+        // Store reference for cancellation
+        currentProvisioningVM = provisioningVM
+
+        defer {
+            currentProvisioningVM = nil
+        }
+
+        // Run installation with progress forwarding
+        let success = try await provisioningVM.runInstallation { [weak delegate] progress in
+            delegate?.installationDidUpdateProgress(progress)
+        }
+
+        if !success {
+            throw WinRunError.internalError(message: "Windows installation did not complete successfully")
+        }
+    }
+
+    /// Reference to the current provisioning VM (for cancellation)
+    private var currentProvisioningVM: ProvisioningVirtualMachine?
+
+    /// Runs a simulated installation (for testing or when Virtualization is unavailable).
+    private func runSimulatedInstallationPhases(
         delegate: (any InstallationDelegate)?,
         isCancelled: @Sendable () -> Bool
     ) async throws {

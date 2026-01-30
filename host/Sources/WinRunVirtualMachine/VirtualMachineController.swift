@@ -4,32 +4,6 @@ import WinRunShared
 import Virtualization
 #endif
 
-public enum VirtualMachineLifecycleError: Error, CustomStringConvertible {
-    case startTimeout
-    case invalidSnapshot(String)
-    case virtualizationUnavailable(String)
-    case alreadyStopped
-    case unexpectedStop(String?)
-
-    public var description: String {
-        switch self {
-        case .startTimeout:
-            return "Timed out waiting for the Windows VM to finish booting."
-        case .invalidSnapshot(let reason):
-            return "Unable to use saved VM state: \(reason)"
-        case .virtualizationUnavailable(let reason):
-            return "Virtualization.framework is unavailable: \(reason)"
-        case .alreadyStopped:
-            return "The Windows VM is already stopped."
-        case .unexpectedStop(let reason):
-            if let reason {
-                return "The Windows VM stopped unexpectedly: \(reason)"
-            }
-            return "The Windows VM stopped unexpectedly."
-        }
-    }
-}
-
 public actor VirtualMachineController {
     public private(set) var state: VMState
     private let configuration: VMConfiguration
@@ -407,14 +381,14 @@ public actor VirtualMachineController {
         vmConfig.platform = platform
 
         // Configure EFI boot loader with variable store for Windows boot persistence
-        let efiVariableStore = try getOrCreateEFIVariableStore()
+        let efiVariableStore = try getOrCreateEFIVariableStore(for: configuration)
         vmConfig.bootLoader = VZEFIBootLoader(variableStore: efiVariableStore)
 
         let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
         vmConfig.storageDevices = [blockDevice]
 
-        let networkAttachment = try makeNetworkAttachment()
+        let networkAttachment = try makeNetworkDeviceAttachment(for: configuration)
         let networkDevice = VZVirtioNetworkDeviceConfiguration()
         networkDevice.attachment = networkAttachment
 
@@ -479,52 +453,5 @@ public actor VirtualMachineController {
         }
     }
 
-    /// Gets or creates the EFI variable store for Windows boot persistence.
-    ///
-    /// The EFI variable store is required for Windows ARM64 to boot correctly.
-    /// During installation, Windows Setup writes boot manager entries to NVRAM.
-    /// These entries must persist across reboots for Windows to boot from disk.
-    @available(macOS 13, *)
-    private func getOrCreateEFIVariableStore() throws -> VZEFIVariableStore {
-        let efiVarsURL = configuration.disk.efiVariableStorePath
-
-        // Create parent directory if needed
-        let parentDir = efiVarsURL.deletingLastPathComponent()
-        if !FileManager.default.fileExists(atPath: parentDir.path) {
-            try FileManager.default.createDirectory(
-                at: parentDir,
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-        }
-
-        // Check if variable store already exists
-        if FileManager.default.fileExists(atPath: efiVarsURL.path) {
-            logger.debug("Using existing EFI variable store: \(efiVarsURL.path)")
-            return try VZEFIVariableStore(url: efiVarsURL)
-        }
-
-        // Create new variable store
-        logger.info("Creating new EFI variable store: \(efiVarsURL.path)")
-        return try VZEFIVariableStore(creatingVariableStoreAt: efiVarsURL)
-    }
-
-    @available(macOS 13, *)
-    private func makeNetworkAttachment() throws -> VZNetworkDeviceAttachment {
-        switch configuration.network.mode {
-        case .nat:
-            return VZNATNetworkDeviceAttachment()
-        case .bridged:
-            guard let identifier = configuration.network.interfaceIdentifier else {
-                throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
-            }
-            guard let interface = VZBridgedNetworkInterface.networkInterfaces.first(where: {
-                $0.identifier == identifier || $0.localizedDisplayName == identifier
-            }) else {
-                throw VMConfigurationValidationError.bridgedInterfaceUnavailable(identifier)
-            }
-            return VZBridgedNetworkDeviceAttachment(interface: interface)
-        }
-    }
 #endif
 }
