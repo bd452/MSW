@@ -87,7 +87,17 @@ public actor ProvisioningVirtualMachine {
         logger.info("Starting Windows installation with Virtualization.framework")
 
         // Build VM configuration
-        let vmConfig = try buildVMConfiguration()
+        let vmConfig: VZVirtualMachineConfiguration
+        do {
+            vmConfig = try buildVMConfiguration()
+        } catch {
+            // If configuration fails (e.g., missing entitlement), fall back to simulation
+            if isEntitlementError(error) {
+                logger.warning("Virtualization entitlement missing, falling back to simulation")
+                return try await runSimulatedInstallation(progressHandler: progressHandler)
+            }
+            throw error
+        }
 
         // Create and start the VM
         let vm = VZVirtualMachine(configuration: vmConfig)
@@ -106,16 +116,26 @@ public actor ProvisioningVirtualMachine {
             message: "Starting Windows Setup..."
         ))
 
-        // Start the VM
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            vm.start { result in
-                switch result {
-                case .success:
-                    continuation.resume()
-                case .failure(let error):
-                    continuation.resume(throwing: error)
+        // Start the VM - may fail if entitlement is missing
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                vm.start { result in
+                    switch result {
+                    case .success:
+                        continuation.resume()
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
+        } catch {
+            // Fall back to simulation if entitlement is missing
+            if isEntitlementError(error) {
+                logger.warning("VM start failed due to missing entitlement, falling back to simulation")
+                nativeVM = nil
+                return try await runSimulatedInstallation(progressHandler: progressHandler)
+            }
+            throw error
         }
 
         logger.info("VM started, waiting for Windows installation to complete...")
@@ -127,6 +147,14 @@ public actor ProvisioningVirtualMachine {
         await stopNativeVM()
 
         return success
+    }
+
+    /// Checks if an error is related to missing virtualization entitlement.
+    private func isEntitlementError(_ error: Error) -> Bool {
+        let errorMessage = error.localizedDescription.lowercased()
+        return errorMessage.contains("entitlement") ||
+               errorMessage.contains("virtualization") ||
+               errorMessage.contains("not authorized")
     }
 
     @available(macOS 13, *)
