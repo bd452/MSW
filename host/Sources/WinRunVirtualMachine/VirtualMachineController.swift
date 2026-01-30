@@ -382,7 +382,9 @@ public actor VirtualMachineController {
 
         // Configure EFI boot loader with variable store for Windows boot persistence
         let efiVariableStore = try getOrCreateEFIVariableStore(for: configuration)
-        vmConfig.bootLoader = VZEFIBootLoader(variableStore: efiVariableStore)
+        let bootLoader = VZEFIBootLoader()
+        bootLoader.variableStore = efiVariableStore
+        vmConfig.bootLoader = bootLoader
 
         let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)

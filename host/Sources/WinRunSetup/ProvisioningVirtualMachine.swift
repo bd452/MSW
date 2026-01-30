@@ -146,7 +146,7 @@ public actor ProvisioningVirtualMachine {
         let efiVarsURL = getEFIVariableStorePath()
         let efiStore: VZEFIVariableStore
         if FileManager.default.fileExists(atPath: efiVarsURL.path) {
-            efiStore = try VZEFIVariableStore(url: efiVarsURL)
+            efiStore = VZEFIVariableStore(url: efiVarsURL)
         } else {
             // Create parent directory if needed
             try FileManager.default.createDirectory(
@@ -155,7 +155,9 @@ public actor ProvisioningVirtualMachine {
             )
             efiStore = try VZEFIVariableStore(creatingVariableStoreAt: efiVarsURL)
         }
-        vmConfig.bootLoader = VZEFIBootLoader(variableStore: efiStore)
+        let bootLoader = VZEFIBootLoader()
+        bootLoader.variableStore = efiStore
+        vmConfig.bootLoader = bootLoader
 
         // Storage devices
         vmConfig.storageDevices = try buildStorageDevices()

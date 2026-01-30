@@ -30,7 +30,7 @@ extension VirtualMachineController {
 
         // Check if variable store already exists
         if FileManager.default.fileExists(atPath: efiVarsURL.path) {
-            return try VZEFIVariableStore(url: efiVarsURL)
+            return VZEFIVariableStore(url: efiVarsURL)
         }
 
         // Create new variable store

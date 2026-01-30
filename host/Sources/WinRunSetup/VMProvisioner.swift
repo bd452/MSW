@@ -129,6 +129,7 @@ public final class VMProvisioner: Sendable {
     private let resourcesDirectory: URL?
     private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()
+    private let provisioningVMHolder = ProvisioningVMHolder()
 
     public init(resourcesDirectory: URL? = nil) {
         self.resourcesDirectory = resourcesDirectory
@@ -325,7 +326,7 @@ public final class VMProvisioner: Sendable {
         installationTask.cancel()
 
         // Also cancel the provisioning VM if running
-        if let provisioningVM = currentProvisioningVM {
+        if let provisioningVM = provisioningVMHolder.vm {
             Task {
                 await provisioningVM.cancel()
             }
@@ -426,10 +427,10 @@ public final class VMProvisioner: Sendable {
         let provisioningVM = ProvisioningVirtualMachine(configuration: vmConfiguration)
 
         // Store reference for cancellation
-        currentProvisioningVM = provisioningVM
+        provisioningVMHolder.vm = provisioningVM
 
         defer {
-            currentProvisioningVM = nil
+            provisioningVMHolder.vm = nil
         }
 
         // Run installation with progress forwarding
@@ -441,9 +442,6 @@ public final class VMProvisioner: Sendable {
             throw WinRunError.internalError(message: "Windows installation did not complete successfully")
         }
     }
-
-    /// Reference to the current provisioning VM (for cancellation)
-    private var currentProvisioningVM: ProvisioningVirtualMachine?
 
     /// Runs a simulated installation (for testing or when Virtualization is unavailable).
     private func runSimulatedInstallationPhases(
