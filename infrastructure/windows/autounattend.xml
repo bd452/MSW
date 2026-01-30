@@ -194,8 +194,9 @@
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>2</Order>
-                    <Path>cmd /c if exist A:\*.PS1 copy A:\*.PS1 C:\WinRun\provision\</Path>
-                    <Description>Copy provisioning scripts from floppy root</Description>
+                    <!-- Search all drives for provision.ps1 and copy scripts (Floppy/USB might not be A:) -->
+                    <Path>powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path ($_.Root + 'provision.ps1') } | Select-Object -First 1 | ForEach-Object { Copy-Item ($_.Root + '*.ps1') 'C:\WinRun\provision\' }"</Path>
+                    <Description>Copy provisioning scripts from setup media</Description>
                 </RunSynchronousCommand>
             </RunSynchronous>
         </component>
