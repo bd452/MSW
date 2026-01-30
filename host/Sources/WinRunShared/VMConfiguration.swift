@@ -499,6 +499,7 @@ public struct ProgramLaunchRequest: Codable, Hashable {
 public struct InstallWindowsRequest: Codable, Hashable, Sendable {
     public let isoPath: URL
     public let autounattendFloppyPath: URL?
+    public let virtioIsoPath: URL?
     public let diskImagePath: URL
     public let cpuCount: Int
     public let memorySizeGB: Int
@@ -506,12 +507,14 @@ public struct InstallWindowsRequest: Codable, Hashable, Sendable {
     public init(
         isoPath: URL,
         autounattendFloppyPath: URL? = nil,
+        virtioIsoPath: URL? = nil,
         diskImagePath: URL,
         cpuCount: Int = 4,
         memorySizeGB: Int = 8
     ) {
         self.isoPath = isoPath
         self.autounattendFloppyPath = autounattendFloppyPath
+        self.virtioIsoPath = virtioIsoPath
         self.diskImagePath = diskImagePath
         self.cpuCount = cpuCount
         self.memorySizeGB = memorySizeGB

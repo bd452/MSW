@@ -241,10 +241,20 @@ public final class VMProvisioner: Sendable {
                     startTime: startTime, diskPath: configuration.diskImagePath)
             }
 
+            // Check for VirtIO drivers ISO in resources
+            var virtioIsoPath: URL?
+            if let resources = resourcesDirectory {
+                let candidate = resources.appendingPathComponent("virtio-win.iso")
+                if FileManager.default.fileExists(atPath: candidate.path) {
+                    virtioIsoPath = candidate
+                }
+            }
+
             // Request daemon to start installation
             let request = InstallWindowsRequest(
                 isoPath: configuration.isoPath,
                 autounattendFloppyPath: floppyPath,
+                virtioIsoPath: virtioIsoPath,
                 diskImagePath: configuration.diskImagePath,
                 cpuCount: configuration.cpuCount,
                 memorySizeGB: configuration.memorySizeGB

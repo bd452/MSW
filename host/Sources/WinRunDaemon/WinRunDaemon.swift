@@ -126,6 +126,11 @@ import Security
                     extraStorage.append(VMExtraStorageDevice(path: floppy, isReadOnly: true, isUSBMassStorage: true))
                 }
                 
+                if let virtioIso = request.virtioIsoPath {
+                    // Mount VirtIO drivers as extra CD-ROM (read-only block device)
+                    extraStorage.append(VMExtraStorageDevice(path: virtioIso, isReadOnly: true, isUSBMassStorage: false))
+                }
+                
                 let resources = VMResources(cpuCount: request.cpuCount, memorySizeGB: request.memorySizeGB)
                 
                 // Clone existing config but override provisioning-specific fields
