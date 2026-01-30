@@ -208,6 +208,10 @@ final class WinRunDaemonListener: NSObject, NSXPCListenerDelegate {
         service.stopVM(clientId: clientId, reply: reply)
     }
 
+    func installWindows(_ requestData: NSData, reply: @escaping (NSData?, NSError?) -> Void) {
+        service.installWindows(clientId: clientId, requestData: requestData, reply: reply)
+    }
+
     func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void) {
         service.listSessions(clientId: clientId, reply: reply)
     }

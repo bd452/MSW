@@ -69,22 +69,22 @@ public actor VirtualMachineController {
     }
 
     @discardableResult
-    public func ensureRunning() async throws -> VMState {
+    public func ensureRunning(overrides: VMConfiguration? = nil) async throws -> VMState {
         switch state.status {
         case .running:
             return snapshotState()
         case .starting, .suspending:
             return try await waitForReady()
         case .suspended:
-            return try await start(resumeFromSnapshot: true)
+            return try await start(resumeFromSnapshot: true, overrides: overrides)
         case .stopped, .stopping:
-            return try await start(resumeFromSnapshot: false)
+            return try await start(resumeFromSnapshot: false, overrides: overrides)
         }
     }
 
     @discardableResult
-    public func start() async throws -> VMState {
-        try await start(resumeFromSnapshot: false)
+    public func start(overrides: VMConfiguration? = nil) async throws -> VMState {
+        try await start(resumeFromSnapshot: false, overrides: overrides)
     }
 
     public func registerSession(delta: Int) {
@@ -178,7 +178,7 @@ public actor VirtualMachineController {
 
     // MARK: - Private helpers
 
-    private func start(resumeFromSnapshot: Bool) async throws -> VMState {
+    private func start(resumeFromSnapshot: Bool, overrides: VMConfiguration? = nil) async throws -> VMState {
         if state.status == .running {
             return snapshotState()
         }
@@ -194,7 +194,7 @@ public actor VirtualMachineController {
 #if canImport(Virtualization)
         if #available(macOS 13, *) {
             do {
-                try await bootNativeVirtualMachine(resumeFromSnapshot: resumeFromSnapshot)
+                try await bootNativeVirtualMachine(resumeFromSnapshot: resumeFromSnapshot, overrides: overrides)
             } catch let validationError as VMConfigurationValidationError {
                 logger.error("Failed to build VM configuration: \(validationError.description)")
                 throw VirtualMachineLifecycleError.virtualizationUnavailable(validationError.description)
@@ -371,8 +371,8 @@ public actor VirtualMachineController {
 
 #if canImport(Virtualization)
     @available(macOS 13, *)
-    private func bootNativeVirtualMachine(resumeFromSnapshot: Bool) async throws {
-        let config = try cachedConfiguration ?? buildNativeConfiguration()
+    private func bootNativeVirtualMachine(resumeFromSnapshot: Bool, overrides: VMConfiguration? = nil) async throws {
+        let config = try cachedConfiguration ?? buildNativeConfiguration(overrides: overrides)
         cachedConfiguration = config
 
         let vm: VZVirtualMachine
@@ -397,26 +397,39 @@ public actor VirtualMachineController {
     }
 
     @available(macOS 13, *)
-    private func buildNativeConfiguration() throws -> VZVirtualMachineConfiguration {
+    private func buildNativeConfiguration(overrides: VMConfiguration? = nil) throws -> VZVirtualMachineConfiguration {
+        let effectiveConfig = overrides ?? configuration
         let vmConfig = VZVirtualMachineConfiguration()
-        vmConfig.cpuCount = max(2, configuration.resources.cpuCount)
-        vmConfig.memorySize = UInt64(configuration.resources.memorySizeGB) * 1024 * 1024 * 1024
+        vmConfig.cpuCount = max(2, effectiveConfig.resources.cpuCount)
+        vmConfig.memorySize = UInt64(effectiveConfig.resources.memorySizeGB) * 1024 * 1024 * 1024
 
         let platform = VZGenericPlatformConfiguration()
         platform.machineIdentifier = VZGenericMachineIdentifier()
         vmConfig.platform = platform
         vmConfig.bootLoader = VZEFIBootLoader()
 
-        let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
+        let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: effectiveConfig.diskImagePath, readOnly: false)
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
         vmConfig.storageDevices = [blockDevice]
 
-        let networkAttachment = try makeNetworkAttachment()
+        // Add extra storage devices (ISOs, floppies, etc.)
+        for device in effectiveConfig.extraStorage {
+            let attachment = try VZDiskImageStorageDeviceAttachment(url: device.path, readOnly: device.isReadOnly)
+            if device.isUSBMassStorage {
+                let usbDevice = VZUSBMassStorageDeviceConfiguration(attachment: attachment)
+                vmConfig.storageDevices.append(usbDevice)
+            } else {
+                let extraBlockDevice = VZVirtioBlockDeviceConfiguration(attachment: attachment)
+                vmConfig.storageDevices.append(extraBlockDevice)
+            }
+        }
+
+        let networkAttachment = try makeNetworkAttachment(config: effectiveConfig)
         let networkDevice = VZVirtioNetworkDeviceConfiguration()
         networkDevice.attachment = networkAttachment
 
         // Apply custom MAC address if configured
-        if let macAddressString = configuration.network.macAddress,
+        if let macAddressString = effectiveConfig.network.macAddress,
            let macAddress = VZMACAddress(string: macAddressString) {
             networkDevice.macAddress = macAddress
             logger.debug("Applied custom MAC address: \(macAddressString)")
@@ -434,7 +447,7 @@ public actor VirtualMachineController {
         vmConfig.memoryBalloonDevices = [VZVirtioTraditionalMemoryBalloonDeviceConfiguration()]
 
         // Configure frame streaming devices
-        try configureFrameStreamingDevices(vmConfig)
+        try configureFrameStreamingDevices(vmConfig, config: effectiveConfig)
 
         try vmConfig.validate()
         return vmConfig
@@ -442,8 +455,8 @@ public actor VirtualMachineController {
 
     /// Configures vsock, shared memory, and console devices for frame streaming.
     @available(macOS 13, *)
-    private func configureFrameStreamingDevices(_ vmConfig: VZVirtualMachineConfiguration) throws {
-        let frameConfig = configuration.frameStreaming
+    private func configureFrameStreamingDevices(_ vmConfig: VZVirtualMachineConfiguration, config: VMConfiguration) throws {
+        let frameConfig = config.frameStreaming
 
         // Add VirtIO socket device for vsock communication
         if frameConfig.vsockEnabled {
@@ -477,12 +490,12 @@ public actor VirtualMachineController {
     }
 
     @available(macOS 13, *)
-    private func makeNetworkAttachment() throws -> VZNetworkDeviceAttachment {
-        switch configuration.network.mode {
+    private func makeNetworkAttachment(config: VMConfiguration) throws -> VZNetworkDeviceAttachment {
+        switch config.network.mode {
         case .nat:
             return VZNATNetworkDeviceAttachment()
         case .bridged:
-            guard let identifier = configuration.network.interfaceIdentifier else {
+            guard let identifier = config.network.interfaceIdentifier else {
                 throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
             }
             guard let interface = VZBridgedNetworkInterface.networkInterfaces.first(where: {

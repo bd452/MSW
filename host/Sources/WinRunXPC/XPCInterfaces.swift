@@ -7,6 +7,9 @@ import WinRunShared
     func getStatus(_ reply: @escaping (NSData?, NSError?) -> Void)
     func suspendIfIdle(_ reply: @escaping (NSError?) -> Void)
     func stopVM(_ reply: @escaping (NSData?, NSError?) -> Void)
+    
+    // Provisioning
+    func installWindows(_ requestData: NSData, reply: @escaping (NSData?, NSError?) -> Void)
 
     // Session management
     func listSessions(_ reply: @escaping (NSData?, NSError?) -> Void)

@@ -168,6 +168,20 @@ public enum FrameBufferMode: String, Codable, CaseIterable, Hashable {
     }
 }
 
+// MARK: - Extra Storage
+
+public struct VMExtraStorageDevice: Codable, Hashable, Sendable {
+    public let path: URL
+    public let isReadOnly: Bool
+    public let isUSBMassStorage: Bool
+
+    public init(path: URL, isReadOnly: Bool, isUSBMassStorage: Bool) {
+        self.path = path
+        self.isReadOnly = isReadOnly
+        self.isUSBMassStorage = isUSBMassStorage
+    }
+}
+
 // MARK: - Frame Streaming Configuration
 
 /// Configuration for guest-host frame streaming communication.
@@ -304,6 +318,7 @@ public struct VMConfiguration: Codable, Hashable {
     public var disk: VMDiskConfiguration
     public var network: VMNetworkConfiguration
     public var frameStreaming: FrameStreamingConfiguration
+    public var extraStorage: [VMExtraStorageDevice]
     public var suspendOnIdleAfterSeconds: TimeInterval
 
     public init(
@@ -311,12 +326,14 @@ public struct VMConfiguration: Codable, Hashable {
         disk: VMDiskConfiguration = VMDiskConfiguration(),
         network: VMNetworkConfiguration = VMNetworkConfiguration(),
         frameStreaming: FrameStreamingConfiguration = FrameStreamingConfiguration(),
+        extraStorage: [VMExtraStorageDevice] = [],
         suspendOnIdleAfterSeconds: TimeInterval = 300
     ) {
         self.resources = resources
         self.disk = disk
         self.network = network
         self.frameStreaming = frameStreaming
+        self.extraStorage = extraStorage
         self.suspendOnIdleAfterSeconds = suspendOnIdleAfterSeconds
     }
 
@@ -331,11 +348,15 @@ public struct VMConfiguration: Codable, Hashable {
             FrameStreamingConfiguration.self,
             forKey: .frameStreaming
         ) ?? FrameStreamingConfiguration()
+        self.extraStorage = try container.decodeIfPresent(
+            [VMExtraStorageDevice].self,
+            forKey: .extraStorage
+        ) ?? []
         self.suspendOnIdleAfterSeconds = try container.decode(TimeInterval.self, forKey: .suspendOnIdleAfterSeconds)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case resources, disk, network, frameStreaming, suspendOnIdleAfterSeconds
+        case resources, disk, network, frameStreaming, extraStorage, suspendOnIdleAfterSeconds
     }
 
     public var diskImagePath: URL {
@@ -350,6 +371,12 @@ public extension VMConfiguration {
         try disk.validate(fileManager: fileManager)
         try network.validate()
         try frameStreaming.validate()
+        
+        for device in extraStorage {
+             guard fileManager.fileExists(atPath: device.path.path) else {
+                 throw VMConfigurationValidationError.diskImageMissing(device.path)
+             }
+        }
     }
 }
 
@@ -466,6 +493,28 @@ public struct ProgramLaunchRequest: Codable, Hashable {
         self.windowsPath = windowsPath
         self.arguments = arguments
         self.workingDirectory = workingDirectory
+    }
+}
+
+public struct InstallWindowsRequest: Codable, Hashable, Sendable {
+    public let isoPath: URL
+    public let autounattendFloppyPath: URL?
+    public let diskImagePath: URL
+    public let cpuCount: Int
+    public let memorySizeGB: Int
+
+    public init(
+        isoPath: URL,
+        autounattendFloppyPath: URL? = nil,
+        diskImagePath: URL,
+        cpuCount: Int = 4,
+        memorySizeGB: Int = 8
+    ) {
+        self.isoPath = isoPath
+        self.autounattendFloppyPath = autounattendFloppyPath
+        self.diskImagePath = diskImagePath
+        self.cpuCount = cpuCount
+        self.memorySizeGB = memorySizeGB
     }
 }
 
