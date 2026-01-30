@@ -113,26 +113,38 @@ vmConfig.bootLoader = bootLoader
 
 ---
 
-### 5. No VirtIO Drivers or WinRunAgent MSI Included
+### 5. VirtIO Drivers and WinRunAgent MSI — Configuration Added
 
 **Location**: `infrastructure/windows/provision/install-drivers.ps1`, `install-agent.ps1`
 
-**Problem**: The provisioning scripts expect to find:
+**Status**: ✅ PARTIALLY FIXED - Configuration options added, but users must provide files.
+
+**Previous Problem**: The provisioning scripts expected to find:
 - VirtIO drivers at `D:\`, `E:\`, or `A:\drivers`
 - `WinRunAgent.msi` at `A:\`, `C:\WinRun\`, or `D:\`
 
-But the current provisioning flow doesn't:
-1. Mount a VirtIO driver ISO
-2. Include the WinRunAgent.msi on the floppy or anywhere accessible
+**Current Solution**:
+The provisioning configuration now supports:
+- `virtioDriversISOPath` — Path to VirtIO drivers ISO (mounted as additional CD-ROM)
+- `agentInstallerPath` — Path to WinRunAgent.msi (included in autounattend ISO)
 
-**Impact**: 
-- Without VirtIO drivers, the VM will have degraded performance (generic Windows drivers)
-- Without WinRunAgent, there's no guest-side communication — no window tracking, frame streaming, or input injection
+**Obtaining Required Files**:
 
-**Fix**: 
-1. Download and bundle VirtIO drivers ISO (from Fedora/Red Hat)
-2. Include the VirtIO ISO as a secondary CD-ROM during provisioning
-3. Build and bundle `WinRunAgent.msi` for inclusion (could go on the floppy if small enough, or a secondary ISO)
+1. **VirtIO Drivers ISO** (recommended for best performance):
+   - Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/
+   - Look for: `virtio-win-X.X.XXX.iso`
+   - Place in: `~/Library/Application Support/WinRun/virtio-win.iso`
+
+2. **WinRunAgent.msi** (required for host-guest communication):
+   - Build from `guest/WinRunAgent.Installer/` project
+   - Run on Windows: `dotnet build guest/WinRunAgent.sln`
+   - Then: `scripts/build-guest-installer.ps1`
+   - Place in: `~/Library/Application Support/WinRun/WinRunAgent.msi`
+
+**Remaining Work**:
+- Add automatic discovery of these files in standard locations
+- Consider bundling VirtIO drivers in the app (licensing review needed)
+- Add download prompts in the setup wizard for missing components
 
 ---
 

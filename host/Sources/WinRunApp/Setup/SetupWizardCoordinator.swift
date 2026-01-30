@@ -141,6 +141,48 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         return nil
     }
 
+    /// Path to VirtIO drivers ISO (optional but recommended).
+    ///
+    /// Searches in the following locations:
+    /// 1. App bundle Resources/virtio-win.iso
+    /// 2. ~/Library/Application Support/WinRun/virtio-win.iso
+    private var virtioDriversISOPath: URL? {
+        // Try app bundle first
+        if let bundlePath = Bundle.main.url(forResource: "virtio-win", withExtension: "iso") {
+            return bundlePath
+        }
+
+        // Try Application Support directory
+        let appSupportPath = DiskImageConfiguration.defaultDirectory
+            .appendingPathComponent("virtio-win.iso")
+        if FileManager.default.fileExists(atPath: appSupportPath.path) {
+            return appSupportPath
+        }
+
+        return nil
+    }
+
+    /// Path to WinRunAgent.msi installer.
+    ///
+    /// Searches in the following locations:
+    /// 1. App bundle Resources/WinRunAgent.msi
+    /// 2. ~/Library/Application Support/WinRun/WinRunAgent.msi
+    private var agentInstallerPath: URL? {
+        // Try app bundle first
+        if let bundlePath = Bundle.main.url(forResource: "WinRunAgent", withExtension: "msi") {
+            return bundlePath
+        }
+
+        // Try Application Support directory
+        let appSupportPath = DiskImageConfiguration.defaultDirectory
+            .appendingPathComponent("WinRunAgent.msi")
+        if FileManager.default.fileExists(atPath: appSupportPath.path) {
+            return appSupportPath
+        }
+
+        return nil
+    }
+
     // MARK: - Initialization
 
     public init(
@@ -330,17 +372,31 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         provisioningTask = Task { [weak self] in
             guard let self else { return }
 
-            // Log autounattend path for debugging
+            // Log configuration for debugging
             if let autounattendPath = self.autounattendPath {
                 self.logger.info("Using autounattend.xml from: \(autounattendPath.path)")
             } else {
                 self.logger.warn("No autounattend.xml found - Windows installation will require manual input")
             }
 
+            if let virtioPath = self.virtioDriversISOPath {
+                self.logger.info("Using VirtIO drivers from: \(virtioPath.path)")
+            } else {
+                self.logger.info("No VirtIO drivers ISO found - using Windows default drivers")
+            }
+
+            if let agentPath = self.agentInstallerPath {
+                self.logger.info("Using WinRunAgent from: \(agentPath.path)")
+            } else {
+                self.logger.warn("No WinRunAgent.msi found - host-guest communication will not work")
+            }
+
             let config = SetupCoordinatorConfiguration(
                 isoPath: isoPath,
                 diskImagePath: self.diskImagePath,
-                autounattendPath: self.autounattendPath
+                autounattendPath: self.autounattendPath,
+                virtioDriversISOPath: self.virtioDriversISOPath,
+                agentInstallerPath: self.agentInstallerPath
             )
 
             let result = await self.setupCoordinator.startProvisioning(with: config)

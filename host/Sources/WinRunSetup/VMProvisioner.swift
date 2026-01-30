@@ -14,6 +14,18 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
     /// Path to the autounattend.xml file for unattended installation.
     public let autounattendPath: URL?
 
+    /// Path to VirtIO drivers ISO (optional but recommended for performance).
+    ///
+    /// Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/
+    /// The `install-drivers.ps1` script will search for and install these drivers.
+    public let virtioDriversISOPath: URL?
+
+    /// Path to WinRunAgent.msi installer (required for host-guest communication).
+    ///
+    /// Built from the `guest/WinRunAgent.Installer` project.
+    /// If not provided, the agent installation will be skipped.
+    public let agentInstallerPath: URL?
+
     /// CPU cores to allocate during installation.
     public let cpuCount: Int
 
@@ -31,12 +43,16 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
         isoPath: URL,
         diskImagePath: URL,
         autounattendPath: URL? = nil,
+        virtioDriversISOPath: URL? = nil,
+        agentInstallerPath: URL? = nil,
         cpuCount: Int = ProvisioningConfiguration.defaultCPUCount,
         memorySizeGB: Int = ProvisioningConfiguration.defaultMemorySizeGB
     ) {
         self.isoPath = isoPath
         self.diskImagePath = diskImagePath
         self.autounattendPath = autounattendPath
+        self.virtioDriversISOPath = virtioDriversISOPath
+        self.agentInstallerPath = agentInstallerPath
         self.cpuCount = cpuCount
         self.memorySizeGB = memorySizeGB
     }
@@ -44,12 +60,16 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
     /// Creates a configuration using default paths.
     public static func withDefaults(
         isoPath: URL,
-        autounattendPath: URL? = nil
+        autounattendPath: URL? = nil,
+        virtioDriversISOPath: URL? = nil,
+        agentInstallerPath: URL? = nil
     ) -> ProvisioningConfiguration {
         ProvisioningConfiguration(
             isoPath: isoPath,
             diskImagePath: DiskImageConfiguration.defaultPath,
-            autounattendPath: autounattendPath
+            autounattendPath: autounattendPath,
+            virtioDriversISOPath: virtioDriversISOPath,
+            agentInstallerPath: agentInstallerPath
         )
     }
 }
@@ -142,9 +162,12 @@ public final class VMProvisioner: Sendable {
                 isBootable: true
             ))
 
+        // Create autounattend media with optional agent installer
         if let autounattendPath = configuration.autounattendPath {
-            // Create ISO image for autounattend (supports long filenames)
-            let autounattendMedia = try await createAutounattendMedia(from: autounattendPath)
+            let autounattendMedia = try await createAutounattendMedia(
+                from: autounattendPath,
+                agentInstallerPath: configuration.agentInstallerPath
+            )
 
             // Mount as secondary CD-ROM - Windows Setup will scan all removable media
             // for autounattend.xml during installation
@@ -155,6 +178,19 @@ public final class VMProvisioner: Sendable {
                     isReadOnly: true,
                     isBootable: false
                 ))
+        }
+
+        // Attach VirtIO drivers ISO if provided
+        if let virtioPath = configuration.virtioDriversISOPath {
+            if FileManager.default.fileExists(atPath: virtioPath.path) {
+                storageDevices.append(
+                    ProvisioningStorageDevice(
+                        type: .cdrom,
+                        path: virtioPath,
+                        isReadOnly: true,
+                        isBootable: false
+                    ))
+            }
         }
 
         let memorySizeBytes = UInt64(configuration.memorySizeGB) * 1024 * 1024 * 1024
@@ -314,10 +350,14 @@ public final class VMProvisioner: Sendable {
     /// This method creates an ISO image containing:
     /// - `autounattend.xml` - the unattended installation answer file
     /// - Provisioning scripts - PowerShell scripts for post-install configuration
+    /// - WinRunAgent installer (if provided) - for host-guest communication
     ///
     /// ISO is preferred over floppy because FAT12 floppies only support 8.3 filenames,
     /// which would truncate `autounattend.xml` to `AUTOUNAT.XML`, breaking Windows Setup.
-    private func createAutounattendMedia(from autounattendPath: URL) async throws -> URL {
+    private func createAutounattendMedia(
+        from autounattendPath: URL,
+        agentInstallerPath: URL? = nil
+    ) async throws -> URL {
         try validateFileExists(at: autounattendPath, description: "Autounattend.xml")
 
         // Collect provisioning scripts if available in resources
@@ -339,6 +379,12 @@ public final class VMProvisioner: Sendable {
                     }
                 }
             }
+        }
+
+        // Add agent installer if provided
+        if let agentPath = agentInstallerPath,
+           FileManager.default.fileExists(atPath: agentPath.path) {
+            provisionScripts.append(agentPath)
         }
 
         // Create ISO image with autounattend.xml and scripts (supports long filenames)
