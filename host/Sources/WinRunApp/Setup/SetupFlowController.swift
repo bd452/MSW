@@ -25,12 +25,48 @@ final class SetupFlowController {
         preflight: ProvisioningPreflightResult,
         logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupFlowController"),
         presentSetupWindow: @escaping SetupWindowPresenter = SetupFlowController.defaultSetupWindowPresenter,
-        setupCoordinatorFactory: @escaping () -> SetupCoordinator = { SetupCoordinator() }
+        setupCoordinatorFactory: @escaping () -> SetupCoordinator = { SetupFlowController.createDefaultSetupCoordinator() }
     ) {
         self.preflight = preflight
         self.logger = logger
         self.presentSetupWindow = presentSetupWindow
         self.setupCoordinatorFactory = setupCoordinatorFactory
+    }
+
+    /// Creates a SetupCoordinator with the correct resources directory for provisioning.
+    private static func createDefaultSetupCoordinator() -> SetupCoordinator {
+        // Determine resources directory for provisioning scripts
+        let resourcesDirectory = findResourcesDirectory()
+        let vmProvisioner = VMProvisioner(resourcesDirectory: resourcesDirectory)
+
+        return SetupCoordinator(vmProvisioner: vmProvisioner)
+    }
+
+    /// Finds the resources directory containing provisioning scripts.
+    private static func findResourcesDirectory() -> URL? {
+        // Try app bundle first
+        if let resourcesURL = Bundle.main.resourceURL {
+            // Check if provision directory exists in resources
+            let provisionDir = resourcesURL.appendingPathComponent("provision")
+            if FileManager.default.fileExists(atPath: provisionDir.path) {
+                return resourcesURL
+            }
+        }
+
+        // Fallback for development builds - find infrastructure/windows directory
+        // relative to the source file location
+        let developmentPath = URL(fileURLWithPath: #file)
+            .deletingLastPathComponent()  // Setup/
+            .deletingLastPathComponent()  // WinRunApp/
+            .deletingLastPathComponent()  // Sources/
+            .deletingLastPathComponent()  // host/
+            .appendingPathComponent("infrastructure/windows")
+
+        if FileManager.default.fileExists(atPath: developmentPath.path) {
+            return developmentPath
+        }
+
+        return nil
     }
 
     func routeToSetupOrNormalOperation(normalOperation: @escaping NormalOperationBlock) {

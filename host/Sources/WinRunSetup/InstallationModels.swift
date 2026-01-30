@@ -197,3 +197,24 @@ final class InstallationTaskHolder: @unchecked Sendable {
         _isRunning = false
     }
 }
+
+// MARK: - Provisioning VM Holder
+
+/// Thread-safe holder for the current provisioning VM reference.
+final class ProvisioningVMHolder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _vm: ProvisioningVirtualMachine?
+
+    var vm: ProvisioningVirtualMachine? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _vm
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _vm = newValue
+        }
+    }
+}

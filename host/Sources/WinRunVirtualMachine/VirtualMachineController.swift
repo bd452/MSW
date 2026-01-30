@@ -4,32 +4,6 @@ import WinRunShared
 import Virtualization
 #endif
 
-public enum VirtualMachineLifecycleError: Error, CustomStringConvertible {
-    case startTimeout
-    case invalidSnapshot(String)
-    case virtualizationUnavailable(String)
-    case alreadyStopped
-    case unexpectedStop(String?)
-
-    public var description: String {
-        switch self {
-        case .startTimeout:
-            return "Timed out waiting for the Windows VM to finish booting."
-        case .invalidSnapshot(let reason):
-            return "Unable to use saved VM state: \(reason)"
-        case .virtualizationUnavailable(let reason):
-            return "Virtualization.framework is unavailable: \(reason)"
-        case .alreadyStopped:
-            return "The Windows VM is already stopped."
-        case .unexpectedStop(let reason):
-            if let reason {
-                return "The Windows VM stopped unexpectedly: \(reason)"
-            }
-            return "The Windows VM stopped unexpectedly."
-        }
-    }
-}
-
 public actor VirtualMachineController {
     public private(set) var state: VMState
     private let configuration: VMConfiguration
@@ -405,13 +379,18 @@ public actor VirtualMachineController {
         let platform = VZGenericPlatformConfiguration()
         platform.machineIdentifier = VZGenericMachineIdentifier()
         vmConfig.platform = platform
-        vmConfig.bootLoader = VZEFIBootLoader()
+
+        // Configure EFI boot loader with variable store for Windows boot persistence
+        let efiVariableStore = try getOrCreateEFIVariableStore(for: configuration)
+        let bootLoader = VZEFIBootLoader()
+        bootLoader.variableStore = efiVariableStore
+        vmConfig.bootLoader = bootLoader
 
         let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
         vmConfig.storageDevices = [blockDevice]
 
-        let networkAttachment = try makeNetworkAttachment()
+        let networkAttachment = try makeNetworkDeviceAttachment(for: configuration)
         let networkDevice = VZVirtioNetworkDeviceConfiguration()
         networkDevice.attachment = networkAttachment
 
@@ -476,22 +455,5 @@ public actor VirtualMachineController {
         }
     }
 
-    @available(macOS 13, *)
-    private func makeNetworkAttachment() throws -> VZNetworkDeviceAttachment {
-        switch configuration.network.mode {
-        case .nat:
-            return VZNATNetworkDeviceAttachment()
-        case .bridged:
-            guard let identifier = configuration.network.interfaceIdentifier else {
-                throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
-            }
-            guard let interface = VZBridgedNetworkInterface.networkInterfaces.first(where: {
-                $0.identifier == identifier || $0.localizedDisplayName == identifier
-            }) else {
-                throw VMConfigurationValidationError.bridgedInterfaceUnavailable(identifier)
-            }
-            return VZBridgedNetworkDeviceAttachment(interface: interface)
-        }
-    }
 #endif
 }

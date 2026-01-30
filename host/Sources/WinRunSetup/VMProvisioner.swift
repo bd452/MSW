@@ -14,6 +14,18 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
     /// Path to the autounattend.xml file for unattended installation.
     public let autounattendPath: URL?
 
+    /// Path to VirtIO drivers ISO (optional but recommended for performance).
+    ///
+    /// Download from: https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/
+    /// The `install-drivers.ps1` script will search for and install these drivers.
+    public let virtioDriversISOPath: URL?
+
+    /// Path to WinRunAgent.msi installer (required for host-guest communication).
+    ///
+    /// Built from the `guest/WinRunAgent.Installer` project.
+    /// If not provided, the agent installation will be skipped.
+    public let agentInstallerPath: URL?
+
     /// CPU cores to allocate during installation.
     public let cpuCount: Int
 
@@ -31,12 +43,16 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
         isoPath: URL,
         diskImagePath: URL,
         autounattendPath: URL? = nil,
+        virtioDriversISOPath: URL? = nil,
+        agentInstallerPath: URL? = nil,
         cpuCount: Int = ProvisioningConfiguration.defaultCPUCount,
         memorySizeGB: Int = ProvisioningConfiguration.defaultMemorySizeGB
     ) {
         self.isoPath = isoPath
         self.diskImagePath = diskImagePath
         self.autounattendPath = autounattendPath
+        self.virtioDriversISOPath = virtioDriversISOPath
+        self.agentInstallerPath = agentInstallerPath
         self.cpuCount = cpuCount
         self.memorySizeGB = memorySizeGB
     }
@@ -44,12 +60,16 @@ public struct ProvisioningConfiguration: Equatable, Sendable {
     /// Creates a configuration using default paths.
     public static func withDefaults(
         isoPath: URL,
-        autounattendPath: URL? = nil
+        autounattendPath: URL? = nil,
+        virtioDriversISOPath: URL? = nil,
+        agentInstallerPath: URL? = nil
     ) -> ProvisioningConfiguration {
         ProvisioningConfiguration(
             isoPath: isoPath,
             diskImagePath: DiskImageConfiguration.defaultPath,
-            autounattendPath: autounattendPath
+            autounattendPath: autounattendPath,
+            virtioDriversISOPath: virtioDriversISOPath,
+            agentInstallerPath: agentInstallerPath
         )
     }
 }
@@ -109,6 +129,7 @@ public final class VMProvisioner: Sendable {
     private let resourcesDirectory: URL?
     private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()
+    private let provisioningVMHolder = ProvisioningVMHolder()
 
     public init(resourcesDirectory: URL? = nil) {
         self.resourcesDirectory = resourcesDirectory
@@ -142,15 +163,35 @@ public final class VMProvisioner: Sendable {
                 isBootable: true
             ))
 
+        // Create autounattend media with optional agent installer
         if let autounattendPath = configuration.autounattendPath {
-            let floppyImage = try await createAutounattendFloppy(from: autounattendPath)
+            let autounattendMedia = try await createAutounattendMedia(
+                from: autounattendPath,
+                agentInstallerPath: configuration.agentInstallerPath
+            )
+
+            // Mount as secondary CD-ROM - Windows Setup will scan all removable media
+            // for autounattend.xml during installation
             storageDevices.append(
                 ProvisioningStorageDevice(
-                    type: .floppy,
-                    path: floppyImage,
+                    type: .cdrom,
+                    path: autounattendMedia,
                     isReadOnly: true,
                     isBootable: false
                 ))
+        }
+
+        // Attach VirtIO drivers ISO if provided
+        if let virtioPath = configuration.virtioDriversISOPath {
+            if FileManager.default.fileExists(atPath: virtioPath.path) {
+                storageDevices.append(
+                    ProvisioningStorageDevice(
+                        type: .cdrom,
+                        path: virtioPath,
+                        isReadOnly: true,
+                        isBootable: false
+                    ))
+            }
         }
 
         let memorySizeBytes = UInt64(configuration.memorySizeGB) * 1024 * 1024 * 1024
@@ -192,6 +233,18 @@ public final class VMProvisioner: Sendable {
     // MARK: - Installation Lifecycle
 
     /// Starts the Windows installation process.
+    ///
+    /// This method:
+    /// 1. Validates the provisioning configuration
+    /// 2. Creates the VM configuration with ISO and autounattend media
+    /// 3. Boots the VM from the Windows ISO
+    /// 4. Monitors installation progress
+    /// 5. Shuts down the VM when complete
+    ///
+    /// - Parameters:
+    ///   - configuration: The provisioning configuration with ISO and disk paths
+    ///   - delegate: Optional delegate for progress updates
+    /// - Returns: The installation result
     public func startInstallation(
         configuration: ProvisioningConfiguration,
         delegate: (any InstallationDelegate)? = nil
@@ -221,7 +274,8 @@ public final class VMProvisioner: Sendable {
         }
 
         do {
-            _ = try await createProvisioningConfiguration(configuration)
+            // Create VM configuration with all storage devices
+            let vmConfiguration = try await createProvisioningConfiguration(configuration)
 
             reportProgress(
                 delegate,
@@ -235,7 +289,13 @@ public final class VMProvisioner: Sendable {
                     startTime: startTime, diskPath: configuration.diskImagePath)
             }
 
-            try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
+            // Run the actual Windows installation
+            try await runInstallationPhases(
+                configuration: configuration,
+                vmConfiguration: vmConfiguration,
+                delegate: delegate,
+                isCancelled: isCancelled
+            )
 
             let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
             let result = InstallationResult(
@@ -264,6 +324,13 @@ public final class VMProvisioner: Sendable {
     /// Cancels the current installation if one is in progress.
     public func cancelInstallation() {
         installationTask.cancel()
+
+        // Also cancel the provisioning VM if running
+        if let provisioningVM = provisioningVMHolder.vm {
+            Task {
+                await provisioningVM.cancel()
+            }
+        }
     }
 
     /// Checks if an installation is currently in progress.
@@ -279,7 +346,19 @@ public final class VMProvisioner: Sendable {
         }
     }
 
-    private func createAutounattendFloppy(from autounattendPath: URL) async throws -> URL {
+    /// Creates autounattend media (ISO preferred) for Windows unattended installation.
+    ///
+    /// This method creates an ISO image containing:
+    /// - `autounattend.xml` - the unattended installation answer file
+    /// - Provisioning scripts - PowerShell scripts for post-install configuration
+    /// - WinRunAgent installer (if provided) - for host-guest communication
+    ///
+    /// ISO is preferred over floppy because FAT12 floppies only support 8.3 filenames,
+    /// which would truncate `autounattend.xml` to `AUTOUNAT.XML`, breaking Windows Setup.
+    private func createAutounattendMedia(
+        from autounattendPath: URL,
+        agentInstallerPath: URL? = nil
+    ) async throws -> URL {
         try validateFileExists(at: autounattendPath, description: "Autounattend.xml")
 
         // Collect provisioning scripts if available in resources
@@ -303,11 +382,24 @@ public final class VMProvisioner: Sendable {
             }
         }
 
-        // Create the FAT12 floppy image with autounattend.xml and scripts
-        return try floppyImageCreator.createAutounattendFloppy(
+        // Add agent installer if provided
+        if let agentPath = agentInstallerPath,
+           FileManager.default.fileExists(atPath: agentPath.path) {
+            provisionScripts.append(agentPath)
+        }
+
+        // Create ISO image with autounattend.xml and scripts (supports long filenames)
+        return try floppyImageCreator.createAutounattendMedia(
             autounattendPath: autounattendPath,
-            provisionScripts: provisionScripts
+            provisionScripts: provisionScripts,
+            preferISO: true
         )
+    }
+
+    /// Legacy method for creating floppy image - deprecated, use createAutounattendMedia
+    @available(*, deprecated, message: "Use createAutounattendMedia instead - floppy truncates filenames")
+    private func createAutounattendFloppy(from autounattendPath: URL) async throws -> URL {
+        try await createAutounattendMedia(from: autounattendPath)
     }
 
     private func reportProgress(
@@ -326,6 +418,33 @@ public final class VMProvisioner: Sendable {
     }
 
     private func runInstallationPhases(
+        configuration: ProvisioningConfiguration,
+        vmConfiguration: ProvisioningVMConfiguration,
+        delegate: (any InstallationDelegate)?,
+        isCancelled: @Sendable () -> Bool
+    ) async throws {
+        // Create and run the provisioning VM
+        let provisioningVM = ProvisioningVirtualMachine(configuration: vmConfiguration)
+
+        // Store reference for cancellation
+        provisioningVMHolder.vm = provisioningVM
+
+        defer {
+            provisioningVMHolder.vm = nil
+        }
+
+        // Run installation with progress forwarding
+        let success = try await provisioningVM.runInstallation { [weak delegate] progress in
+            delegate?.installationDidUpdateProgress(progress)
+        }
+
+        if !success {
+            throw WinRunError.internalError(message: "Windows installation did not complete successfully")
+        }
+    }
+
+    /// Runs a simulated installation (for testing or when Virtualization is unavailable).
+    private func runSimulatedInstallationPhases(
         delegate: (any InstallationDelegate)?,
         isCancelled: @Sendable () -> Bool
     ) async throws {

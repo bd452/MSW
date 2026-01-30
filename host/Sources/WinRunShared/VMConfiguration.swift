@@ -37,18 +37,43 @@ public extension VMResources {
 public struct VMDiskConfiguration: Codable, Hashable {
     public var imagePath: URL
     public var sizeGB: Int
+    public var efiVariableStorePath: URL
 
     public init(
         imagePath: URL = VMDiskConfiguration.defaultImagePath,
-        sizeGB: Int = 64
+        sizeGB: Int = 64,
+        efiVariableStorePath: URL = VMDiskConfiguration.defaultEFIVariableStorePath
     ) {
         self.imagePath = imagePath
         self.sizeGB = sizeGB
+        self.efiVariableStorePath = efiVariableStorePath
     }
 
     public static var defaultImagePath: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/WinRun/windows.img")
+    }
+
+    /// Default path for EFI variable store (NVRAM)
+    public static var defaultEFIVariableStorePath: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/WinRun/efi_vars.nvram")
+    }
+
+    // Custom decoder to handle existing configs that don't have efiVariableStorePath
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.imagePath = try container.decode(URL.self, forKey: .imagePath)
+        self.sizeGB = try container.decode(Int.self, forKey: .sizeGB)
+        // Default to standard path if not present (backward compatibility)
+        self.efiVariableStorePath = try container.decodeIfPresent(
+            URL.self,
+            forKey: .efiVariableStorePath
+        ) ?? Self.defaultEFIVariableStorePath
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case imagePath, sizeGB, efiVariableStorePath
     }
 }
 

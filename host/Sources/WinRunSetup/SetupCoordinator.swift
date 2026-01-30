@@ -267,13 +267,7 @@ public actor SetupCoordinator {
     }
 
     private func installWindows(configuration: SetupCoordinatorConfiguration) async throws {
-        let provisionConfig = ProvisioningConfiguration(
-            isoPath: configuration.isoPath,
-            diskImagePath: configuration.diskImagePath,
-            autounattendPath: configuration.autounattendPath,
-            cpuCount: configuration.cpuCount,
-            memorySizeGB: configuration.memorySizeGB
-        )
+        let provisionConfig = configuration.toProvisioningConfiguration()
 
         // Create an adapter delegate to forward installation progress
         let progressAdapter = InstallationProgressAdapter { [weak self] progress in

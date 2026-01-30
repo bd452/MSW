@@ -213,7 +213,8 @@ final class VMProvisionerTests: XCTestCase {
         let vmConfig = try await provisioner.createProvisioningConfiguration(provConfig)
 
         XCTAssertEqual(vmConfig.storageDevices.count, 3)
-        XCTAssertEqual(vmConfig.storageDevices[2].type, .floppy)
+        // Autounattend is now created as ISO (cdrom) to avoid FAT12 8.3 filename truncation
+        XCTAssertEqual(vmConfig.storageDevices[2].type, .cdrom)
     }
 
     func testCreateProvisioningConfiguration_EnforceMinimumCPU() async throws {
