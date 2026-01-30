@@ -143,11 +143,15 @@ public final class VMProvisioner: Sendable {
             ))
 
         if let autounattendPath = configuration.autounattendPath {
-            let floppyImage = try await createAutounattendFloppy(from: autounattendPath)
+            // Create ISO image for autounattend (supports long filenames)
+            let autounattendMedia = try await createAutounattendMedia(from: autounattendPath)
+
+            // Mount as secondary CD-ROM - Windows Setup will scan all removable media
+            // for autounattend.xml during installation
             storageDevices.append(
                 ProvisioningStorageDevice(
-                    type: .floppy,
-                    path: floppyImage,
+                    type: .cdrom,
+                    path: autounattendMedia,
                     isReadOnly: true,
                     isBootable: false
                 ))
@@ -279,7 +283,15 @@ public final class VMProvisioner: Sendable {
         }
     }
 
-    private func createAutounattendFloppy(from autounattendPath: URL) async throws -> URL {
+    /// Creates autounattend media (ISO preferred) for Windows unattended installation.
+    ///
+    /// This method creates an ISO image containing:
+    /// - `autounattend.xml` - the unattended installation answer file
+    /// - Provisioning scripts - PowerShell scripts for post-install configuration
+    ///
+    /// ISO is preferred over floppy because FAT12 floppies only support 8.3 filenames,
+    /// which would truncate `autounattend.xml` to `AUTOUNAT.XML`, breaking Windows Setup.
+    private func createAutounattendMedia(from autounattendPath: URL) async throws -> URL {
         try validateFileExists(at: autounattendPath, description: "Autounattend.xml")
 
         // Collect provisioning scripts if available in resources
@@ -303,11 +315,18 @@ public final class VMProvisioner: Sendable {
             }
         }
 
-        // Create the FAT12 floppy image with autounattend.xml and scripts
-        return try floppyImageCreator.createAutounattendFloppy(
+        // Create ISO image with autounattend.xml and scripts (supports long filenames)
+        return try floppyImageCreator.createAutounattendMedia(
             autounattendPath: autounattendPath,
-            provisionScripts: provisionScripts
+            provisionScripts: provisionScripts,
+            preferISO: true
         )
+    }
+
+    /// Legacy method for creating floppy image - deprecated, use createAutounattendMedia
+    @available(*, deprecated, message: "Use createAutounattendMedia instead - floppy truncates filenames")
+    private func createAutounattendFloppy(from autounattendPath: URL) async throws -> URL {
+        try await createAutounattendMedia(from: autounattendPath)
     }
 
     private func reportProgress(

@@ -405,7 +405,10 @@ public actor VirtualMachineController {
         let platform = VZGenericPlatformConfiguration()
         platform.machineIdentifier = VZGenericMachineIdentifier()
         vmConfig.platform = platform
-        vmConfig.bootLoader = VZEFIBootLoader()
+
+        // Configure EFI boot loader with variable store for Windows boot persistence
+        let efiVariableStore = try getOrCreateEFIVariableStore()
+        vmConfig.bootLoader = VZEFIBootLoader(variableStore: efiVariableStore)
 
         let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
@@ -474,6 +477,36 @@ public actor VirtualMachineController {
                 "(size: \(frameConfig.sharedMemorySizeMB)MB, tag: \(SharedMemoryManager.virtioFSTag))"
             )
         }
+    }
+
+    /// Gets or creates the EFI variable store for Windows boot persistence.
+    ///
+    /// The EFI variable store is required for Windows ARM64 to boot correctly.
+    /// During installation, Windows Setup writes boot manager entries to NVRAM.
+    /// These entries must persist across reboots for Windows to boot from disk.
+    @available(macOS 13, *)
+    private func getOrCreateEFIVariableStore() throws -> VZEFIVariableStore {
+        let efiVarsURL = configuration.disk.efiVariableStorePath
+
+        // Create parent directory if needed
+        let parentDir = efiVarsURL.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: parentDir.path) {
+            try FileManager.default.createDirectory(
+                at: parentDir,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+        }
+
+        // Check if variable store already exists
+        if FileManager.default.fileExists(atPath: efiVarsURL.path) {
+            logger.debug("Using existing EFI variable store: \(efiVarsURL.path)")
+            return try VZEFIVariableStore(url: efiVarsURL)
+        }
+
+        // Create new variable store
+        logger.info("Creating new EFI variable store: \(efiVarsURL.path)")
+        return try VZEFIVariableStore(creatingVariableStoreAt: efiVarsURL)
     }
 
     @available(macOS 13, *)

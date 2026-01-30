@@ -1,10 +1,19 @@
 import Foundation
 import WinRunShared
 
-/// Creates FAT12-formatted floppy disk images for Windows unattended installation.
-/// Windows Setup looks for autounattend.xml on removable media including floppy drives.
+/// Creates disk images for Windows unattended installation.
+///
+/// This class supports two formats:
+/// - **ISO (preferred)**: Small ISO image with Joliet extensions for long filename support.
+///   Windows Setup finds `autounattend.xml` correctly on ISO media.
+/// - **FAT12 floppy (legacy)**: 1.44MB floppy image with 8.3 filenames only.
+///   Use only if ISO is not supported.
+///
+/// Windows Setup looks for `autounattend.xml` on removable media. The ISO format
+/// is preferred because FAT12's 8.3 filename restriction would truncate
+/// `autounattend.xml` to `AUTOUNAT.XML`, which Windows Setup doesn't recognize.
 public final class FloppyImageCreator: Sendable {
-    /// Standard 1.44MB floppy geometry
+    /// Standard 1.44MB floppy geometry (for legacy FAT12 support)
     public static let floppySize: UInt64 = 1_474_560
     private static let bytesPerSector: UInt16 = 512
     private static let sectorsPerCluster: UInt8 = 1
@@ -119,19 +128,93 @@ public final class FloppyImageCreator: Sendable {
         return outputPath
     }
 
+    /// Creates an ISO image for autounattend injection during Windows setup.
+    ///
+    /// This is the preferred method as ISO images support long filenames via Joliet
+    /// extensions, allowing Windows Setup to find `autounattend.xml` correctly.
+    ///
+    /// - Parameters:
+    ///   - autounattendPath: Path to the autounattend.xml file
+    ///   - provisionScripts: Optional paths to provisioning scripts to include
+    ///   - outputPath: Where to create the ISO image (defaults to temp directory)
+    /// - Returns: URL of the created ISO image
+    public func createAutounattendISO(
+        autounattendPath: URL,
+        provisionScripts: [URL] = [],
+        outputPath: URL? = nil
+    ) throws -> URL {
+        // Create temporary staging directory
+        let stagingDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("winrun-autounattend-\(UUID().uuidString)")
+
+        try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+
+        defer {
+            try? FileManager.default.removeItem(at: stagingDir)
+        }
+
+        // Copy autounattend.xml with correct name (Windows Setup requires this exact name)
+        let autounattendDest = stagingDir.appendingPathComponent("autounattend.xml")
+        try FileManager.default.copyItem(at: autounattendPath, to: autounattendDest)
+
+        // Copy provisioning scripts with their original names
+        for script in provisionScripts {
+            let destPath = stagingDir.appendingPathComponent(script.lastPathComponent)
+            try FileManager.default.copyItem(at: script, to: destPath)
+        }
+
+        // Create ISO using hdiutil
+        let isoPath = outputPath ?? FileManager.default.temporaryDirectory
+            .appendingPathComponent("autounattend-\(UUID().uuidString).iso")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        process.arguments = [
+            "makehybrid",
+            "-iso",
+            "-joliet",
+            "-o", isoPath.path,
+            stagingDir.path
+        ]
+
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        process.standardOutput = FileHandle.nullDevice
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            throw WinRunError.diskCreationFailed(
+                path: isoPath.path,
+                reason: "hdiutil makehybrid failed: \(errorString.trimmingCharacters(in: .whitespacesAndNewlines))"
+            )
+        }
+
+        return isoPath
+    }
+
     /// Creates a floppy image for autounattend injection during Windows setup.
+    ///
+    /// - Warning: FAT12 floppies only support 8.3 filenames. The `autounattend.xml`
+    ///   filename will be truncated to `AUTOUNAT.XML`, which Windows Setup does NOT
+    ///   recognize. Use `createAutounattendISO()` instead for proper long filename support.
+    ///
     /// - Parameters:
     ///   - autounattendPath: Path to the autounattend.xml file
     ///   - provisionScripts: Optional paths to provisioning scripts to include
     ///   - outputPath: Where to create the floppy image (defaults to temp directory)
     /// - Returns: URL of the created floppy image
+    @available(*, deprecated, message: "Use createAutounattendISO() instead - FAT12 truncates autounattend.xml to 8.3 format")
     public func createAutounattendFloppy(
         autounattendPath: URL,
         provisionScripts: [URL] = [],
         outputPath: URL? = nil
     ) throws -> URL {
         var files: [String: URL] = [
-            "AUTOUNAT.XML": autounattendPath  // 8.3 format for FAT12 compatibility
+            "AUTOUNAT.XML": autounattendPath  // 8.3 format - Windows Setup won't find this!
         ]
 
         // Add provisioning scripts if provided
@@ -144,6 +227,35 @@ public final class FloppyImageCreator: Sendable {
             .appendingPathComponent("autounattend-\(UUID().uuidString).img")
 
         return try createFloppyImage(files: files, at: destination)
+    }
+
+    /// Creates media for autounattend injection, preferring ISO format.
+    ///
+    /// This method creates an ISO image by default, which supports long filenames
+    /// and ensures Windows Setup can find `autounattend.xml`. Falls back to floppy
+    /// only if explicitly requested.
+    ///
+    /// - Parameters:
+    ///   - autounattendPath: Path to the autounattend.xml file
+    ///   - provisionScripts: Optional paths to provisioning scripts to include
+    ///   - preferISO: If true (default), creates ISO; if false, creates floppy image
+    /// - Returns: URL of the created media image
+    public func createAutounattendMedia(
+        autounattendPath: URL,
+        provisionScripts: [URL] = [],
+        preferISO: Bool = true
+    ) throws -> URL {
+        if preferISO {
+            return try createAutounattendISO(
+                autounattendPath: autounattendPath,
+                provisionScripts: provisionScripts
+            )
+        } else {
+            return try createAutounattendFloppy(
+                autounattendPath: autounattendPath,
+                provisionScripts: provisionScripts
+            )
+        }
     }
 
     // MARK: - Private Implementation

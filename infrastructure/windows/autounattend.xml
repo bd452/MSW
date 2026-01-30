@@ -164,16 +164,29 @@
                    xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <RunSynchronous>
-                <!-- Copy provisioning scripts from floppy to local disk -->
+                <!-- Create provisioning directory -->
                 <RunSynchronousCommand wcm:action="add">
                     <Order>1</Order>
                     <Path>cmd /c mkdir C:\WinRun\provision</Path>
                     <Description>Create provisioning directory</Description>
                 </RunSynchronousCommand>
+                <!-- Copy provisioning scripts from CD-ROM drives (WinRun autounattend ISO) -->
+                <!-- Try D: first (typical for secondary CD-ROM), then E: as fallback -->
                 <RunSynchronousCommand wcm:action="add">
                     <Order>2</Order>
-                    <Path>cmd /c if exist A:\*.PS1 copy A:\*.PS1 C:\WinRun\provision\</Path>
-                    <Description>Copy provisioning scripts from floppy root</Description>
+                    <Path>cmd /c if exist D:\provision.ps1 copy D:\*.ps1 C:\WinRun\provision\</Path>
+                    <Description>Copy provisioning scripts from D: drive</Description>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>3</Order>
+                    <Path>cmd /c if exist E:\provision.ps1 copy E:\*.ps1 C:\WinRun\provision\</Path>
+                    <Description>Copy provisioning scripts from E: drive (fallback)</Description>
+                </RunSynchronousCommand>
+                <!-- Also try floppy for legacy compatibility -->
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>4</Order>
+                    <Path>cmd /c if exist A:\provision.ps1 copy A:\*.ps1 C:\WinRun\provision\</Path>
+                    <Description>Copy provisioning scripts from floppy (legacy)</Description>
                 </RunSynchronousCommand>
             </RunSynchronous>
         </component>
