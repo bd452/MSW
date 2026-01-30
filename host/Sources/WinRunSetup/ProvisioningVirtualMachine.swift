@@ -93,7 +93,7 @@ public actor ProvisioningVirtualMachine {
         } catch {
             // If configuration fails (e.g., missing entitlement), fall back to simulation
             if isEntitlementError(error) {
-                logger.warning("Virtualization entitlement missing, falling back to simulation")
+                logger.warn("Virtualization entitlement missing, falling back to simulation")
                 return try await runSimulatedInstallation(progressHandler: progressHandler)
             }
             throw error
@@ -131,7 +131,7 @@ public actor ProvisioningVirtualMachine {
         } catch {
             // Fall back to simulation if entitlement is missing
             if isEntitlementError(error) {
-                logger.warning("VM start failed due to missing entitlement, falling back to simulation")
+                logger.warn("VM start failed due to missing entitlement, falling back to simulation")
                 nativeVM = nil
                 return try await runSimulatedInstallation(progressHandler: progressHandler)
             }
