@@ -1,5 +1,6 @@
 import Foundation
 import WinRunShared
+import WinRunXPC
 
 // MARK: - Provisioning Configuration
 
@@ -109,6 +110,7 @@ public final class VMProvisioner: Sendable {
     private let resourcesDirectory: URL?
     private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()
+    private let daemonClient = WinRunDaemonClient()
 
     public init(resourcesDirectory: URL? = nil) {
         self.resourcesDirectory = resourcesDirectory
@@ -221,12 +223,16 @@ public final class VMProvisioner: Sendable {
         }
 
         do {
-            _ = try await createProvisioningConfiguration(configuration)
+            // Create autounattend floppy if needed
+            var floppyPath: URL?
+            if let autounattendPath = configuration.autounattendPath {
+                floppyPath = try await createAutounattendFloppy(from: autounattendPath)
+            }
 
             reportProgress(
                 delegate,
                 phase: .booting,
-                overall: 0.05,
+                overall: 0.1,
                 message: "Starting Windows Setup from ISO..."
             )
 
@@ -235,7 +241,30 @@ public final class VMProvisioner: Sendable {
                     startTime: startTime, diskPath: configuration.diskImagePath)
             }
 
-            try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
+            // Check for VirtIO drivers ISO in resources
+            var virtioIsoPath: URL?
+            if let resources = resourcesDirectory {
+                let candidate = resources.appendingPathComponent("virtio-win.iso")
+                if FileManager.default.fileExists(atPath: candidate.path) {
+                    virtioIsoPath = candidate
+                }
+            }
+
+            // Request daemon to start installation
+            let request = InstallWindowsRequest(
+                isoPath: configuration.isoPath,
+                autounattendFloppyPath: floppyPath,
+                virtioIsoPath: virtioIsoPath,
+                diskImagePath: configuration.diskImagePath,
+                cpuCount: configuration.cpuCount,
+                memorySizeGB: configuration.memorySizeGB
+            )
+
+            _ = try await daemonClient.installWindows(request)
+
+            // VM is now running and installing Windows.
+            // We return success immediately so the coordinator can move to post-install phase
+            // and wait for the guest agent to connect.
 
             let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
             let result = InstallationResult(
@@ -247,7 +276,7 @@ public final class VMProvisioner: Sendable {
             )
 
             reportProgress(
-                delegate, phase: .complete, overall: 1.0, message: "Windows installation completed")
+                delegate, phase: .complete, overall: 1.0, message: "Windows VM started")
             delegate?.installationDidComplete(with: result)
 
             return result
@@ -325,59 +354,9 @@ public final class VMProvisioner: Sendable {
         delegate?.installationDidUpdateProgress(progress)
     }
 
-    private func runInstallationPhases(
-        delegate: (any InstallationDelegate)?,
-        isCancelled: @Sendable () -> Bool
-    ) async throws {
-        let phases: [InstallationPhaseInfo] = [
-            InstallationPhaseInfo(
-                phase: .copyingFiles, weight: 0.30, message: "Copying Windows files..."),
-            InstallationPhaseInfo(
-                phase: .installingFeatures, weight: 0.25, message: "Installing features..."),
-            InstallationPhaseInfo(
-                phase: .firstBoot, weight: 0.20, message: "Completing first-time setup..."),
-            InstallationPhaseInfo(
-                phase: .postInstall, weight: 0.20, message: "Configuring Windows..."),
-        ]
+    // MARK: - Private Helpers
 
-        var overallProgress = 0.05
-
-        for phaseInfo in phases {
-            if isCancelled() { throw WinRunError.cancelled }
-
-            try await runSinglePhase(
-                phaseInfo,
-                baseProgress: overallProgress,
-                delegate: delegate,
-                isCancelled: isCancelled
-            )
-            overallProgress += phaseInfo.weight
-        }
-    }
-
-    private func runSinglePhase(
-        _ phaseInfo: InstallationPhaseInfo,
-        baseProgress: Double,
-        delegate: (any InstallationDelegate)?,
-        isCancelled: @Sendable () -> Bool
-    ) async throws {
-        for step in 1...10 {
-            if isCancelled() { throw WinRunError.cancelled }
-
-            try await Task.sleep(nanoseconds: 10_000_000)
-
-            let phaseProgress = Double(step) / 10.0
-            let progress = InstallationProgress(
-                phase: phaseInfo.phase,
-                phaseProgress: phaseProgress,
-                overallProgress: baseProgress + (phaseInfo.weight * phaseProgress),
-                message: phaseInfo.message
-            )
-            delegate?.installationDidUpdateProgress(progress)
-        }
-    }
-
-    private func createCancelledResult(startTime: Date, diskPath: URL) -> InstallationResult {
+    private func validateFileExists(at url: URL, description: String) throws {
         InstallationResult(
             success: false,
             finalPhase: .cancelled,

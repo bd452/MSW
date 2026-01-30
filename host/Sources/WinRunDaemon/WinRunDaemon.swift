@@ -7,6 +7,7 @@ import Security
 
 @objc final class WinRunDaemonService: NSObject {
     private let vmController: VirtualMachineController
+    private let configuration: VMConfiguration
     private let logger: Logger
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -19,6 +20,7 @@ import Security
         throttlingConfig: ThrottlingConfig = .production,
         controlChannel: SpiceControlChannel? = nil
     ) {
+        self.configuration = configuration
         self.vmController = VirtualMachineController(configuration: configuration, logger: logger)
         self.logger = logger
         self.rateLimiter = RateLimiter(config: throttlingConfig, logger: logger)
@@ -98,6 +100,52 @@ import Security
             do {
                 try await checkThrottle(clientId: clientId)
                 let state = try await vmController.shutdown()
+                reply(try encode(state), nil)
+            } catch {
+                reply(nil, nsError(error))
+            }
+        }
+    }
+
+    func installWindows(clientId: String, requestData: NSData, reply: @escaping (NSData?, NSError?) -> Void) {
+        let data = Data(referencing: requestData)
+        Task { [self] in
+            do {
+                try await checkThrottle(clientId: clientId)
+                let request = try decode(InstallWindowsRequest.self, from: data)
+                
+                logger.info("Starting Windows installation with ISO: \(request.isoPath.lastPathComponent)")
+                
+                // Construct configuration overrides
+                var extraStorage: [VMExtraStorageDevice] = [
+                    // Mount ISO as USB Mass Storage for detection as removable media
+                    VMExtraStorageDevice(path: request.isoPath, isReadOnly: true, isUSBMassStorage: true)
+                ]
+                
+                if let floppy = request.autounattendFloppyPath {
+                    extraStorage.append(VMExtraStorageDevice(path: floppy, isReadOnly: true, isUSBMassStorage: true))
+                }
+                
+                if let virtioIso = request.virtioIsoPath {
+                    // Mount VirtIO drivers as extra CD-ROM (read-only block device)
+                    extraStorage.append(VMExtraStorageDevice(path: virtioIso, isReadOnly: true, isUSBMassStorage: false))
+                }
+                
+                let resources = VMResources(cpuCount: request.cpuCount, memorySizeGB: request.memorySizeGB)
+                
+                // Clone existing config but override provisioning-specific fields
+                var installConfig = configuration
+                installConfig.resources = resources
+                installConfig.disk.imagePath = request.diskImagePath
+                installConfig.extraStorage = extraStorage
+                
+                // Ensure VM is stopped so overrides take effect
+                let currentState = await vmController.currentState()
+                if currentState.status != .stopped {
+                     _ = try await vmController.shutdown()
+                }
+                
+                let state = try await vmController.start(overrides: installConfig)
                 reply(try encode(state), nil)
             } catch {
                 reply(nil, nsError(error))
