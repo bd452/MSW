@@ -140,6 +140,25 @@ public protocol InstallationDelegate: AnyObject, Sendable {
 
     /// Called when installation completes (successfully or with failure).
     func installationDidComplete(with result: InstallationResult)
+
+    /// Called when the VM is ready for display.
+    /// The vm parameter is the `VZVirtualMachine` instance (typed as Any for Sendable compatibility).
+    /// Implement this to show the VM's display in a window during installation.
+    func installationDidProvideVM(_ vm: Any)
+
+    /// Called when the VM display should be hidden.
+    func installationShouldHideVM()
+}
+
+/// Default implementations for optional delegate methods.
+public extension InstallationDelegate {
+    func installationDidProvideVM(_ vm: Any) {
+        // Default: do nothing
+    }
+
+    func installationShouldHideVM() {
+        // Default: do nothing
+    }
 }
 
 // MARK: - Installation Phase Info

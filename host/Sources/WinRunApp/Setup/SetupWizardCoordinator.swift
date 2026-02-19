@@ -73,6 +73,16 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     private var window: NSWindow?
     private var provisioningTask: Task<Void, Never>?
+    private var isManualInstallFallback = false
+    private var installationDisplayEnabled: Bool {
+        ProcessInfo.processInfo.environment["WINRUN_SHOW_INSTALLATION_VM_WINDOW"] == "1"
+    }
+    private var forceManualInstall: Bool {
+        ProcessInfo.processInfo.environment["WINRUN_FORCE_MANUAL_INSTALL"] == "1"
+    }
+    private var shouldShowInstallationDisplay: Bool {
+        installationDisplayEnabled || isManualInstallFallback
+    }
 
     // MARK: - Configuration
 
@@ -265,13 +275,63 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     // MARK: - Private: Provisioning
 
+    private let virtioDriverManager = VirtIODriverManager(
+        resourcesDirectory: Bundle.main.resourceURL
+    )
+
     private func beginProvisioning(isoPath: URL) {
         provisioningTask = Task { [weak self] in
             guard let self else { return }
+            let resourcesDirectory = ProvisioningResourceLocator.resolveResourcesDirectory()
+            let resolvedAutounattendPath = ProvisioningResourceLocator.resolveAutounattendPath(
+                resourcesDirectory: resourcesDirectory
+            )
+            let autounattendPath = self.resolveAutounattendForCurrentMode(resolvedAutounattendPath)
+            self.isManualInstallFallback = self.forceManualInstall || autounattendPath == nil
+            if autounattendPath == nil {
+                let reason = forceManualInstall ? "forced_by_env" : "autounattend_missing"
+                self.logger.warn(
+                    "Using interactive manual setup fallback",
+                    metadata: [
+                        "resourcesDirectory": .string(resourcesDirectory?.path ?? "none"),
+                        "reason": .string(reason),
+                    ]
+                )
+            } else {
+                self.logger.info(
+                    "Using autounattend.xml: \(autounattendPath?.path ?? "none")"
+                )
+            }
+
+            // First, ensure VirtIO drivers are available (download if needed)
+            let virtioPath: URL?
+            do {
+                virtioPath = try await self.virtioDriverManager.getDriversPath { progress, message in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.currentStep == .installing else { return }
+                        if let progressVC = self.window?.contentViewController as? InstallProgressViewController {
+                            // Show download progress in the UI
+                            let downloadProgress = ProvisioningProgress(
+                                phase: .validatingISO,
+                                phaseProgress: progress,
+                                overallProgress: progress * 0.05,  // Small slice of total
+                                message: message
+                            )
+                            progressVC.apply(progress: downloadProgress)
+                        }
+                    }
+                }
+                self.logger.info("VirtIO drivers available at: \(virtioPath?.path ?? "none")")
+            } catch {
+                self.logger.warn("Failed to get VirtIO drivers: \(error). Graphics may be limited.")
+                virtioPath = nil
+            }
 
             let config = SetupCoordinatorConfiguration(
                 isoPath: isoPath,
-                diskImagePath: self.diskImagePath
+                diskImagePath: self.diskImagePath,
+                autounattendPath: autounattendPath,
+                virtioDriversPath: virtioPath
             )
 
             let result = await self.setupCoordinator.startProvisioning(with: config)
@@ -280,6 +340,45 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
                 self?.handleInstallationComplete(result: result)
             }
         }
+    }
+
+    private func resolveAutounattendForCurrentMode(_ resolvedAutounattendPath: URL?) -> URL? {
+        guard forceManualInstall else { return resolvedAutounattendPath }
+        guard let resolvedAutounattendPath else { return nil }
+        do {
+            let manualPath = try createManualModeAutounattend(from: resolvedAutounattendPath)
+            logger.warn(
+                "Manual install mode enabled; using autounattend without LabConfig bypass"
+            )
+            return manualPath
+        } catch {
+            logger.warn(
+                "Failed to prepare manual-mode autounattend variant; using original file: \(error)"
+            )
+            return resolvedAutounattendPath
+        }
+    }
+
+    private func createManualModeAutounattend(from sourcePath: URL) throws -> URL {
+        let sourceContents = try String(contentsOf: sourcePath, encoding: .utf8)
+        let disabledContents = sourceContents
+            .replacingOccurrences(
+                of: "cmd /c reg add HKLM\\SYSTEM\\Setup\\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f",
+                with: "cmd /c rem WinRun manual mode: TPM bypass disabled"
+            )
+            .replacingOccurrences(
+                of: "cmd /c reg add HKLM\\SYSTEM\\Setup\\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f",
+                with: "cmd /c rem WinRun manual mode: SecureBoot bypass disabled"
+            )
+            .replacingOccurrences(
+                of: "cmd /c reg add HKLM\\SYSTEM\\Setup\\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f",
+                with: "cmd /c rem WinRun manual mode: RAM bypass disabled"
+            )
+
+        let outputPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("winrun-autounattend-manual-\(UUID().uuidString).xml")
+        try disabledContents.write(to: outputPath, atomically: true, encoding: .utf8)
+        return outputPath
     }
 
     // MARK: - Default View Controller Factory
@@ -435,6 +534,27 @@ extension SetupWizardCoordinator: ProvisioningDelegate {
     public func provisioningDidComplete(with result: ProvisioningResult) {
         Task { @MainActor [weak self] in
             self?.handleInstallationComplete(result: result)
+        }
+    }
+
+    public func provisioningDidProvideVM(_ vm: Any) {
+        guard shouldShowInstallationDisplay else {
+            logger.debug("VM display window disabled; continuing with progress UI only")
+            return
+        }
+        Task { @MainActor in
+            if self.isManualInstallFallback {
+                self.logger.info("Showing interactive installation window (manual fallback mode)")
+            } else {
+                self.logger.info("Showing installation VM display window (debug override enabled)")
+            }
+            InstallationWindow.show(for: vm)
+        }
+    }
+
+    public func provisioningShouldHideVM() {
+        Task { @MainActor in
+            InstallationWindow.close()
         }
     }
 }

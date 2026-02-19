@@ -5,7 +5,7 @@ REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 SWIFTLINT := $(shell command -v swiftlint 2>/dev/null || echo "$(REPO_ROOT)/.tools/swiftlint/swiftlint-static")
 DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
 
-.PHONY: help bootstrap build build-host build-guest test test-host test-guest \
+.PHONY: help bootstrap build build-host build-guest run-app test test-host test-guest \
         test-guest-remote test-host-remote build-host-remote check-host-remote check-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
         check-linux install-daemon uninstall-daemon \
@@ -23,6 +23,7 @@ help:
 	@echo "  build          Build both host and guest"
 	@echo "  build-host     Build macOS host components"
 	@echo "  build-guest    Build Windows guest agent"
+	@echo "  run-app        Build and run WinRunApp (GUI)"
 	@echo ""
 	@echo "Test targets:"
 	@echo "  test           Run all tests"
@@ -86,6 +87,21 @@ build: build-host build-guest
 
 build-host:
 	cd $(REPO_ROOT)/host && swift build
+	@# Sign executables with virtualization entitlement (required for Virtualization.framework)
+	@if [ -f "$(REPO_ROOT)/host/.build/debug/WinRunApp" ]; then \
+		codesign --force --sign - --entitlements $(REPO_ROOT)/host/WinRunApp.entitlements \
+			$(REPO_ROOT)/host/.build/debug/WinRunApp 2>/dev/null && \
+			echo "✅ Signed WinRunApp with virtualization entitlement"; \
+	fi
+	@if [ -f "$(REPO_ROOT)/host/.build/debug/winrund" ]; then \
+		codesign --force --sign - --entitlements $(REPO_ROOT)/host/WinRunApp.entitlements \
+			$(REPO_ROOT)/host/.build/debug/winrund 2>/dev/null && \
+			echo "✅ Signed winrund with virtualization entitlement"; \
+	fi
+
+run-app: build-host
+	@echo "🚀 Launching WinRunApp..."
+	$(REPO_ROOT)/host/.build/debug/WinRunApp
 
 build-guest:
 ifdef DOTNET_ROOT

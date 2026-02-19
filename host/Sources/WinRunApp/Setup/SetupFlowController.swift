@@ -25,12 +25,27 @@ final class SetupFlowController {
         preflight: ProvisioningPreflightResult,
         logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupFlowController"),
         presentSetupWindow: @escaping SetupWindowPresenter = SetupFlowController.defaultSetupWindowPresenter,
-        setupCoordinatorFactory: @escaping () -> SetupCoordinator = { SetupCoordinator() }
+        setupCoordinatorFactory: @escaping (_ logger: Logger) -> SetupCoordinator = { logger in
+            let resourcesDirectory = ProvisioningResourceLocator.resolveResourcesDirectory()
+            let installLogURL = LoggerFactory.defaultLogDirectory
+                .appendingPathComponent("winrun-install.log")
+            let installFileLogger = FileLogger(fileURL: installLogURL, minimumLevel: .debug)
+            let installLogger = CompositeLogger(
+                logger,
+                installFileLogger,
+                StandardLogger(subsystem: "WinRunSetup.Install", minimumLevel: .debug)
+            )
+            let provisioner = VMProvisioner(
+                resourcesDirectory: resourcesDirectory,
+                logger: installLogger
+            )
+            return SetupCoordinator(vmProvisioner: provisioner)
+        }
     ) {
         self.preflight = preflight
         self.logger = logger
         self.presentSetupWindow = presentSetupWindow
-        self.setupCoordinatorFactory = setupCoordinatorFactory
+        self.setupCoordinatorFactory = { setupCoordinatorFactory(logger) }
     }
 
     func routeToSetupOrNormalOperation(normalOperation: @escaping NormalOperationBlock) {
@@ -165,6 +180,10 @@ private final class SetupPlaceholderViewController: NSViewController {
             "No Windows VM disk image was found."
         case .diskImageIsDirectory:
             "The configured VM disk image path points to a directory."
+        case .diskImageEmpty:
+            "The disk image exists but is empty (likely from a failed setup)."
+        case .diskImageTooSmall:
+            "The disk image exists but is too small to contain a valid Windows installation."
         }
 
         let details = NSTextField(wrappingLabelWithString: """

@@ -48,28 +48,33 @@ final class VirtualMachineDelegate: NSObject, VZVirtualMachineDelegate {
 
 #if canImport(Virtualization)
 /// Provides async/await wrappers for VZVirtualMachine completion-handler APIs.
+/// Note: VZVirtualMachine methods must be called from the main queue.
 @available(macOS 13, *)
-enum NativeVirtualMachineBridge {
-    static func start(_ vm: VZVirtualMachine) async throws {
+public enum NativeVirtualMachineBridge {
+    public static func start(_ vm: VZVirtualMachine) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.start { result in
-                switch result {
-                case .success:
-                    cont.resume(returning: ())
-                case .failure(let error):
-                    cont.resume(throwing: error)
+            DispatchQueue.main.async {
+                vm.start { result in
+                    switch result {
+                    case .success:
+                        cont.resume(returning: ())
+                    case .failure(let error):
+                        cont.resume(throwing: error)
+                    }
                 }
             }
         }
     }
 
-    static func stop(_ vm: VZVirtualMachine) async throws {
+    public static func stop(_ vm: VZVirtualMachine) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.stop { error in
-                if let error {
-                    cont.resume(throwing: error)
-                } else {
-                    cont.resume(returning: ())
+            DispatchQueue.main.async {
+                vm.stop { error in
+                    if let error {
+                        cont.resume(throwing: error)
+                    } else {
+                        cont.resume(returning: ())
+                    }
                 }
             }
         }

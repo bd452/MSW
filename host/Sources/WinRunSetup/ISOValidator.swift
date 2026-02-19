@@ -222,12 +222,12 @@ public actor ISOValidator {
         return (nil, warnings)
     }
 
-    /// Parses WIM metadata using wiminfo command-line tool
+    /// Parses WIM metadata using wimlib-imagex command-line tool
     private func parseWithWiminfo(at wimPath: URL) async throws -> WindowsEditionInfo? {
-        // Check if wiminfo is available
+        // Check if wimlib-imagex is available (Homebrew installs wimlib as wimlib-imagex)
         let whichProcess = Process()
         whichProcess.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        whichProcess.arguments = ["wiminfo"]
+        whichProcess.arguments = ["wimlib-imagex"]
         let whichPipe = Pipe()
         whichProcess.standardOutput = whichPipe
         whichProcess.standardError = FileHandle.nullDevice
@@ -243,15 +243,16 @@ public actor ISOValidator {
             return nil
         }
 
-        let wiminfoBinaryData = whichPipe.fileHandleForReading.readDataToEndOfFile()
-        let wiminfoBinary =
-            String(data: wiminfoBinaryData, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "wiminfo"
+        let wimlibBinaryData = whichPipe.fileHandleForReading.readDataToEndOfFile()
+        let wimlibBinary =
+            String(data: wimlibBinaryData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "wimlib-imagex"
 
-        // Run wiminfo to get metadata
+        // Run wimlib-imagex info to get metadata
+        // Usage: wimlib-imagex info <wimfile> [image]
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: wiminfoBinary)
-        process.arguments = [wimPath.path, "1"]  // Index 1 is typically the main image
+        process.executableURL = URL(fileURLWithPath: wimlibBinary)
+        process.arguments = ["info", wimPath.path, "1"]  // Index 1 is typically the main image
 
         let outputPipe = Pipe()
         process.standardOutput = outputPipe

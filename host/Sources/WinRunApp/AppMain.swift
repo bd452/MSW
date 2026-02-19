@@ -7,22 +7,33 @@ import WinRunXPC
 @available(macOS 13, *)
 final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
     private let daemonClient = WinRunDaemonClient()
-    private let logger = StandardLogger(subsystem: "WinRunApp")
+    private let logger: Logger = CompositeLogger(
+        LoggerFactory.app(fileLogging: true, minimumLevel: .debug),
+        StandardLogger(subsystem: "WinRunApp", minimumLevel: .debug)
+    )
     private let windowController = WinRunWindowController()
     private var setupFlowController: SetupFlowController?
     private let settingsController = SettingsWindowController.shared
 
     func start(arguments: [String]) {
+        logger.info("Starting WinRun app")
+        logger.info(
+            "App logs directory: \(LoggerFactory.defaultLogDirectory.path)",
+            metadata: ["component": "startup"]
+        )
         setupMenuBar()
 
         let preflight = ProvisioningPreflight.evaluate()
-        let setupFlowController = SetupFlowController(preflight: preflight)
+        logger.debug("Provisioning preflight result: \(String(describing: preflight))")
+        let setupFlowController = SetupFlowController(preflight: preflight, logger: logger)
         self.setupFlowController = setupFlowController
         setupFlowController.routeToSetupOrNormalOperation { [self] in
             Task {
                 do {
+                    self.logger.info("Setup complete, ensuring VM is running")
                     _ = try await self.daemonClient.ensureVMRunning()
                     let executable = arguments.dropFirst().first ?? "C:/Windows/System32/notepad.exe"
+                    self.logger.info("Launching program: \(executable)")
                     let request = ProgramLaunchRequest(windowsPath: executable)
                     try await self.daemonClient.executeProgram(request)
                     self.windowController.presentWindow(title: executable)

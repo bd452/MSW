@@ -110,6 +110,12 @@ public struct SetupFailureContext: Sendable, Equatable {
     private static func defaultTechnicalDetails(for error: WinRunError) -> String {
         var parts: [String] = []
         parts.append("Error: \(error.localizedDescription)")
+
+        // Include the failure reason if it provides more detail than the localized description
+        if let reason = error.failureReason, reason != error.localizedDescription {
+            parts.append("Reason: \(reason)")
+        }
+
         parts.append("Code: \(error.errorCode)")
         parts.append("Domain: \(error.domain.rawValue)")
         return parts.joined(separator: "\n")

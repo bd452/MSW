@@ -2,12 +2,12 @@
 
 ## Script Inventory
 
-| Script | Purpose |
-|--------|---------|
-| `bootstrap.sh` | Install dependencies, prep Application Support |
-| `build-all.sh` | Orchestrate host + guest builds |
-| `package-host.sh` | (future) macOS pkg build |
-| `package-guest.ps1` | (future) Windows MSI build |
+| Script              | Purpose                                        |
+| ------------------- | ---------------------------------------------- |
+| `bootstrap.sh`      | Install dependencies, prep Application Support |
+| `build-all.sh`      | Orchestrate host + guest builds                |
+| `package-host.sh`   | (future) macOS pkg build                       |
+| `package-guest.ps1` | (future) Windows MSI build                     |
 
 ## Script Ownership (from operations.md)
 

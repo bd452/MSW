@@ -78,9 +78,33 @@ User provides ISO
 ### Phase 3: Unattended Installation
 
 The VM boots with:
-- ISO mounted as virtual CD-ROM
-- Disk attached as primary storage
+- Installer ISO attached as **USB mass storage** (EFI-removable media discovery)
+- Target disk attached as **virtio block** storage
 - `autounattend.xml` injected via virtual floppy or in ISO
+
+#### Boot Media Configuration (Documented Virtualization.framework Pattern)
+
+WinRun follows Apple's documented installer paradigm from the Virtualization sample
+"Running GUI Linux in a virtual machine on a Mac" (same EFI discovery mechanism):
+
+1. Attach installer image as `VZUSBMassStorageDeviceConfiguration` (read-only)
+2. Attach target OS disk as block storage
+3. Use `VZEFIBootLoader` + `VZEFIVariableStore`
+4. Let EFI discover bootable removable media and start installer
+
+Why this matters for WinRun:
+
+- Treating installer media as generic block devices can produce nondeterministic pre-driver boot behavior.
+- Windows ARM installation media must be surfaced as EFI-discoverable removable media for predictable boot.
+- Persisting/controlling EFI variable store is required to avoid stale boot-entry state across attempts.
+
+Implementation alignment:
+
+- `VMProvisioner` orders storage as: installer ISO first, then target disk.
+- `VMProvisionerVirtualization` maps installer-phase ISO media (Windows installer + auxiliary autounattend/VirtIO media) to `VZUSBMassStorageDeviceConfiguration`.
+- This avoids a bootstrap dependency where WinPE would need VirtIO block drivers before it can read the ISO that contains those drivers.
+- `autounattend.xml` scans multiple possible drive letters for scripts/drivers to tolerate nondeterministic removable-media assignment.
+- A shared persisted `MachineIdentifier` + `NVRAM` path is reused by both install and normal runtime boots.
 
 **Autounattend.xml responsibilities:**
 - Skip all OOBE screens

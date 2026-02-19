@@ -45,7 +45,7 @@ var targets: [Target] = [
     ),
     .target(
         name: "WinRunSetup",
-        dependencies: ["WinRunShared", "WinRunSpiceBridge"],
+        dependencies: ["WinRunShared", "WinRunSpiceBridge", "WinRunVirtualMachine"],
         path: "Sources/WinRunSetup"
     ),
     .target(

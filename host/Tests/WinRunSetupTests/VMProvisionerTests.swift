@@ -194,9 +194,11 @@ final class VMProvisionerTests: XCTestCase {
         XCTAssertEqual(vmConfig.memorySizeGB, 8)
         XCTAssertTrue(vmConfig.useEFIBoot)
         XCTAssertEqual(vmConfig.storageDevices.count, 2)
-        XCTAssertEqual(vmConfig.storageDevices[0].type, .disk)
-        XCTAssertEqual(vmConfig.storageDevices[1].type, .cdrom)
-        XCTAssertTrue(vmConfig.storageDevices[1].isBootable)
+        XCTAssertEqual(vmConfig.storageDevices[0].type, .cdrom)
+        XCTAssertTrue(vmConfig.storageDevices[0].isBootable)
+        XCTAssertEqual(vmConfig.storageDevices[1].type, .disk)
+        XCTAssertEqual(vmConfig.efiVariableStorePath, VMArtifactPaths.nvramPath(for: diskPath))
+        XCTAssertEqual(vmConfig.machineIdentifierPath, VMArtifactPaths.machineIdentifierPath(for: diskPath))
     }
 
     func testCreateProvisioningConfiguration_WithAutounattend() async throws {
@@ -212,8 +214,69 @@ final class VMProvisionerTests: XCTestCase {
 
         let vmConfig = try await provisioner.createProvisioningConfiguration(provConfig)
 
+        // Should have: Windows ISO (boot), disk, autounattend ISO (3 devices)
         XCTAssertEqual(vmConfig.storageDevices.count, 3)
-        XCTAssertEqual(vmConfig.storageDevices[2].type, .floppy)
+        XCTAssertEqual(vmConfig.storageDevices[0].type, .cdrom)
+        XCTAssertTrue(vmConfig.storageDevices[0].isBootable)  // Windows ISO boots first
+        XCTAssertEqual(vmConfig.storageDevices[1].type, .disk)
+        // Third device is the autounattend ISO (CD-ROM, not floppy)
+        XCTAssertEqual(vmConfig.storageDevices[2].type, .cdrom)
+        XCTAssertFalse(vmConfig.storageDevices[2].isBootable)  // Only Windows ISO is bootable
+    }
+
+    func testCreateProvisioningConfiguration_WithAutounattendAndVirtioDrivers() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let autounattendPath = try createTestFile(named: "autounattend.xml")
+        let virtioPath = try createTestFile(named: "virtio.iso")
+
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath,
+            autounattendPath: autounattendPath,
+            virtioDriversPath: virtioPath
+        )
+
+        let vmConfig = try await provisioner.createProvisioningConfiguration(provConfig)
+
+        // Windows ISO first (boot), then install target disk, then auxiliary media.
+        XCTAssertEqual(vmConfig.storageDevices.count, 4)
+        XCTAssertEqual(vmConfig.storageDevices[0].type, .cdrom)
+        XCTAssertTrue(vmConfig.storageDevices[0].isBootable)
+        XCTAssertEqual(vmConfig.storageDevices[0].path, isoPath)
+
+        XCTAssertEqual(vmConfig.storageDevices[1].type, .disk)
+        XCTAssertFalse(vmConfig.storageDevices[1].isBootable)
+        XCTAssertEqual(vmConfig.storageDevices[1].path, diskPath)
+
+        XCTAssertEqual(vmConfig.storageDevices[2].type, .cdrom)
+        XCTAssertFalse(vmConfig.storageDevices[2].isBootable)
+
+        XCTAssertEqual(vmConfig.storageDevices[3].type, .cdrom)
+        XCTAssertFalse(vmConfig.storageDevices[3].isBootable)
+        XCTAssertEqual(vmConfig.storageDevices[3].path, virtioPath)
+    }
+
+    func testCreateProvisioningConfiguration_ResetsPersistedIdentityArtifacts() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let nvramPath = VMArtifactPaths.nvramPath(for: diskPath)
+        let machineIdentifierPath = VMArtifactPaths.machineIdentifierPath(for: diskPath)
+
+        try Data([0x01, 0x02]).write(to: nvramPath)
+        try Data([0x03, 0x04]).write(to: machineIdentifierPath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: nvramPath.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: machineIdentifierPath.path))
+
+        _ = try await provisioner.createProvisioningConfiguration(
+            ProvisioningConfiguration(
+                isoPath: isoPath,
+                diskImagePath: diskPath
+            )
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: nvramPath.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: machineIdentifierPath.path))
     }
 
     func testCreateProvisioningConfiguration_EnforceMinimumCPU() async throws {
@@ -233,7 +296,7 @@ final class VMProvisionerTests: XCTestCase {
 
     func testCreateProvisioningConfiguration_MissingISO() async {
         let diskPath = testDirectory.appendingPathComponent("disk.img")
-        try? FileManager.default.createFile(atPath: diskPath.path, contents: Data(), attributes: nil)
+        FileManager.default.createFile(atPath: diskPath.path, contents: Data(), attributes: nil)
 
         let isoPath = testDirectory.appendingPathComponent("nonexistent.iso")
 

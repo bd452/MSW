@@ -45,7 +45,7 @@ final class SetupFlowControllerTests: XCTestCase {
         )
     }
 
-    func testProvisioningPreflight_diskImageFileExists_returnsReady() throws {
+    func testProvisioningPreflight_emptyDiskImageFile_returnsNeedsSetupDiskImageEmpty() throws {
         let tempDir = try makeTempDirectory()
         let configURL = tempDir.appendingPathComponent("config.json")
         let diskURL = tempDir.appendingPathComponent("windows.img")
@@ -59,7 +59,10 @@ final class SetupFlowControllerTests: XCTestCase {
 
         let result = ProvisioningPreflight.evaluate(configStore: store, fileManager: .default)
 
-        XCTAssertEqual(result, .ready(configuration: config))
+        XCTAssertEqual(
+            result,
+            .needsSetup(diskImagePath: diskURL, reason: .diskImageEmpty)
+        )
     }
 
     @MainActor
