@@ -403,14 +403,13 @@ public actor VirtualMachineController {
         vmConfig.memorySize = UInt64(configuration.resources.memorySizeGB) * 1024 * 1024 * 1024
 
         let platform = VZGenericPlatformConfiguration()
-        platform.machineIdentifier = VZGenericMachineIdentifier()
+        let machineIdentifierPath = VMArtifactPaths.machineIdentifierPath(for: configuration.diskImagePath)
+        platform.machineIdentifier = try createOrLoadMachineIdentifier(at: machineIdentifierPath)
         vmConfig.platform = platform
 
         // Create EFI boot loader with variable store
         let efiBootLoader = VZEFIBootLoader()
-        let nvramPath = configuration.diskImagePath
-            .deletingLastPathComponent()
-            .appendingPathComponent("nvram.bin")
+        let nvramPath = VMArtifactPaths.nvramPath(for: configuration.diskImagePath)
 
         let variableStore: VZEFIVariableStore
         if FileManager.default.fileExists(atPath: nvramPath.path) {
@@ -422,8 +421,15 @@ public actor VirtualMachineController {
         vmConfig.bootLoader = efiBootLoader
 
         let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
-        let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
-        vmConfig.storageDevices = [blockDevice]
+        if #available(macOS 14, *) {
+            let blockDevice = VZNVMExpressControllerDeviceConfiguration(attachment: blockAttachment)
+            vmConfig.storageDevices = [blockDevice]
+            logger.debug("Configured runtime storage controller: nvme")
+        } else {
+            let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
+            vmConfig.storageDevices = [blockDevice]
+            logger.debug("Configured runtime storage controller: virtio-block")
+        }
 
         let networkAttachment = try makeNetworkAttachment()
         let networkDevice = VZVirtioNetworkDeviceConfiguration()
@@ -452,6 +458,25 @@ public actor VirtualMachineController {
 
         try vmConfig.validate()
         return vmConfig
+    }
+
+    @available(macOS 13, *)
+    private func createOrLoadMachineIdentifier(at path: URL) throws -> VZGenericMachineIdentifier {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: path.path) {
+            let data = try Data(contentsOf: path)
+            if let identifier = VZGenericMachineIdentifier(dataRepresentation: data) {
+                logger.debug("Loaded VM machine identifier from \(path.path)")
+                return identifier
+            }
+            throw VMConfigurationValidationError.invalidMachineIdentifier(path)
+        }
+
+        let identifier = VZGenericMachineIdentifier()
+        try fileManager.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try identifier.dataRepresentation.write(to: path)
+        logger.debug("Created VM machine identifier at \(path.path)")
+        return identifier
     }
 
     /// Configures vsock, shared memory, and console devices for frame streaming.

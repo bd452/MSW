@@ -9,26 +9,53 @@ import Virtualization
 /// Creates and validates VM configurations for Windows provisioning.
 public final class VMProvisioner: Sendable {
     private let resourcesDirectory: URL?
+    let logger: Logger
     private let floppyImageCreator: FloppyImageCreator
     private let isoModifier: ISOModifier
     private let installationTask = InstallationTaskHolder()
 
-    public init(resourcesDirectory: URL? = nil) {
+    public init(
+        resourcesDirectory: URL? = nil,
+        logger: Logger = StandardLogger(subsystem: "WinRunSetup.VMProvisioner", minimumLevel: .debug)
+    ) {
         self.resourcesDirectory = resourcesDirectory
+        self.logger = logger
         self.floppyImageCreator = FloppyImageCreator()
-        self.isoModifier = ISOModifier()
+        self.isoModifier = ISOModifier(logger: logger)
     }
 
     // MARK: - Configuration Creation
 
+    // swiftlint:disable function_body_length
     /// Creates a VM configuration for Windows provisioning.
     public func createProvisioningConfiguration(
         _ configuration: ProvisioningConfiguration
     ) async throws -> ProvisioningVMConfiguration {
+        logger.info(
+            "Creating provisioning VM configuration",
+            metadata: [
+                "isoPath": .string(configuration.isoPath.path),
+                "diskImagePath": .string(configuration.diskImagePath.path),
+                "hasAutounattend": .bool(configuration.autounattendPath != nil),
+                "hasVirtioDrivers": .bool(configuration.virtioDriversPath != nil),
+                "cpuCount": .int(configuration.cpuCount),
+                "memoryGB": .int(configuration.memorySizeGB),
+            ]
+        )
         try validateFileExists(at: configuration.isoPath, description: "Windows ISO")
         try validateFileExists(at: configuration.diskImagePath, description: "Disk image")
 
         var storageDevices: [ProvisioningStorageDevice] = []
+
+        // Add Windows installation ISO first so EFI boots installer media,
+        // not the empty target disk.
+        storageDevices.append(
+            ProvisioningStorageDevice(
+                type: .cdrom,
+                path: configuration.isoPath,
+                isReadOnly: true,
+                isBootable: true
+            ))
 
         storageDevices.append(
             ProvisioningStorageDevice(
@@ -38,17 +65,9 @@ public final class VMProvisioner: Sendable {
                 isBootable: false
             ))
 
-        // Add Windows installation ISO as first CD-ROM (bootable)
-        storageDevices.append(
-            ProvisioningStorageDevice(
-                type: .cdrom,
-                path: configuration.isoPath,
-                isReadOnly: true,
-                isBootable: true
-            ))
-
         // Create autounattend ISO and mount as second CD-ROM if provided
         if let autounattendPath = configuration.autounattendPath {
+            logger.info("Creating autounattend media", metadata: ["autounattendPath": .string(autounattendPath.path)])
             let autounattendISO = try await createAutounattendISO(from: autounattendPath)
             storageDevices.append(
                 ProvisioningStorageDevice(
@@ -62,6 +81,7 @@ public final class VMProvisioner: Sendable {
         // Mount VirtIO drivers ISO if provided (required for graphics during installation)
         if let virtioPath = configuration.virtioDriversPath {
             try validateFileExists(at: virtioPath, description: "VirtIO drivers ISO")
+            logger.info("Mounting VirtIO drivers ISO", metadata: ["virtioPath": .string(virtioPath.path)])
             storageDevices.append(
                 ProvisioningStorageDevice(
                     type: .cdrom,
@@ -72,17 +92,35 @@ public final class VMProvisioner: Sendable {
         }
 
         let memorySizeBytes = UInt64(configuration.memorySizeGB) * 1024 * 1024 * 1024
+        let efiVariableStorePath = VMArtifactPaths.nvramPath(for: configuration.diskImagePath)
+        let machineIdentifierPath = VMArtifactPaths.machineIdentifierPath(for: configuration.diskImagePath)
+        try resetPersistedIdentityArtifacts(
+            efiVariableStorePath: efiVariableStorePath,
+            machineIdentifierPath: machineIdentifierPath
+        )
+        logger.debug(
+            "Provisioning VM storage prepared",
+            metadata: [
+                "storageDeviceCount": .int(storageDevices.count),
+                "efiVariableStorePath": .string(efiVariableStorePath.path),
+                "machineIdentifierPath": .string(machineIdentifierPath.path),
+            ]
+        )
 
         return ProvisioningVMConfiguration(
             cpuCount: max(2, configuration.cpuCount),
             memorySizeBytes: memorySizeBytes,
             storageDevices: storageDevices,
-            useEFIBoot: true
+            useEFIBoot: true,
+            efiVariableStorePath: efiVariableStorePath,
+            machineIdentifierPath: machineIdentifierPath
         )
     }
+    // swiftlint:enable function_body_length
 
     /// Validates that the provisioning configuration is ready for use.
     public func validateConfiguration(_ configuration: ProvisioningConfiguration) throws {
+        logger.debug("Validating provisioning configuration")
         try validateFileExists(at: configuration.isoPath, description: "Windows ISO")
         try validateFileExists(at: configuration.diskImagePath, description: "Disk image")
 
@@ -132,6 +170,7 @@ public final class VMProvisioner: Sendable {
 
     // MARK: - Installation Lifecycle
 
+    // swiftlint:disable function_body_length
     /// Starts the Windows installation process.
     public func startInstallation(
         configuration: ProvisioningConfiguration,
@@ -141,11 +180,20 @@ public final class VMProvisioner: Sendable {
         defer { installationTask.stop() }
 
         let startTime = Date()
+        logger.info(
+            "Starting Windows installation",
+            metadata: [
+                "diskImagePath": .string(configuration.diskImagePath.path),
+                "isoPath": .string(configuration.isoPath.path),
+                "interactiveFallback": .bool(configuration.autounattendPath == nil),
+            ]
+        )
 
         // Validate configuration early, returning error result if invalid
         do {
             try validateConfiguration(configuration)
         } catch {
+            logger.error("Installation configuration validation failed: \(error)")
             return handleInstallationError(
                 error,
                 startTime: startTime,
@@ -160,12 +208,21 @@ public final class VMProvisioner: Sendable {
             delegate, phase: .preparing, overall: 0, message: "Preparing Windows installation...")
 
         if isCancelled() {
+            logger.warn("Installation cancelled before VM configuration")
             return createCancelledResult(
                 startTime: startTime, diskPath: configuration.diskImagePath)
         }
 
         do {
             let vmConfig = try await createProvisioningConfiguration(configuration)
+            logger.debug(
+                "VM configuration created",
+                metadata: [
+                    "storageDevices": .int(vmConfig.storageDevices.count),
+                    "cpuCount": .int(vmConfig.cpuCount),
+                    "memoryGB": .int(vmConfig.memorySizeGB),
+                ]
+            )
 
             reportProgress(
                 delegate,
@@ -175,6 +232,7 @@ public final class VMProvisioner: Sendable {
             )
 
             if isCancelled() {
+                logger.warn("Installation cancelled before VM boot")
                 return createCancelledResult(
                     startTime: startTime, diskPath: configuration.diskImagePath)
             }
@@ -187,6 +245,13 @@ public final class VMProvisioner: Sendable {
             )
 
             let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
+            logger.info(
+                "Windows installation finished",
+                metadata: [
+                    "durationSeconds": .double(Date().timeIntervalSince(startTime)),
+                    "diskUsageBytes": .int(Int(diskUsage ?? 0)),
+                ]
+            )
             let result = InstallationResult(
                 success: true,
                 finalPhase: .complete,
@@ -201,6 +266,7 @@ public final class VMProvisioner: Sendable {
 
             return result
         } catch {
+            logger.error("Windows installation failed with error: \(error)")
             return handleInstallationError(
                 error,
                 startTime: startTime,
@@ -209,9 +275,11 @@ public final class VMProvisioner: Sendable {
             )
         }
     }
+    // swiftlint:enable function_body_length
 
     /// Cancels the current installation if one is in progress.
     public func cancelInstallation() {
+        logger.warn("Cancel requested for active installation task")
         installationTask.cancel()
     }
 
@@ -234,6 +302,13 @@ public final class VMProvisioner: Sendable {
 
         // Collect provisioning assets from resources directory
         let (scripts, files) = collectProvisioningAssets()
+        logger.debug(
+            "Collected provisioning assets",
+            metadata: [
+                "scriptsCount": .int(scripts.count),
+                "filesCount": .int(files.count),
+            ]
+        )
 
         // Create ISO with autounattend.xml, scripts, and additional files
         return try await isoModifier.createAutounattendISO(
@@ -249,6 +324,7 @@ public final class VMProvisioner: Sendable {
         var additionalFiles: [URL] = []
 
         guard let resources = resourcesDirectory else {
+            logger.warn("No resources directory configured; provisioning assets unavailable")
             return ([], [])
         }
 
@@ -273,7 +349,27 @@ public final class VMProvisioner: Sendable {
             additionalFiles.append(msiPath)
         }
 
+        logger.debug(
+            "Provisioning assets resolution complete",
+            metadata: [
+                "resourcesDirectory": .string(resources.path),
+                "scriptsCount": .int(provisionScripts.count),
+                "filesCount": .int(additionalFiles.count),
+            ]
+        )
         return (provisionScripts, additionalFiles)
+    }
+
+    /// Clears persisted identity artifacts before a fresh install attempt.
+    private func resetPersistedIdentityArtifacts(
+        efiVariableStorePath: URL,
+        machineIdentifierPath: URL
+    ) throws {
+        let fileManager = FileManager.default
+        for path in [efiVariableStorePath, machineIdentifierPath] where fileManager.fileExists(atPath: path.path) {
+            logger.info("Resetting persisted VM identity artifact", metadata: ["path": .string(path.path)])
+            try fileManager.removeItem(at: path)
+        }
     }
 
     /// Reports installation progress to the delegate.
@@ -334,6 +430,14 @@ public final class VMProvisioner: Sendable {
     ) -> InstallationResult {
         let winRunError =
             (error as? WinRunError) ?? WinRunError.wrap(error, context: "Installation")
+        logger.error(
+            "Installation error",
+            metadata: [
+                "durationSeconds": .double(Date().timeIntervalSince(startTime)),
+                "diskPath": .string(diskPath.path),
+                "error": .string(winRunError.localizedDescription),
+            ]
+        )
         let result = InstallationResult(
             success: false,
             finalPhase: .failed,

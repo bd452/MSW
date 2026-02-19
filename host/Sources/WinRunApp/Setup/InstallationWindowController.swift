@@ -9,6 +9,7 @@ import Virtualization
 /// Uses `VZVirtualMachineView` to provide a native view of the VM's graphics output,
 /// allowing users to see and interact with the Windows Setup GUI.
 @available(macOS 13, *)
+@MainActor
 public final class InstallationWindowController: NSObject {
     private var window: NSWindow?
     #if canImport(Virtualization)
@@ -23,6 +24,7 @@ public final class InstallationWindowController: NSObject {
         guard let virtualMachine = vm as? VZVirtualMachine else {
             return
         }
+        closeWindow()
 
         let vmView = VZVirtualMachineView()
         vmView.virtualMachine = virtualMachine
@@ -38,6 +40,7 @@ public final class InstallationWindowController: NSObject {
         )
         window.title = "Windows Installation"
         window.backgroundColor = .windowBackgroundColor
+        vmView.frame = NSRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentView = vmView
         window.center()
 
@@ -69,7 +72,8 @@ public final class InstallationWindowController: NSObject {
     /// Updates the window title with installation progress.
     @MainActor
     public func updateTitle(_ title: String) {
-        window?.title = title
+        guard let window, window.isVisible else { return }
+        window.title = title
     }
 }
 

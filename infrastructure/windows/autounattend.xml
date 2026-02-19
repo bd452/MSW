@@ -43,40 +43,126 @@
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             
             <!-- VirtIO drivers for graphics, storage, and network during setup -->
-            <!-- These are loaded from the VirtIO drivers CD-ROM (typically E: or F:) -->
+            <!-- Drive letters vary by media ordering (installer/autounattend/virtio). -->
             <!-- Required for VZVirtualMachineView display to work during installation -->
             <DriverPaths>
                 <!-- VirtIO GPU (viogpudo) - enables graphics display during setup -->
                 <PathAndCredentials wcm:action="add" wcm:keyValue="1">
-                    <Path>E:\viogpudo\w11\ARM64</Path>
+                    <Path>D:\viogpudo\w11\ARM64</Path>
                 </PathAndCredentials>
                 <PathAndCredentials wcm:action="add" wcm:keyValue="2">
-                    <Path>F:\viogpudo\w11\ARM64</Path>
+                    <Path>E:\viogpudo\w11\ARM64</Path>
                 </PathAndCredentials>
                 <PathAndCredentials wcm:action="add" wcm:keyValue="3">
+                    <Path>F:\viogpudo\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="4">
                     <Path>G:\viogpudo\w11\ARM64</Path>
                 </PathAndCredentials>
-                <!-- VirtIO Storage (viostor) - may improve disk performance -->
-                <PathAndCredentials wcm:action="add" wcm:keyValue="4">
-                    <Path>E:\viostor\w11\ARM64</Path>
-                </PathAndCredentials>
                 <PathAndCredentials wcm:action="add" wcm:keyValue="5">
-                    <Path>F:\viostor\w11\ARM64</Path>
+                    <Path>H:\viogpudo\w11\ARM64</Path>
                 </PathAndCredentials>
                 <PathAndCredentials wcm:action="add" wcm:keyValue="6">
-                    <Path>G:\viostor\w11\ARM64</Path>
+                    <Path>D:\virtio-win\viogpudo\w11\ARM64</Path>
                 </PathAndCredentials>
-                <!-- VirtIO Network (NetKVM) - enables network during setup -->
                 <PathAndCredentials wcm:action="add" wcm:keyValue="7">
-                    <Path>E:\NetKVM\w11\ARM64</Path>
+                    <Path>E:\virtio-win\viogpudo\w11\ARM64</Path>
                 </PathAndCredentials>
                 <PathAndCredentials wcm:action="add" wcm:keyValue="8">
-                    <Path>F:\NetKVM\w11\ARM64</Path>
+                    <Path>F:\virtio-win\viogpudo\w11\ARM64</Path>
                 </PathAndCredentials>
                 <PathAndCredentials wcm:action="add" wcm:keyValue="9">
+                    <Path>G:\virtio-win\viogpudo\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="10">
+                    <Path>H:\virtio-win\viogpudo\w11\ARM64</Path>
+                </PathAndCredentials>
+                <!-- VirtIO Storage (viostor) - may improve disk performance -->
+                <PathAndCredentials wcm:action="add" wcm:keyValue="11">
+                    <Path>D:\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="12">
+                    <Path>E:\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="13">
+                    <Path>F:\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="14">
+                    <Path>G:\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="15">
+                    <Path>H:\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="16">
+                    <Path>D:\virtio-win\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="17">
+                    <Path>E:\virtio-win\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="18">
+                    <Path>F:\virtio-win\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="19">
+                    <Path>G:\virtio-win\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="20">
+                    <Path>H:\virtio-win\viostor\w11\ARM64</Path>
+                </PathAndCredentials>
+                <!-- VirtIO Network (NetKVM) - enables network during setup -->
+                <PathAndCredentials wcm:action="add" wcm:keyValue="21">
+                    <Path>D:\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="22">
+                    <Path>E:\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="23">
+                    <Path>F:\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="24">
                     <Path>G:\NetKVM\w11\ARM64</Path>
                 </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="25">
+                    <Path>H:\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="26">
+                    <Path>D:\virtio-win\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="27">
+                    <Path>E:\virtio-win\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="28">
+                    <Path>F:\virtio-win\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="29">
+                    <Path>G:\virtio-win\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
+                <PathAndCredentials wcm:action="add" wcm:keyValue="30">
+                    <Path>H:\virtio-win\NetKVM\w11\ARM64</Path>
+                </PathAndCredentials>
             </DriverPaths>
+
+            <!--
+                Windows 11 setup can block before disk partitioning when TPM/Secure Boot
+                checks fail on generic virtual hardware profiles. These LabConfig keys
+                are set early in windowsPE so unattended install can continue.
+            -->
+            <RunSynchronous>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Path>cmd /c reg add HKLM\SYSTEM\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
+                    <Description>Bypass TPM requirement for setup</Description>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>2</Order>
+                    <Path>cmd /c reg add HKLM\SYSTEM\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
+                    <Description>Bypass Secure Boot requirement for setup</Description>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>3</Order>
+                    <Path>cmd /c reg add HKLM\SYSTEM\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
+                    <Description>Bypass RAM requirement guardrail</Description>
+                </RunSynchronousCommand>
+            </RunSynchronous>
             
             <!-- Disk partitioning for UEFI/GPT boot (required for ARM64) -->
             <DiskConfiguration>
@@ -131,11 +217,21 @@
             <!-- Image installation settings -->
             <ImageInstall>
                 <OSImage>
+                    <!--
+                        Retail media can contain multiple images; without InstallFrom metadata,
+                        Windows Setup may wait on hidden edition-selection UI.
+                    -->
+                    <InstallFrom>
+                        <MetaData wcm:action="add">
+                            <Key>/IMAGE/INDEX</Key>
+                            <Value>1</Value>
+                        </MetaData>
+                    </InstallFrom>
                     <InstallTo>
                         <DiskID>0</DiskID>
                         <PartitionID>3</PartitionID>
                     </InstallTo>
-                    <!-- Let Windows select the first available image index -->
+                    <!-- Prevent falling back to interactive partition selection -->
                     <InstallToAvailablePartition>false</InstallToAvailablePartition>
                 </OSImage>
             </ImageInstall>
@@ -200,8 +296,8 @@
                    xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" 
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <RunSynchronous>
-                <!-- Copy provisioning scripts and installer from CD-ROM to local disk -->
-                <!-- Windows Setup mounts the Windows ISO as D: and additional CD-ROMs as E:, F:, etc. -->
+                <!-- Copy provisioning scripts and installer from attached install media to local disk -->
+                <!-- Drive letters vary by install media ordering, so scan a wider range. -->
                 <RunSynchronousCommand wcm:action="add">
                     <Order>1</Order>
                     <Path>cmd /c mkdir C:\WinRun\provision</Path>
@@ -209,13 +305,13 @@
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>2</Order>
-                    <Path>cmd /c for %%d in (E F G H) do if exist %%d:\*.PS1 copy %%d:\*.PS1 C:\WinRun\provision\</Path>
-                    <Description>Copy provisioning scripts from CD-ROM root</Description>
+                    <Path>cmd /c for %%d in (D E F G H I J) do if exist %%d:\*.PS1 copy %%d:\*.PS1 C:\WinRun\provision\</Path>
+                    <Description>Copy provisioning scripts from install media root</Description>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>3</Order>
-                    <Path>cmd /c for %%d in (E F G H) do if exist %%d:\WinRunAgent.msi copy %%d:\WinRunAgent.msi C:\WinRun\provision\</Path>
-                    <Description>Copy WinRunAgent installer from CD-ROM root</Description>
+                    <Path>cmd /c for %%d in (D E F G H I J) do if exist %%d:\WinRunAgent.msi copy %%d:\WinRunAgent.msi C:\WinRun\provision\</Path>
+                    <Description>Copy WinRunAgent installer from install media root</Description>
                 </RunSynchronousCommand>
             </RunSynchronous>
         </component>

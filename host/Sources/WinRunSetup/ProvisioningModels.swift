@@ -93,6 +93,7 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
     public let storageDevices: [ProvisioningStorageDevice]
     public let useEFIBoot: Bool
     public let efiVariableStorePath: URL?
+    public let machineIdentifierPath: URL?
 
     public var memorySizeGB: Int {
         Int(memorySizeBytes / (1024 * 1024 * 1024))
@@ -103,12 +104,14 @@ public struct ProvisioningVMConfiguration: Equatable, Sendable {
         memorySizeBytes: UInt64,
         storageDevices: [ProvisioningStorageDevice],
         useEFIBoot: Bool = true,
-        efiVariableStorePath: URL? = nil
+        efiVariableStorePath: URL? = nil,
+        machineIdentifierPath: URL? = nil
     ) {
         self.cpuCount = cpuCount
         self.memorySizeBytes = memorySizeBytes
         self.storageDevices = storageDevices
         self.useEFIBoot = useEFIBoot
         self.efiVariableStorePath = efiVariableStorePath
+        self.machineIdentifierPath = machineIdentifierPath
     }
 }

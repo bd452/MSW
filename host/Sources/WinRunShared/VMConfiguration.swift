@@ -361,6 +361,7 @@ public enum VMConfigurationValidationError: Error, CustomStringConvertible {
     case diskDirectoryUnavailable(URL)
     case diskImageMissing(URL)
     case diskImageIsDirectory(URL)
+    case invalidMachineIdentifier(URL)
     case diskSizeTooSmall(actual: Int)
     case bridgedInterfaceNotSpecified
     case bridgedInterfaceUnavailable(String)
@@ -382,6 +383,8 @@ public enum VMConfigurationValidationError: Error, CustomStringConvertible {
             return "Disk image \(url.path) is missing. Run winrun init to provision Windows."
         case .diskImageIsDirectory(let url):
             return "Disk image path \(url.path) points to a directory, expected file."
+        case .invalidMachineIdentifier(let url):
+            return "Machine identifier at \(url.path) is invalid."
         case .diskSizeTooSmall(let actual):
             return "Configured disk size \(actual)GB is below the minimum of 32GB."
         case .bridgedInterfaceNotSpecified:
