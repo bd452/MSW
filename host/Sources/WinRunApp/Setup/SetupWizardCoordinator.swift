@@ -265,13 +265,42 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     // MARK: - Private: Provisioning
 
+    private let virtioDriverManager = VirtIODriverManager(
+        resourcesDirectory: Bundle.main.resourceURL
+    )
+
     private func beginProvisioning(isoPath: URL) {
         provisioningTask = Task { [weak self] in
             guard let self else { return }
 
+            // First, ensure VirtIO drivers are available (download if needed)
+            let virtioPath: URL?
+            do {
+                virtioPath = try await self.virtioDriverManager.getDriversPath { progress, message in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.currentStep == .installing else { return }
+                        if let progressVC = self.window?.contentViewController as? InstallProgressViewController {
+                            // Show download progress in the UI
+                            let downloadProgress = ProvisioningProgress(
+                                phase: .validatingISO,
+                                phaseProgress: progress,
+                                overallProgress: progress * 0.05,  // Small slice of total
+                                message: message
+                            )
+                            progressVC.apply(progress: downloadProgress)
+                        }
+                    }
+                }
+                self.logger.info("VirtIO drivers available at: \(virtioPath?.path ?? "none")")
+            } catch {
+                self.logger.warn("Failed to get VirtIO drivers: \(error). Installation will proceed without graphics.")
+                virtioPath = nil
+            }
+
             let config = SetupCoordinatorConfiguration(
                 isoPath: isoPath,
-                diskImagePath: self.diskImagePath
+                diskImagePath: self.diskImagePath,
+                virtioDriversPath: virtioPath
             )
 
             let result = await self.setupCoordinator.startProvisioning(with: config)
@@ -425,6 +454,8 @@ extension SetupWizardCoordinator: ProvisioningDelegate {
             if let progressVC = self.window?.contentViewController as? InstallProgressViewController {
                 progressVC.apply(progress: progress)
             }
+            // Update installation window title with progress
+            InstallationWindow.updateTitle("Windows Installation - \(Int(progress.overallProgress * 100))%")
         }
     }
 
@@ -435,6 +466,20 @@ extension SetupWizardCoordinator: ProvisioningDelegate {
     public func provisioningDidComplete(with result: ProvisioningResult) {
         Task { @MainActor [weak self] in
             self?.handleInstallationComplete(result: result)
+        }
+    }
+
+    public func provisioningDidProvideVM(_ vm: Any) {
+        // Show the VM display window - VirtIO drivers should be loaded during
+        // Windows PE phase via autounattend.xml, enabling graphics output.
+        Task { @MainActor in
+            InstallationWindow.show(for: vm)
+        }
+    }
+
+    public func provisioningShouldHideVM() {
+        Task { @MainActor in
+            InstallationWindow.close()
         }
     }
 }

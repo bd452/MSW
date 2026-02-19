@@ -16,6 +16,10 @@ public struct SetupCoordinatorConfiguration: Sendable, Equatable {
     /// Path to autounattend.xml for unattended installation.
     public let autounattendPath: URL?
 
+    /// Path to the VirtIO drivers ISO (virtio-win.iso).
+    /// Required for graphics display during Windows installation.
+    public let virtioDriversPath: URL?
+
     /// CPU cores to allocate during installation.
     public let cpuCount: Int
 
@@ -28,6 +32,7 @@ public struct SetupCoordinatorConfiguration: Sendable, Equatable {
         diskImagePath: URL = DiskImageConfiguration.defaultPath,
         diskSizeGB: UInt64 = DiskImageConfiguration.defaultSizeGB,
         autounattendPath: URL? = nil,
+        virtioDriversPath: URL? = nil,
         cpuCount: Int = ProvisioningConfiguration.defaultCPUCount,
         memorySizeGB: Int = ProvisioningConfiguration.defaultMemorySizeGB
     ) {
@@ -35,6 +40,7 @@ public struct SetupCoordinatorConfiguration: Sendable, Equatable {
         self.diskImagePath = diskImagePath
         self.diskSizeGB = diskSizeGB
         self.autounattendPath = autounattendPath
+        self.virtioDriversPath = virtioDriversPath
         self.cpuCount = cpuCount
         self.memorySizeGB = memorySizeGB
     }

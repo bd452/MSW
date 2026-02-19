@@ -212,8 +212,11 @@ final class VMProvisionerTests: XCTestCase {
 
         let vmConfig = try await provisioner.createProvisioningConfiguration(provConfig)
 
+        // Should have: disk, Windows ISO, autounattend ISO (3 devices)
         XCTAssertEqual(vmConfig.storageDevices.count, 3)
-        XCTAssertEqual(vmConfig.storageDevices[2].type, .floppy)
+        // Third device is the autounattend ISO (CD-ROM, not floppy)
+        XCTAssertEqual(vmConfig.storageDevices[2].type, .cdrom)
+        XCTAssertFalse(vmConfig.storageDevices[2].isBootable)  // Only Windows ISO is bootable
     }
 
     func testCreateProvisioningConfiguration_EnforceMinimumCPU() async throws {

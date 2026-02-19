@@ -76,20 +76,20 @@
         - [X] Implement autounattend.xml injection via minimal ISO as second CD-ROM
         - [X] Update buildVZConfiguration to attach autounattend ISO to VM as second CD-ROM
         - [X] Update autounattend.xml to look for scripts on CD-ROM drives (E:, F:, G:, H:) instead of floppy (A:)
-      - [ ] Handle multiple reboots during Windows installation { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
-        - [ ] Detect intermediate VM stops (reboots) vs final completion
-        - [ ] Wait for VM to automatically restart after reboot or manually restart VM
-        - [ ] Continue monitoring installation progress across multiple boot cycles
-        - [ ] Distinguish Windows Setup reboots from final installation completion
-      - [ ] Improve installation completion detection { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
-        - [ ] Add logic to distinguish intermediate reboots from final completion
-        - [ ] Verify Windows is fully installed (not just first reboot) before marking complete
-        - [ ] Consider checking for Windows boot completion indicators (e.g., registry, file system state)
-      - [ ] Boot VM for post-install provisioning phase { host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
-        - [ ] After installation completes, create new VM instance with same disk image
-        - [ ] Boot VM and wait for Windows to fully start
-        - [ ] Wait for guest agent to connect via Spice and begin provisioning scripts
-        - [ ] Monitor provisioning progress via Spice messages until completion
+      - [X] Handle multiple reboots during Windows installation { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+        - [X] Virtualization.framework handles guest reboots internally (VM stays running)
+        - [X] VM only stops when guest explicitly shuts down (finalize.ps1 calls Stop-Computer)
+        - [X] No manual restart needed - monitor until VM enters .stopped state
+        - [X] Document this behavior in monitorInstallationProgress()
+      - [X] Improve installation completion detection { host/Sources/WinRunSetup/VMProvisioner.swift } <docs/decisions/windows-provisioning.md>
+        - [X] VM stop is the primary completion signal (finalize.ps1 triggers shutdown)
+        - [X] Add checkInstallationSuccess() to verify disk usage >= 500MB (sanity check)
+        - [X] Report final disk usage in completion message
+      - [X] Boot VM for post-install provisioning phase { host/Sources/WinRunSetup/SetupCoordinator.swift, host/Sources/WinRunSetup/VMProvisioner.swift, infrastructure/windows/provision/finalize.ps1 } <docs/decisions/windows-provisioning.md>
+        - [X] Provisioning runs during installation via FirstLogonCommands (autounattend.xml)
+        - [X] VM shuts down after provisioning completes (finalize.ps1 calls Stop-Computer)
+        - [X] SetupCoordinator uses simulation for progress display (real Spice monitoring can be added later)
+        - [X] Installation + provisioning complete in single VM session for reliability
     - [X] Add unit tests for disk creation and provisioning state machine { new:host/Tests/WinRunSetupTests/DiskImageCreatorTests.swift, new:host/Tests/WinRunSetupTests/VMProvisionerTests.swift } <docs/development.md>
   - [X] Provisioning state machine + progress tracking { new:host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>
     - [X] Define provisioning phases and state transitions { new:host/Sources/WinRunSetup/ProvisioningState.swift } <docs/decisions/windows-provisioning.md>

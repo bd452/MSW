@@ -20,23 +20,25 @@ public actor ISOModifier {
         self.logger = logger
     }
 
-    /// Creates a small ISO containing autounattend.xml and provisioning scripts.
+    /// Creates a small ISO containing autounattend.xml, provisioning scripts, and additional files.
     ///
-    /// This creates a lightweight ISO (typically < 10MB) that can be mounted as
-    /// a second CD-ROM device alongside the Windows installation ISO. Windows Setup
-    /// will find autounattend.xml in the root of this ISO.
+    /// This creates a lightweight ISO that can be mounted as a second CD-ROM device
+    /// alongside the Windows installation ISO. Windows Setup will find autounattend.xml
+    /// in the root of this ISO.
     ///
     /// Results are cached per autounattend.xml path to avoid recreating identical ISOs.
     ///
     /// - Parameters:
     ///   - autounattendPath: Path to the autounattend.xml file
     ///   - provisionScripts: Optional array of provisioning script paths to include
+    ///   - additionalFiles: Optional array of additional file paths to include (e.g., WinRunAgent.msi)
     ///   - outputPath: Optional path for the created ISO (defaults to temp directory)
     /// - Returns: URL of the created ISO
     /// - Throws: `WinRunError` if the ISO cannot be created
     public func createAutounattendISO(
         autounattendPath: URL,
         provisionScripts: [URL] = [],
+        additionalFiles: [URL] = [],
         outputPath: URL? = nil
     ) async throws -> URL {
         // Check cache first
@@ -82,6 +84,17 @@ public actor ISOModifier {
                 let scriptDest = tempDir.appendingPathComponent(script.lastPathComponent)
                 try FileManager.default.copyItem(at: script, to: scriptDest)
                 logger?.debug("Provisioning script copied: \(script.lastPathComponent)")
+            }
+
+            // Copy additional files (e.g., WinRunAgent.msi) to root of temp directory
+            for file in additionalFiles {
+                guard FileManager.default.fileExists(atPath: file.path) else {
+                    logger?.warn("Additional file not found, skipping: \(file.path)")
+                    continue
+                }
+                let fileDest = tempDir.appendingPathComponent(file.lastPathComponent)
+                try FileManager.default.copyItem(at: file, to: fileDest)
+                logger?.debug("Additional file copied: \(file.lastPathComponent)")
             }
 
             // Create small ISO from contents

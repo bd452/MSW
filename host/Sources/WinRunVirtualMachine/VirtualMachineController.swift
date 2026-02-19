@@ -405,7 +405,21 @@ public actor VirtualMachineController {
         let platform = VZGenericPlatformConfiguration()
         platform.machineIdentifier = VZGenericMachineIdentifier()
         vmConfig.platform = platform
-        vmConfig.bootLoader = VZEFIBootLoader()
+
+        // Create EFI boot loader with variable store
+        let efiBootLoader = VZEFIBootLoader()
+        let nvramPath = configuration.diskImagePath
+            .deletingLastPathComponent()
+            .appendingPathComponent("nvram.bin")
+
+        let variableStore: VZEFIVariableStore
+        if FileManager.default.fileExists(atPath: nvramPath.path) {
+            variableStore = VZEFIVariableStore(url: nvramPath)
+        } else {
+            variableStore = try VZEFIVariableStore(creatingVariableStoreAt: nvramPath)
+        }
+        efiBootLoader.variableStore = variableStore
+        vmConfig.bootLoader = efiBootLoader
 
         let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)

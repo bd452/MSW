@@ -218,9 +218,11 @@ final class InstallationLifecycleTests: XCTestCase {
             diskImagePath: diskPath
         )
 
+        // Capture provisioner strongly to avoid race with teardown
+        let localProvisioner = provisioner!
         Task {
             try? await Task.sleep(nanoseconds: 5_000_000)
-            provisioner.cancelInstallation()
+            localProvisioner.cancelInstallation()
         }
 
         let result = try await provisioner.startInstallation(configuration: provConfig)

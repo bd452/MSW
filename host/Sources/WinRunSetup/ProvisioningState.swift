@@ -345,6 +345,24 @@ public protocol ProvisioningDelegate: AnyObject, Sendable {
     func provisioningDidUpdateProgress(_ progress: ProvisioningProgress)
     func provisioningDidChangePhase(from oldPhase: ProvisioningPhase, to newPhase: ProvisioningPhase)
     func provisioningDidComplete(with result: ProvisioningResult)
+
+    /// Called when the VM is ready for display during installation.
+    /// The vm parameter is the `VZVirtualMachine` instance (typed as Any for Sendable compatibility).
+    func provisioningDidProvideVM(_ vm: Any)
+
+    /// Called when the VM display should be hidden.
+    func provisioningShouldHideVM()
+}
+
+/// Default implementations for optional delegate methods.
+public extension ProvisioningDelegate {
+    func provisioningDidProvideVM(_ vm: Any) {
+        // Default: do nothing
+    }
+
+    func provisioningShouldHideVM() {
+        // Default: do nothing
+    }
 }
 
 // MARK: - WinRunError Extension

@@ -28,7 +28,7 @@ final class WinRunSharedTests: XCTestCase {
         XCTAssertEqual(result, .needsSetup(diskImagePath: diskURL, reason: .diskImageMissing))
     }
 
-    func testProvisioningPreflightReturnsReadyWhenDiskExists() throws {
+    func testProvisioningPreflightReturnsNeedsSetupWhenDiskIsEmpty() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -43,7 +43,7 @@ final class WinRunSharedTests: XCTestCase {
         try store.save(configuration)
 
         let result = ProvisioningPreflight.evaluate(configStore: store, fileManager: .default)
-        XCTAssertEqual(result, .ready(configuration: configuration))
+        XCTAssertEqual(result, .needsSetup(diskImagePath: diskURL, reason: .diskImageEmpty))
     }
 
     func testValidationFailsWhenDiskIsMissing() {

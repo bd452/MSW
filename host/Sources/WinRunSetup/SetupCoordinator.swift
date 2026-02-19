@@ -1,3 +1,4 @@
+// swiftlint:disable file_length type_body_length
 import Foundation
 import WinRunShared
 import WinRunSpiceBridge
@@ -249,10 +250,13 @@ public actor SetupCoordinator {
     private func createDiskImage(configuration: SetupCoordinatorConfiguration) async throws {
         updateProgress(phaseProgress: 0.3, message: "Allocating disk space...")
 
+        // Check if existing disk image is empty/invalid and should be overwritten
+        let shouldOverwrite = isExistingDiskInvalid(at: configuration.diskImagePath)
+
         let diskConfig = DiskImageConfiguration(
             destinationURL: configuration.diskImagePath,
             sizeGB: configuration.diskSizeGB,
-            overwriteExisting: false
+            overwriteExisting: shouldOverwrite
         )
 
         let result = try await diskCreator.createDiskImage(configuration: diskConfig)
@@ -271,17 +275,32 @@ public actor SetupCoordinator {
             isoPath: configuration.isoPath,
             diskImagePath: configuration.diskImagePath,
             autounattendPath: configuration.autounattendPath,
+            virtioDriversPath: configuration.virtioDriversPath,
             cpuCount: configuration.cpuCount,
             memorySizeGB: configuration.memorySizeGB
         )
 
-        // Create an adapter delegate to forward installation progress
-        let progressAdapter = InstallationProgressAdapter { [weak self] progress in
-            guard let self else { return }
-            Task {
-                await self.handleInstallationProgress(progress)
+        // Create an adapter delegate to forward installation progress and VM display
+        let progressAdapter = InstallationProgressAdapter(
+            onProgress: { [weak self] progress in
+                guard let self else { return }
+                Task {
+                    await self.handleInstallationProgress(progress)
+                }
+            },
+            onVMReady: { [weak self] vm in
+                guard let self else { return }
+                Task { @MainActor in
+                    await self.delegate?.provisioningDidProvideVM(vm)
+                }
+            },
+            onVMHide: { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in
+                    await self.delegate?.provisioningShouldHideVM()
+                }
             }
-        }
+        )
 
         let result = try await vmProvisioner.startInstallation(
             configuration: provisionConfig,
@@ -545,6 +564,31 @@ public actor SetupCoordinator {
         return UInt64(resourceValues.totalFileAllocatedSize ?? 0)
     }
 
+    /// Checks if an existing disk image is invalid and should be overwritten.
+    ///
+    /// A disk is considered invalid if:
+    /// - It's empty (0 bytes actual disk usage - sparse file with no content)
+    /// - It's too small to contain a valid Windows installation (< 2GB actual usage)
+    ///
+    /// This allows setup to recover from failed previous attempts that left behind
+    /// empty or incomplete disk images.
+    private func isExistingDiskInvalid(at url: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return false  // No existing disk, no need to overwrite
+        }
+
+        // Get actual disk usage (not apparent/sparse size)
+        guard let resourceValues = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey]),
+              let allocatedSize = resourceValues.totalFileAllocatedSize else {
+            return false  // Can't determine size, don't overwrite
+        }
+
+        // Empty or nearly empty disk is invalid
+        // A valid Windows installation uses at least several GB
+        let minimumValidSizeBytes = 2 * 1024 * 1024 * 1024  // 2GB
+        return allocatedSize < minimumValidSizeBytes
+    }
+
     // MARK: - Control Channel Message Routing
 
     /// Routes a Spice message to the appropriate handler.
@@ -592,3 +636,4 @@ public actor SetupCoordinator {
         guestMessageContinuation?.yield(.complete(message))
     }
 }
+// swiftlint:enable file_length type_body_length

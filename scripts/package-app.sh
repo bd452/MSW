@@ -158,12 +158,16 @@ copy_binaries() {
         fi
     done
 
-    # Copy main app binary (renamed to WinRun for the bundle)
-    cp "${BUILD_DIR}/WinRunApp" "${OUTPUT_DIR}/Contents/MacOS/WinRun"
-
-    # Copy daemon and CLI binaries
+    # Copy daemon first (no collision issues)
     cp "${BUILD_DIR}/winrund" "${OUTPUT_DIR}/Contents/MacOS/winrund"
-    cp "${BUILD_DIR}/winrun" "${OUTPUT_DIR}/Contents/MacOS/winrun"
+
+    # Copy CLI as "winrun-cli" to avoid case-insensitive collision with WinRun
+    # (macOS default filesystem treats WinRun and winrun as the same file)
+    cp "${BUILD_DIR}/winrun" "${OUTPUT_DIR}/Contents/MacOS/winrun-cli"
+
+    # Copy main app binary LAST (renamed to WinRun for the bundle)
+    # This must be last to avoid being overwritten by winrun on case-insensitive FS
+    cp "${BUILD_DIR}/WinRunApp" "${OUTPUT_DIR}/Contents/MacOS/WinRun"
 
     # Make all binaries executable
     chmod +x "${OUTPUT_DIR}/Contents/MacOS/"*
@@ -509,6 +513,50 @@ create_pkginfo() {
 }
 
 # =============================================================================
+# Sign bundle with entitlements
+# =============================================================================
+
+sign_bundle() {
+    log_info "Signing bundle with virtualization entitlement..."
+
+    local entitlements="${REPO_ROOT}/host/WinRunApp.entitlements"
+
+    if [[ ! -f "$entitlements" ]]; then
+        log_warn "Entitlements file not found: ${entitlements}"
+        log_warn "Creating default entitlements with virtualization support..."
+        cat > "$entitlements" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.get-task-allow</key>
+    <true/>
+    <key>com.apple.security.virtualization</key>
+    <true/>
+</dict>
+</plist>
+EOF
+    fi
+
+    # Sign each binary with the entitlements
+    for bin in WinRun winrund; do
+        if [[ -f "${OUTPUT_DIR}/Contents/MacOS/${bin}" ]]; then
+            codesign --force --sign - --entitlements "$entitlements" \
+                "${OUTPUT_DIR}/Contents/MacOS/${bin}" 2>/dev/null || {
+                log_warn "Failed to sign ${bin}"
+            }
+        fi
+    done
+
+    # Sign CLI without virtualization entitlement (doesn't need it)
+    if [[ -f "${OUTPUT_DIR}/Contents/MacOS/winrun-cli" ]]; then
+        codesign --force --sign - "${OUTPUT_DIR}/Contents/MacOS/winrun-cli" 2>/dev/null || true
+    fi
+
+    log_success "Bundle signed with virtualization entitlement"
+}
+
+# =============================================================================
 # Validate bundle
 # =============================================================================
 
@@ -523,7 +571,7 @@ validate_bundle() {
         "Contents/PkgInfo"
         "Contents/MacOS/WinRun"
         "Contents/MacOS/winrund"
-        "Contents/MacOS/winrun"
+        "Contents/MacOS/winrun-cli"
     )
 
     for file in "${required_files[@]}"; do
@@ -534,7 +582,7 @@ validate_bundle() {
     done
 
     # Check binaries are executable
-    for bin in WinRun winrund winrun; do
+    for bin in WinRun winrund winrun-cli; do
         if [[ -f "${OUTPUT_DIR}/Contents/MacOS/${bin}" ]] && [[ ! -x "${OUTPUT_DIR}/Contents/MacOS/${bin}" ]]; then
             log_error "Binary not executable: ${bin}"
             ((errors++))
@@ -603,6 +651,7 @@ main() {
     bundle_spice_libraries
     fix_library_paths
     create_pkginfo
+    sign_bundle
     validate_bundle
     print_summary
 }

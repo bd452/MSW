@@ -3,12 +3,20 @@ import WinRunShared
 
 // MARK: - Installation Progress Adapter
 
-/// Adapter to forward InstallationDelegate calls to a closure.
+/// Adapter to forward InstallationDelegate calls to closures.
 final class InstallationProgressAdapter: InstallationDelegate, @unchecked Sendable {
     private let onProgress: @Sendable (InstallationProgress) -> Void
+    private let onVMReady: (@Sendable (Any) -> Void)?
+    private let onVMHide: (@Sendable () -> Void)?
 
-    init(onProgress: @escaping @Sendable (InstallationProgress) -> Void) {
+    init(
+        onProgress: @escaping @Sendable (InstallationProgress) -> Void,
+        onVMReady: (@Sendable (Any) -> Void)? = nil,
+        onVMHide: (@Sendable () -> Void)? = nil
+    ) {
         self.onProgress = onProgress
+        self.onVMReady = onVMReady
+        self.onVMHide = onVMHide
     }
 
     func installationDidUpdateProgress(_ progress: InstallationProgress) {
@@ -17,6 +25,14 @@ final class InstallationProgressAdapter: InstallationDelegate, @unchecked Sendab
 
     func installationDidComplete(with result: InstallationResult) {
         // Completion is handled by the coordinator
+    }
+
+    func installationDidProvideVM(_ vm: Any) {
+        onVMReady?(vm)
+    }
+
+    func installationShouldHideVM() {
+        onVMHide?()
     }
 }
 
