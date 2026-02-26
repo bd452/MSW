@@ -301,7 +301,7 @@ public final class SharedFrameBufferReader {
         }
         // Use assumingMemoryBound for proper alignment - header is always at offset 0
         // which is guaranteed to be aligned by our allocation requirements
-        memoryPointer.assumingMemoryBound(to: SharedFrameBufferHeader.self).pointee
+        return memoryPointer.assumingMemoryBound(to: SharedFrameBufferHeader.self).pointee
     }
 
     /// Updates the read index after consuming a frame.
@@ -327,7 +327,7 @@ public final class SharedFrameBufferReader {
         switch layout {
         case .legacySharedRing:
             return Int(readHeader().availableFrames)
-        case .perWindowSlots(let _, let slotCount):
+        case .perWindowSlots(_, let slotCount):
             return slotCount
         }
     }
