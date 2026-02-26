@@ -1,0 +1,3 @@
+brew "spice-gtk"
+brew "pkgconf"
+brew "swiftlint"
