@@ -74,7 +74,10 @@ public static class Program
 
         var shortcutService = new ShortcutSyncService(
             logger,
-            msg => _ = outboundChannel.Writer.WriteAsync(msg));
+            msg =>
+            {
+                _ = outboundChannel.Writer.WriteAsync(msg);
+            });
 
         var agent = new WinRunAgentService(
             windowTracker,
