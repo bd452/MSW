@@ -199,8 +199,7 @@ public final class VMProvisioner: Sendable {
         delegate: (any InstallationDelegate)? = nil
     ) async throws -> InstallationResult {
         let startTime = Date()
-        installationTask.start()
-        defer { installationTask.stop() }
+        installationTask.start(); defer { installationTask.stop() }
 
         // Validate configuration early, returning error result if invalid
         do {

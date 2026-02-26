@@ -163,7 +163,6 @@ struct StreamState {
     var windowID: UInt64?
     var isUserInitiatedClose = false
     var isPaused = false
-    var hasActivatedConnection = false
 }
 
 struct SpiceStreamCloseReason: CustomStringConvertible {
