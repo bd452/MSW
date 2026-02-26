@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import WinRunShared
+import WinRunSpiceBridge
 
 /// Manages the WinRun settings/preferences window with tabbed categories.
 ///
@@ -23,6 +24,9 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     /// Logger for settings operations.
     private let logger: Logger
+
+    /// Control channel used to forward runtime settings to the guest.
+    private let controlChannel: SpiceControlChannel
 
     // MARK: - Settings Tabs
 
@@ -53,9 +57,11 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
     ///   - logger: Logger instance for diagnostics.
     public init(
         configStore: ConfigStore = ConfigStore(),
+        controlChannel: SpiceControlChannel = SpiceControlChannel(),
         logger: Logger = StandardLogger(subsystem: "WinRunApp.Settings")
     ) {
         self.configStore = configStore
+        self.controlChannel = controlChannel
         self.logger = logger
         super.init()
     }
@@ -165,10 +171,24 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
                 logger: logger
             )
             controller.onFrameBufferModeChanged = { [weak self] mode in
-                self?.logger.info("Frame buffer mode updated: \(mode.rawValue)")
-                // Future: Send mode change to guest agent via control channel
+                guard let self else { return }
+                Task {
+                    await self.applyFrameBufferModeToGuest(mode)
+                }
             }
             return controller
+        }
+    }
+
+    private func applyFrameBufferModeToGuest(_ mode: FrameBufferMode) async {
+        do {
+            if await !controlChannel.connected {
+                try await controlChannel.connect()
+            }
+            try await controlChannel.configureStreaming(frameBufferMode: mode)
+            logger.info("Frame buffer mode updated and sent to guest: \(mode.rawValue)")
+        } catch {
+            logger.warn("Failed to apply frame buffer mode \(mode.rawValue): \(error)")
         }
     }
 

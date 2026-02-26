@@ -24,7 +24,7 @@ final class InstallationLifecycleTests: XCTestCase {
             withIntermediateDirectories: true
         )
 
-        provisioner = VMProvisioner()
+        provisioner = VMProvisioner(allowSimulation: true)
     }
 
     override func tearDown() async throws {

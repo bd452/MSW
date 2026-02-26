@@ -247,6 +247,18 @@ final class MetalContentView: NSView {
         metalView.needsDisplay = true
     }
 
+    /// Update the view with a shared-memory frame from the Spice stream.
+    /// - Parameters:
+    ///   - frame: Shared frame payload (compressed or uncompressed).
+    ///   - guestScaleFactor: Scale factor reported by the guest (for DPI awareness).
+    func updateSharedFrame(_ frame: SharedFrame, guestScaleFactor: CGFloat = 1.0) {
+        let combinedScale = currentScaleFactor * guestScaleFactor
+        renderer.updateFrame(from: frame, scaleFactor: combinedScale)
+
+        expectedFrameSize = CGSize(width: CGFloat(frame.width), height: CGFloat(frame.height))
+        metalView.needsDisplay = true
+    }
+
     /// Clear the current frame
     func clearFrame() {
         renderer.clearFrame()

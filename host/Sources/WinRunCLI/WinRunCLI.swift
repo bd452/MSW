@@ -1,4 +1,5 @@
 import ArgumentParser
+import Darwin
 import Foundation
 import Dispatch
 import WinRunShared
@@ -40,6 +41,7 @@ extension WinRunCLI {
                     _ = try await client.ensureVMRunning()
                     try await client.executeProgram(request)
                     print("Launched \(executablePath)")
+                    Darwin.exit(EXIT_SUCCESS)
                 } catch {
                     WinRunCLI.exit(withError: error)
                 }
@@ -75,6 +77,7 @@ extension WinRunCLI {
                     default:
                         throw WinRunError.notSupported(feature: "vm \(actionValue)")
                     }
+                    Darwin.exit(EXIT_SUCCESS)
                 } catch {
                     WinRunCLI.exit(withError: error)
                 }
@@ -122,6 +125,7 @@ extension WinRunCLI {
                                 print("    PID: \(session.processId), Started: \(started)")
                             }
                         }
+                        Darwin.exit(EXIT_SUCCESS)
                     } catch {
                         WinRunCLI.exit(withError: error)
                     }
@@ -143,6 +147,7 @@ extension WinRunCLI {
                     do {
                         try await client.closeSession(id)
                         print("Closed session \(id)")
+                        Darwin.exit(EXIT_SUCCESS)
                     } catch {
                         WinRunCLI.exit(withError: error)
                     }
@@ -189,6 +194,7 @@ extension WinRunCLI {
                                 }
                             }
                         }
+                        Darwin.exit(EXIT_SUCCESS)
                     } catch {
                         WinRunCLI.exit(withError: error)
                     }
@@ -235,6 +241,7 @@ extension WinRunCLI {
                                 }
                             }
                         }
+                        Darwin.exit(EXIT_SUCCESS)
                     } catch {
                         WinRunCLI.exit(withError: error)
                     }
@@ -299,11 +306,17 @@ extension WinRunCLI {
         static var configuration = CommandConfiguration(abstract: "Bootstrap the WinRun environment")
 
         mutating func run() throws {
-            print("Downloading Windows image (mock)...")
-            sleep(1)
-            print("Installing guest tools (mock)...")
-            sleep(1)
-            print("WinRun initialized.")
+            Task {
+                do {
+                    let client = WinRunDaemonClient()
+                    let state = try await client.ensureVMRunning()
+                    print("WinRun initialized. VM status: \(state.status.rawValue)")
+                    Darwin.exit(EXIT_SUCCESS)
+                } catch {
+                    WinRunCLI.exit(withError: error)
+                }
+            }
+            dispatchMain()
         }
     }
 }
