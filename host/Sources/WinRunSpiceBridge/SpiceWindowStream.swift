@@ -16,6 +16,7 @@ public final class SpiceWindowStream {
     private let configuration: SpiceStreamConfiguration
     private let delegateQueue: DispatchQueue
     private let transport: SpiceStreamTransport
+    private let activateConnectionOnOpen: Bool
     private let logger: Logger
     private let stateQueue = DispatchQueue(label: "com.winrun.spice.window-stream.state")
     private var state = StreamState()
@@ -52,6 +53,7 @@ public final class SpiceWindowStream {
         self.delegateQueue = delegateQueue
         self.logger = logger
         self.reconnectPolicy = reconnectPolicy
+        self.activateConnectionOnOpen = transport != nil
         #if os(macOS)
         self.transport = transport ?? LibSpiceStreamTransport(logger: logger)
         #else
@@ -337,6 +339,9 @@ public final class SpiceWindowStream {
             state.hasActivatedConnection = false
             reconnectWorkItem = nil
             logger.info("Spice stream transport opened for window \(windowID)")
+            if activateConnectionOnOpen {
+                markConnectedIfNeeded()
+            }
         } catch let error as SpiceStreamError {
             switch error {
             case .sharedMemoryUnavailable(let description):
