@@ -1,0 +1,11 @@
+# Host build/test dependencies for test-host-remote workflow.
+# Keep this aligned with the root Brewfile for host toolchain parity.
+
+brew "spice-gtk"
+brew "pkgconf"
+brew "cmake"
+brew "ninja"
+brew "glib"
+brew "spice-protocol"
+brew "wimlib"
+brew "swiftlint"

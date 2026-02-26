@@ -49,6 +49,10 @@ typedef struct winrun_spice_stream {
     int button_state;
     // Clipboard sequence number for deduplication
     uint64_t clipboard_sequence;
+    // Last host clipboard payload cached for guest request callbacks
+    winrun_clipboard_format host_clipboard_format;
+    uint8_t *host_clipboard_data;
+    size_t host_clipboard_length;
 #if __APPLE__
     SpiceSession *session;
     SpiceInputsChannel *inputs_channel;
@@ -262,6 +266,35 @@ static void winrun_write_error(char *buffer, size_t length, const char *message)
     buffer[msg_len] = '\0';
 }
 
+static bool winrun_cache_host_clipboard(
+    winrun_spice_stream *stream,
+    const winrun_clipboard_data *clipboard
+) {
+    if (!stream || !clipboard) {
+        return false;
+    }
+
+    if (clipboard->data_length == 0) {
+        free(stream->host_clipboard_data);
+        stream->host_clipboard_data = NULL;
+        stream->host_clipboard_length = 0;
+        stream->host_clipboard_format = clipboard->format;
+        return true;
+    }
+
+    uint8_t *copy = (uint8_t *)malloc(clipboard->data_length);
+    if (!copy) {
+        return false;
+    }
+
+    memcpy(copy, clipboard->data, clipboard->data_length);
+    free(stream->host_clipboard_data);
+    stream->host_clipboard_data = copy;
+    stream->host_clipboard_length = clipboard->data_length;
+    stream->host_clipboard_format = clipboard->format;
+    return true;
+}
+
 static winrun_spice_stream *winrun_spice_stream_create(
     uint64_t window_id,
     void *user_data,
@@ -288,6 +321,9 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->control_user_data = NULL;
     stream->button_state = 0;
     stream->clipboard_sequence = 0;
+    stream->host_clipboard_format = WINRUN_CLIPBOARD_FORMAT_TEXT;
+    stream->host_clipboard_data = NULL;
+    stream->host_clipboard_length = 0;
     stream->worker_started = false;
     pthread_mutex_init(&stream->send_mutex, NULL);
     atomic_store(&stream->worker_running, true);
@@ -355,6 +391,12 @@ static void winrun_spice_stream_free(winrun_spice_stream *stream) {
         g_object_unref(stream->session);
     }
 #endif
+
+    if (stream->host_clipboard_data) {
+        free(stream->host_clipboard_data);
+        stream->host_clipboard_data = NULL;
+    }
+    stream->host_clipboard_length = 0;
 
     free(stream);
 }
@@ -790,14 +832,30 @@ static void on_clipboard_data(SpiceMainChannel *channel, guint selection,
 static void on_clipboard_request(SpiceMainChannel *channel, guint selection,
                                  guint type, gpointer user_data) {
     (void)channel;
-    (void)selection;
-    (void)type;
-    (void)user_data;
-    // This is called when guest wants clipboard data from the host.
-    // The host should respond by calling spice_main_channel_clipboard_selection_notify
-    // with the requested data. For now, we log and ignore - the Swift layer
-    // should handle this by monitoring NSPasteboard and pushing updates.
-    // TODO: Add a callback to notify Swift layer that guest wants clipboard data
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream) {
+        return;
+    }
+
+    pthread_mutex_lock(&stream->send_mutex);
+
+    SpiceMainChannel *main = stream->main_channel;
+    if (!main || !stream->host_clipboard_data || stream->host_clipboard_length == 0) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return;
+    }
+
+    guint cached_type = winrun_format_to_spice(stream->host_clipboard_format);
+    guint response_type = (type == cached_type) ? type : cached_type;
+    spice_main_channel_clipboard_selection_notify(
+        main,
+        selection,
+        response_type,
+        stream->host_clipboard_data,
+        stream->host_clipboard_length
+    );
+
+    pthread_mutex_unlock(&stream->send_mutex);
 }
 
 // Called when guest releases clipboard
@@ -844,7 +902,12 @@ bool winrun_spice_send_clipboard(
         return false;
     }
 
-    guint spice_type = winrun_format_to_spice(clipboard->format);
+    if (!winrun_cache_host_clipboard(stream, clipboard)) {
+        pthread_mutex_unlock(&stream->send_mutex);
+        return false;
+    }
+
+    guint spice_type = winrun_format_to_spice(stream->host_clipboard_format);
 
     // First, grab the clipboard to notify guest we have new content
     guint32 types[] = { spice_type };
@@ -860,8 +923,8 @@ bool winrun_spice_send_clipboard(
         main,
         VD_AGENT_CLIPBOARD_SELECTION_CLIPBOARD,
         spice_type,
-        clipboard->data,
-        clipboard->data_length
+        stream->host_clipboard_data,
+        stream->host_clipboard_length
     );
 #else
     (void)clipboard;
