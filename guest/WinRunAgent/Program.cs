@@ -5,7 +5,7 @@ namespace WinRun.Agent;
 
 public static class Program
 {
-    public static async Task Main(string[] _)
+    public static async Task Main(string[] _args)
     {
         var cancellationSource = new CancellationTokenSource();
         Console.CancelKeyPress += (_, eventArgs) =>
@@ -76,7 +76,7 @@ public static class Program
             logger,
             msg =>
             {
-                _ = outboundChannel.Writer.WriteAsync(msg);
+                outboundChannel.Writer.TryWrite(msg);
             });
 
         var agent = new WinRunAgentService(
