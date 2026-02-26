@@ -5,8 +5,9 @@ namespace WinRun.Agent;
 
 public static class Program
 {
-    public static async Task Main(string[] _)
+    public static async Task Main(string[] args)
     {
+        _ = args;
         var cancellationSource = new CancellationTokenSource();
         Console.CancelKeyPress += (_, eventArgs) =>
         {
