@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Darwin
 import WinRunShared
 import WinRunSpiceBridge
 
@@ -17,7 +18,12 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     private let renderer: SpiceFrameRenderer
     private var metalContentView: MetalContentView?
     private let stream: SpiceWindowStream
+    private let controlChannel: SpiceControlChannel
+    private let frameRouter: SpiceFrameRouter
     private let logger: Logger
+    private var currentWindowID: UInt64 = 0
+    private var sharedMemoryRegion: MappedSharedMemoryRegion?
+    private var isTearingDown = false
 
     /// Current metadata from the Spice stream
     private var currentMetadata: WindowMetadata?
@@ -26,16 +32,23 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     private let clipboardManager: ClipboardManager
 
     override init() {
-        self.logger = StandardLogger(subsystem: "WinRunWindowController")
-        self.stream = SpiceWindowStream(configuration: SpiceStreamConfiguration.environmentDefault())
+        let logger = StandardLogger(subsystem: "WinRunWindowController")
+        let streamConfiguration = SpiceStreamConfiguration.environmentDefault()
+        self.logger = logger
+        self.stream = SpiceWindowStream(configuration: streamConfiguration)
+        self.controlChannel = SpiceControlChannel(configuration: streamConfiguration, logger: logger)
+        self.frameRouter = SpiceFrameRouter(logger: logger)
         self.renderer = SpiceFrameRenderer()
         self.clipboardManager = ClipboardManager()
         super.init()
         stream.delegate = self
         clipboardManager.delegate = self
+        controlChannel.delegate = frameRouter
     }
 
-    func presentWindow(title: String) {
+    func presentWindow(title: String, windowID: UInt64 = 0) {
+        currentWindowID = windowID
+        isTearingDown = false
         let contentRect = NSRect(x: 100, y: 100, width: 800, height: 600)
         let window = NSWindow(
             contentRect: contentRect,
@@ -50,6 +63,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         // Create Metal content view for GPU-accelerated frame rendering
         let metalView = MetalContentView(frame: contentRect, renderer: renderer)
         metalView.inputDelegate = self
+        metalView.windowID = windowID
         window.contentView = metalView
         self.metalContentView = metalView
 
@@ -64,8 +78,15 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         // Start clipboard monitoring
         clipboardManager.startMonitoring()
 
-        logger.info("Window created with Metal rendering layer and input forwarding")
-        stream.connect(toWindowID: 0)
+        // Route FrameReady notifications for this stream and attach shared memory if available.
+        frameRouter.registerStream(stream, forWindowID: windowID)
+        configureSharedMemoryRoutingIfNeeded()
+        Task { [weak self] in
+            await self?.connectControlChannelIfNeeded()
+        }
+
+        logger.info("Window created with Metal rendering layer and input forwarding (windowID=\(windowID))")
+        stream.connect(toWindowID: windowID)
     }
 
     // MARK: - MetalContentViewInputDelegate
@@ -152,14 +173,23 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         }
     }
 
+    func windowStream(_ stream: SpiceWindowStream, didReceiveSharedFrame frame: SharedFrame) {
+        guard let metalView = metalContentView else { return }
+        let scaleFactor = currentMetadata?.scaleFactor ?? 1.0
+        metalView.updateFrame(sharedFrame: frame, guestScaleFactor: scaleFactor)
+    }
+
     func windowStream(_ stream: SpiceWindowStream, didChangeState state: SpiceConnectionState) {
         logger.debug("Spice stream state changed: \(state)")
+        if sharedMemoryRegion == nil {
+            configureSharedMemoryRoutingIfNeeded()
+        }
         metalContentView?.updateConnectionState(state)
     }
 
     func windowStreamDidClose(_ stream: SpiceWindowStream) {
         logger.info("Spice stream closed, closing window")
-        clipboardManager.stopMonitoring()
+        tearDownConnections()
         window?.close()
         metalContentView?.clearFrame()
     }
@@ -175,9 +205,10 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
 @available(macOS 13, *)
 extension WinRunWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        // Disconnect the stream when window is closed by user
-        clipboardManager.stopMonitoring()
-        stream.disconnect()
+        if !isTearingDown {
+            stream.disconnect()
+        }
+        tearDownConnections()
     }
 
     func windowDidChangeBackingProperties(_ notification: Notification) {
@@ -225,5 +256,127 @@ extension WinRunWindowController: ClipboardManagerDelegate {
     func clipboardManager(_ manager: ClipboardManager, didDetectHostClipboardChange clipboard: ClipboardData) {
         // Send host clipboard to Windows guest
         stream.sendClipboard(clipboard)
+    }
+}
+
+@available(macOS 13, *)
+private extension WinRunWindowController {
+    func connectControlChannelIfNeeded() async {
+        do {
+            if await !controlChannel.connected {
+                try await controlChannel.connect()
+                logger.info("Connected Spice control channel for frame routing")
+            }
+        } catch {
+            logger.error("Failed to connect Spice control channel: \(error)")
+        }
+    }
+
+    func configureSharedMemoryRoutingIfNeeded() {
+        if let region = sharedMemoryRegion {
+            frameRouter.setSharedMemoryRegion(basePointer: region.pointer, size: region.size)
+            return
+        }
+
+        let candidatePaths = sharedMemoryPathCandidates()
+        var mapped: MappedSharedMemoryRegion?
+
+        for candidate in candidatePaths {
+            if let region = MappedSharedMemoryRegion.open(fileURL: candidate, logger: logger) {
+                mapped = region
+                break
+            }
+        }
+
+        guard let region = mapped else {
+            logger.warn("Shared frame buffer file not available (checked \(candidatePaths.count) paths)")
+            return
+        }
+
+        sharedMemoryRegion = region
+        frameRouter.setSharedMemoryRegion(basePointer: region.pointer, size: region.size)
+        logger.info("Attached shared frame buffer at \(region.fileURL.path): \(region.size / 1024 / 1024) MB")
+    }
+
+    func tearDownConnections() {
+        guard !isTearingDown else { return }
+        isTearingDown = true
+
+        clipboardManager.stopMonitoring()
+        frameRouter.unregisterStream(forWindowID: currentWindowID)
+        frameRouter.clearSharedMemoryRegion()
+        sharedMemoryRegion = nil
+        currentMetadata = nil
+
+        Task { [controlChannel] in
+            await controlChannel.disconnect()
+        }
+    }
+
+    func sharedMemoryPathCandidates() -> [URL] {
+        var paths: [URL] = []
+
+        if let explicitPath = ProcessInfo.processInfo.environment["WINRUN_FRAMEBUFFER_PATH"],
+           !explicitPath.isEmpty {
+            paths.append(URL(fileURLWithPath: explicitPath))
+        }
+
+        let userDefault = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/WinRun/SharedMemory/framebuffer.shm")
+        paths.append(userDefault)
+
+        // Some launchd configurations run the daemon as root.
+        // In that case the shared-memory file is created under /var/root.
+        let rootDefault = URL(fileURLWithPath: "/var/root/Library/Application Support/WinRun/SharedMemory/framebuffer.shm")
+        if rootDefault.path != userDefault.path {
+            paths.append(rootDefault)
+        }
+
+        return paths
+    }
+}
+
+/// Represents a memory-mapped shared frame buffer file in the host process.
+private final class MappedSharedMemoryRegion {
+    let fileURL: URL
+    let pointer: UnsafeMutableRawPointer
+    let size: Int
+    private let fileDescriptor: Int32
+
+    private init(fileURL: URL, pointer: UnsafeMutableRawPointer, size: Int, fileDescriptor: Int32) {
+        self.fileURL = fileURL
+        self.pointer = pointer
+        self.size = size
+        self.fileDescriptor = fileDescriptor
+    }
+
+    deinit {
+        munmap(pointer, size)
+        close(fileDescriptor)
+    }
+
+    static func open(fileURL: URL, logger: Logger) -> MappedSharedMemoryRegion? {
+        let fd = Darwin.open(fileURL.path, O_RDWR)
+        guard fd >= 0 else { return nil }
+
+        var fileStat = stat()
+        guard fstat(fd, &fileStat) == 0, fileStat.st_size > 0 else {
+            close(fd)
+            return nil
+        }
+
+        let size = Int(fileStat.st_size)
+        guard let mapped = mmap(nil, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0), mapped != MAP_FAILED else {
+            logger.error("Failed to map shared frame buffer at \(fileURL.path)")
+            close(fd)
+            return nil
+        }
+
+        return MappedSharedMemoryRegion(
+            fileURL: fileURL,
+            pointer: mapped,
+            size: size,
+            fileDescriptor: fd
+        )
     }
 }

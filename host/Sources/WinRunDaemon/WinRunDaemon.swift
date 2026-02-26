@@ -60,7 +60,19 @@ import Security
                 try await checkThrottle(clientId: clientId)
                 let request = try decode(ProgramLaunchRequest.self, from: data)
                 _ = try await vmController.ensureRunning()
-                logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
+
+                // Ensure control channel is connected to the guest agent.
+                if await !controlChannel.connected {
+                    try await controlChannel.connect()
+                }
+
+                // Forward the launch request to the guest agent.
+                try await controlChannel.launchProgram(
+                    path: request.windowsPath,
+                    arguments: request.arguments,
+                    workingDirectory: request.workingDirectory
+                )
+                logger.info("Launched \(request.windowsPath) with args \(request.arguments)")
                 await vmController.registerSession(delta: 1)
                 reply(nil)
             } catch {
