@@ -219,12 +219,23 @@ public struct SharedFrame {
     }
 }
 
+/// Layout strategy for shared frame buffers.
+///
+/// `legacySharedRing` matches the original protocol where a shared header tracks
+/// write/read indices. `perWindowSlots` matches the guest's per-window buffers
+/// where slot selection comes from `FrameReadyMessage.slotIndex`.
+public enum SharedFrameBufferLayout {
+    case legacySharedRing
+    case perWindowSlots(slotSize: Int, slotCount: Int)
+}
+
 /// Host-side reader for the shared frame buffer.
 /// Reads frames written by the guest agent.
 public final class SharedFrameBufferReader {
     private let memoryPointer: UnsafeMutableRawPointer
     private let memorySize: Int
     private let ownsMemory: Bool
+    private let layout: SharedFrameBufferLayout
     private let logger: Logger
 
     /// Creates a reader with an existing memory region.
@@ -232,16 +243,19 @@ public final class SharedFrameBufferReader {
     ///   - pointer: Pointer to the shared memory region
     ///   - size: Size of the memory region in bytes
     ///   - ownsMemory: Whether this reader should deallocate memory on deinit
+    ///   - layout: Memory layout for frame slot parsing
     ///   - logger: Logger for diagnostics
     public init(
         pointer: UnsafeMutableRawPointer,
         size: Int,
         ownsMemory: Bool = false,
+        layout: SharedFrameBufferLayout = .legacySharedRing,
         logger: Logger = StandardLogger(subsystem: "SharedFrameBuffer")
     ) {
         self.memoryPointer = pointer
         self.memorySize = size
         self.ownsMemory = ownsMemory
+        self.layout = layout
         self.logger = logger
     }
 
@@ -253,6 +267,13 @@ public final class SharedFrameBufferReader {
 
     /// Validates the shared memory buffer header.
     public func validate() throws {
+        if case .perWindowSlots(let slotSize, let slotCount) = layout {
+            guard slotSize > FrameSlotHeader.size, slotCount > 0 else {
+                throw SharedFrameBufferError.slotIndexOutOfBounds
+            }
+            return
+        }
+
         guard memorySize >= SharedFrameBufferHeader.size else {
             throw SharedFrameBufferError.bufferTooSmall(
                 required: SharedFrameBufferHeader.size,
@@ -275,9 +296,12 @@ public final class SharedFrameBufferReader {
 
     /// Reads the buffer header.
     public func readHeader() -> SharedFrameBufferHeader {
+        guard case .legacySharedRing = layout else {
+            return SharedFrameBufferHeader()
+        }
         // Use assumingMemoryBound for proper alignment - header is always at offset 0
         // which is guaranteed to be aligned by our allocation requirements
-        memoryPointer.assumingMemoryBound(to: SharedFrameBufferHeader.self).pointee
+        return memoryPointer.assumingMemoryBound(to: SharedFrameBufferHeader.self).pointee
     }
 
     /// Updates the read index after consuming a frame.
@@ -290,17 +314,54 @@ public final class SharedFrameBufferReader {
 
     /// Whether frames are available to read.
     public var hasFrames: Bool {
-        readHeader().hasFrames
+        switch layout {
+        case .legacySharedRing:
+            return readHeader().hasFrames
+        case .perWindowSlots:
+            return true
+        }
     }
 
     /// Number of frames available to read.
     public var availableFrameCount: Int {
-        Int(readHeader().availableFrames)
+        switch layout {
+        case .legacySharedRing:
+            return Int(readHeader().availableFrames)
+        case .perWindowSlots(_, let slotCount):
+            return slotCount
+        }
     }
 
     /// Reads the next available frame from the buffer.
     /// - Returns: The frame data, or nil if no frames available
     public func readNextFrame() throws -> SharedFrame? {
+        switch layout {
+        case .legacySharedRing:
+            return try readFromLegacyRing()
+        case .perWindowSlots:
+            logger.warn("readNextFrame is unsupported for per-window buffers; use readFrame(atSlotIndex:)")
+            return nil
+        }
+    }
+
+    /// Reads a frame from a specific slot index.
+    /// - Parameter slotIndex: Slot index from `FrameReadyMessage.slotIndex`
+    /// - Returns: The frame data, or nil if slot index is invalid
+    public func readFrame(atSlotIndex slotIndex: UInt32) throws -> SharedFrame? {
+        switch layout {
+        case .legacySharedRing:
+            return try readNextFrame()
+        case .perWindowSlots(let slotSize, let slotCount):
+            guard Int(slotIndex) < slotCount else {
+                logger.warn("Frame slot index \(slotIndex) out of bounds (slotCount=\(slotCount))")
+                return nil
+            }
+            let slotOffset = Int(slotIndex) * slotSize
+            return try readFrame(atSlotOffset: slotOffset)
+        }
+    }
+
+    private func readFromLegacyRing() throws -> SharedFrame? {
         let header = readHeader()
 
         guard header.hasFrames else {
@@ -314,6 +375,31 @@ public final class SharedFrameBufferReader {
 
         // Calculate slot offset
         let slotOffset = SharedFrameBufferHeader.size + Int(slotIndex) * Int(header.slotSize)
+        guard slotOffset + FrameSlotHeader.size <= memorySize else {
+            throw SharedFrameBufferError.slotIndexOutOfBounds
+        }
+
+        let frame = try readFrame(atSlotOffset: slotOffset)
+
+        // Advance read pointer
+        advanceReadIndex()
+
+        return frame
+    }
+
+    /// Signals that the host is actively reading.
+    public func setHostActive(_ active: Bool) {
+        let headerPtr = memoryPointer.assumingMemoryBound(to: SharedFrameBufferHeader.self)
+        var flags = SharedFrameBufferFlags(rawValue: headerPtr.pointee.flags)
+        if active {
+            flags.insert(.hostActive)
+        } else {
+            flags.remove(.hostActive)
+        }
+        headerPtr.pointee.flags = flags.rawValue
+    }
+
+    private func readFrame(atSlotOffset slotOffset: Int) throws -> SharedFrame {
         guard slotOffset + FrameSlotHeader.size <= memorySize else {
             throw SharedFrameBufferError.slotIndexOutOfBounds
         }
@@ -339,7 +425,12 @@ public final class SharedFrameBufferReader {
         let slotFlags = FrameSlotFlags(rawValue: slotHeader.flags)
         let format = SpicePixelFormat(rawValue: UInt8(truncatingIfNeeded: slotHeader.format)) ?? .bgra32
 
-        let frame = SharedFrame(
+        logger.debug(
+            "Read frame \(slotHeader.frameNumber) for window \(slotHeader.windowId): " +
+                "\(slotHeader.width)x\(slotHeader.height)"
+        )
+
+        return SharedFrame(
             windowId: slotHeader.windowId,
             frameNumber: slotHeader.frameNumber,
             width: Int(slotHeader.width),
@@ -349,25 +440,6 @@ public final class SharedFrameBufferReader {
             data: data,
             isCompressed: slotFlags.contains(.compressed)
         )
-
-        // Advance read pointer
-        advanceReadIndex()
-
-        logger.debug("Read frame \(slotHeader.frameNumber) for window \(slotHeader.windowId): \(slotHeader.width)x\(slotHeader.height)")
-
-        return frame
-    }
-
-    /// Signals that the host is actively reading.
-    public func setHostActive(_ active: Bool) {
-        let headerPtr = memoryPointer.assumingMemoryBound(to: SharedFrameBufferHeader.self)
-        var flags = SharedFrameBufferFlags(rawValue: headerPtr.pointee.flags)
-        if active {
-            flags.insert(.hostActive)
-        } else {
-            flags.remove(.hostActive)
-        }
-        headerPtr.pointee.flags = flags.rawValue
     }
 
     /// Loads a FrameSlotHeader from a potentially unaligned pointer.

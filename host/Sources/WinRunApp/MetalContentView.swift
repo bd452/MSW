@@ -247,6 +247,18 @@ final class MetalContentView: NSView {
         metalView.needsDisplay = true
     }
 
+    /// Update the view with a frame received from shared memory.
+    /// - Parameters:
+    ///   - sharedFrame: Frame payload and metadata from shared memory
+    ///   - guestScaleFactor: Scale factor reported by the guest
+    func updateFrame(sharedFrame: SharedFrame, guestScaleFactor: CGFloat = 1.0) {
+        let combinedScale = currentScaleFactor * guestScaleFactor
+        renderer.updateFrame(from: sharedFrame, scaleFactor: combinedScale)
+
+        expectedFrameSize = CGSize(width: CGFloat(sharedFrame.width), height: CGFloat(sharedFrame.height))
+        metalView.needsDisplay = true
+    }
+
     /// Clear the current frame
     func clearFrame() {
         renderer.clearFrame()

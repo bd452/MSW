@@ -133,12 +133,14 @@ public final class SpiceFrameRouter {
 
         // Calculate the host pointer for this buffer
         let bufferPointer = basePointer.advanced(by: offset)
+        let layout = detectBufferLayout(pointer: bufferPointer, info: info)
 
         // Create the reader for this per-window buffer
         let reader = SharedFrameBufferReader(
             pointer: bufferPointer,
             size: info.bufferSize,
             ownsMemory: false, // Shared memory region owns the memory
+            layout: layout,
             logger: logger
         )
 
@@ -155,6 +157,29 @@ public final class SpiceFrameRouter {
             stream.setFrameBufferReader(reader)
             logger.debug("Attached buffer reader to stream for window \(windowId)")
         }
+    }
+
+    private func detectBufferLayout(pointer: UnsafeMutableRawPointer, info: WindowBufferInfo) -> SharedFrameBufferLayout {
+        guard info.bufferSize >= SharedFrameBufferHeader.size else {
+            return .perWindowSlots(slotSize: info.slotSize, slotCount: info.slotCount)
+        }
+
+        let magic = loadUInt32(from: pointer, at: 0)
+        let version = loadUInt32(from: pointer, at: MemoryLayout<UInt32>.size)
+        if magic == SharedFrameBufferMagic, version == SharedFrameBufferVersion {
+            logger.debug("Detected legacy shared-ring frame buffer layout")
+            return .legacySharedRing
+        }
+
+        return .perWindowSlots(slotSize: info.slotSize, slotCount: info.slotCount)
+    }
+
+    private func loadUInt32(from pointer: UnsafeRawPointer, at offset: Int) -> UInt32 {
+        var value: UInt32 = 0
+        withUnsafeMutableBytes(of: &value) { destination in
+            destination.copyBytes(from: UnsafeRawBufferPointer(start: pointer.advanced(by: offset), count: 4))
+        }
+        return value
     }
 
     /// Gets buffer info for a specific window.

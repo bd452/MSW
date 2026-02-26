@@ -191,6 +191,11 @@ public actor VirtualMachineController {
         state.status = .starting
         logger.info(resumeFromSnapshot ? "Resuming Windows VM from snapshot" : "Booting Windows VM")
 
+        // Shared-memory frame transport requires a concrete backing file before the VM starts.
+        if configuration.frameStreaming.sharedMemoryEnabled {
+            _ = try initializeSharedMemory()
+        }
+
 #if canImport(Virtualization)
         if #available(macOS 13, *) {
             do {
@@ -458,7 +463,7 @@ public actor VirtualMachineController {
             // VZVirtioConsoleDeviceConfiguration has a default port at index 0
             // Configure it for our Spice control channel using index access
             if let port = consoleDevice.ports[0] {
-                port.name = "com.winrun.spice"
+                port.name = "com.winrun.control"
                 port.isConsole = false
             }
             vmConfig.consoleDevices = [consoleDevice]
