@@ -42,6 +42,7 @@ final class SpiceFrameRendererCompressionTests: XCTestCase {
     private func compressLZ4(_ data: Data) throws -> Data {
         let compressionBound = data.count + (data.count / 255) + 32
         var compressed = Data(count: max(compressionBound, 64))
+        let destinationCapacity = compressed.count
 
         let compressedSize = compressed.withUnsafeMutableBytes { destinationBuffer -> Int in
             guard let destination = destinationBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
@@ -54,7 +55,7 @@ final class SpiceFrameRendererCompressionTests: XCTestCase {
                 return Int(
                     compression_encode_buffer(
                         destination,
-                        compressed.count,
+                        destinationCapacity,
                         source,
                         data.count,
                         nil,
