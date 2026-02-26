@@ -429,15 +429,14 @@ private final class SharedMemoryFileMapping {
             throw SharedMemoryMappingError.fileMissing(path)
         }
 
-        var fileInfo = stat()
-        let statResult = path.withCString { cPath in
-            Darwin.stat(cPath, &fileInfo)
-        }
-        guard statResult == 0 else {
+        let attributes: [FileAttributeKey: Any]
+        do {
+            attributes = try FileManager.default.attributesOfItem(atPath: path)
+        } catch {
             throw SharedMemoryMappingError.statFailed(path)
         }
 
-        let fileSize = Int(fileInfo.st_size)
+        let fileSize = (attributes[.size] as? NSNumber)?.intValue ?? 0
         guard fileSize > 0 else {
             throw SharedMemoryMappingError.emptyFile(path)
         }
