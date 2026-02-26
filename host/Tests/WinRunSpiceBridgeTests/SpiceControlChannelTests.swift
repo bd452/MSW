@@ -197,6 +197,76 @@ final class SpiceControlChannelTests: XCTestCase {
             XCTFail("Unexpected error type: \(error)")
         }
     }
+
+    // MARK: - Launch Program Tests
+
+    func testLaunchProgramSucceedsWhenGuestAcknowledges() async throws {
+        let channel = SpiceControlChannel()
+        await channel.simulateConnected()
+
+        let request = ProgramLaunchRequest(
+            windowsPath: "C:\\Windows\\System32\\notepad.exe",
+            arguments: ["/A"]
+        )
+
+        let launchTask = Task {
+            try await channel.launchProgram(request, timeout: .milliseconds(500))
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        let ack = AckMessage(messageId: 1, success: true, errorMessage: nil)
+        let payload = try JSONEncoder().encode(ack)
+
+        var envelope = Data()
+        envelope.append(SpiceMessageType.ack.rawValue)
+        var length = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+        envelope.append(payload)
+
+        try await channel.simulateResponse(envelope)
+
+        try await launchTask.value
+    }
+
+    func testLaunchProgramThrowsGuestErrorWhenAckFails() async throws {
+        let channel = SpiceControlChannel()
+        await channel.simulateConnected()
+
+        let request = ProgramLaunchRequest(
+            windowsPath: "C:\\bad.exe",
+            arguments: []
+        )
+
+        let launchTask = Task {
+            try await channel.launchProgram(request, timeout: .milliseconds(500))
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        let ack = AckMessage(messageId: 1, success: false, errorMessage: "Executable not found")
+        let payload = try JSONEncoder().encode(ack)
+
+        var envelope = Data()
+        envelope.append(SpiceMessageType.ack.rawValue)
+        var length = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+        envelope.append(payload)
+
+        try await channel.simulateResponse(envelope)
+
+        do {
+            try await launchTask.value
+            XCTFail("Expected SpiceControlError.guestError")
+        } catch let error as SpiceControlError {
+            if case .guestError(let code, let message) = error {
+                XCTAssertEqual(code, "LAUNCH_PROGRAM_FAILED")
+                XCTAssertEqual(message, "Executable not found")
+            } else {
+                XCTFail("Expected guestError, got \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - FrameReady Notification Tests
