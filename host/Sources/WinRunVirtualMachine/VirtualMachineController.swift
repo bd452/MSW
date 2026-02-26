@@ -188,6 +188,18 @@ public actor VirtualMachineController {
 
         try validateConfigurationIfNeeded()
 
+        if configuration.frameStreaming.sharedMemoryEnabled {
+            do {
+                let region = try initializeSharedMemory()
+                logger.info("Initialized frame shared memory at \(region.fileURL.path) (\(region.size) bytes)")
+            } catch {
+                logger.error("Failed to initialize frame shared memory: \(error)")
+                throw VirtualMachineLifecycleError.virtualizationUnavailable(
+                    "Failed to initialize frame shared memory: \(error.localizedDescription)"
+                )
+            }
+        }
+
         state.status = .starting
         logger.info(resumeFromSnapshot ? "Resuming Windows VM from snapshot" : "Booting Windows VM")
 
@@ -458,7 +470,7 @@ public actor VirtualMachineController {
             // VZVirtioConsoleDeviceConfiguration has a default port at index 0
             // Configure it for our Spice control channel using index access
             if let port = consoleDevice.ports[0] {
-                port.name = "com.winrun.spice"
+                port.name = "com.winrun.control"
                 port.isConsole = false
             }
             vmConfig.consoleDevices = [consoleDevice]
