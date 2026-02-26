@@ -78,10 +78,11 @@ public actor SpiceControlChannel {
 
     public nonisolated var delegate: SpiceControlChannelDelegate? {
         get { nil } // Simplified - use proper actor isolation in real implementation
-        set { Task { await setDelegate(newValue) } }
+        set { Task { await updateDelegate(newValue) } }
     }
 
-    private func setDelegate(_ delegate: SpiceControlChannelDelegate?) {
+    /// Updates the delegate for control-channel callbacks.
+    public func updateDelegate(_ delegate: SpiceControlChannelDelegate?) {
         _delegate = delegate
     }
 
@@ -188,6 +189,38 @@ public actor SpiceControlChannel {
         isConnected
     }
 
+    /// Sends a launch-program request to the guest and waits for acknowledgement.
+    /// - Parameters:
+    ///   - request: Program launch parameters.
+    ///   - timeout: Maximum time to wait for guest acknowledgement.
+    public func launchProgram(
+        _ request: ProgramLaunchRequest,
+        timeout: Duration = .seconds(10)
+    ) async throws {
+        let messageId = nextMessageId()
+        let launchRequest = LaunchProgramSpiceMessage(
+            messageId: messageId,
+            path: request.windowsPath,
+            arguments: request.arguments,
+            workingDirectory: request.workingDirectory,
+            environment: nil
+        )
+
+        logger.debug("Sending LaunchProgram request for \(request.windowsPath) (messageId: \(messageId))")
+
+        let response = try await sendAndWait(launchRequest, messageId: messageId, timeout: timeout)
+        guard let ack = response as? AckMessage else {
+            throw SpiceControlError.unexpectedResponse("Expected AckMessage, got \(type(of: response))")
+        }
+
+        if !ack.success {
+            throw SpiceControlError.guestError(
+                code: "LAUNCH_PROGRAM_FAILED",
+                message: ack.errorMessage ?? "Guest rejected launch request"
+            )
+        }
+    }
+
     /// Request a list of active sessions from the guest.
     /// - Parameter timeout: Maximum time to wait for response
     /// - Returns: List of guest sessions
@@ -244,6 +277,35 @@ public actor SpiceControlChannel {
         }
 
         return shortcutList.toWindowsShortcutList()
+    }
+
+    /// Sends streaming configuration updates to the guest and waits for acknowledgement.
+    /// - Parameters:
+    ///   - frameBufferMode: Requested frame-buffer mode.
+    ///   - timeout: Maximum time to wait for guest acknowledgement.
+    public func configureStreaming(
+        frameBufferMode: FrameBufferMode,
+        timeout: Duration = .seconds(5)
+    ) async throws {
+        let messageId = nextMessageId()
+        let request = ConfigureStreamingSpiceMessage(
+            messageId: messageId,
+            frameBufferMode: FrameBufferModeValue(from: frameBufferMode)
+        )
+
+        logger.debug("Sending ConfigureStreaming request mode=\(frameBufferMode.rawValue) (messageId: \(messageId))")
+
+        let response = try await sendAndWait(request, messageId: messageId, timeout: timeout)
+        guard let ack = response as? AckMessage else {
+            throw SpiceControlError.unexpectedResponse("Expected AckMessage, got \(type(of: response))")
+        }
+
+        if !ack.success {
+            throw SpiceControlError.guestError(
+                code: "CONFIGURE_STREAMING_FAILED",
+                message: ack.errorMessage ?? "Guest rejected streaming configuration"
+            )
+        }
     }
 
     // MARK: - Internal Message Handling
@@ -322,18 +384,6 @@ public actor SpiceControlChannel {
             throw SpiceControlError.sendFailed(error)
         }
 
-        // Send via transport
-        let sent = transport.sendControlMessage(data)
-        if !sent {
-            throw SpiceControlError.sendFailed(
-                NSError(domain: "SpiceControlChannel", code: -1, userInfo: [
-                    NSLocalizedDescriptionKey: "Transport failed to send message",
-                ])
-            )
-        }
-
-        logger.debug("Sent control message (\(data.count) bytes)")
-
         // Wait for response with timeout using AsyncStream approach
         // This avoids actor-isolation issues with continuations
         return try await withThrowingTaskGroup(of: Any.self) { group in
@@ -342,6 +392,21 @@ public actor SpiceControlChannel {
 
             // Register the stream continuation for this message ID
             pendingStreams[messageId] = streamContinuation
+
+            // Send via transport after registering the continuation to avoid
+            // dropping fast responses that can arrive immediately.
+            let sent = transport.sendControlMessage(data)
+            if !sent {
+                pendingStreams.removeValue(forKey: messageId)
+                streamContinuation.finish()
+                throw SpiceControlError.sendFailed(
+                    NSError(domain: "SpiceControlChannel", code: -1, userInfo: [
+                        NSLocalizedDescriptionKey: "Transport failed to send message",
+                    ])
+                )
+            }
+
+            logger.debug("Sent control message (\(data.count) bytes)")
 
             // Add the request task
             group.addTask {

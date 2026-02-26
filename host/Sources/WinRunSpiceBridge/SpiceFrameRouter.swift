@@ -139,6 +139,7 @@ public final class SpiceFrameRouter {
             pointer: bufferPointer,
             size: info.bufferSize,
             ownsMemory: false, // Shared memory region owns the memory
+            layout: .perWindowSlots(slotSize: info.slotSize, slotCount: info.slotCount),
             logger: logger
         )
 

@@ -60,9 +60,19 @@ import Security
                 try await checkThrottle(clientId: clientId)
                 let request = try decode(ProgramLaunchRequest.self, from: data)
                 _ = try await vmController.ensureRunning()
-                logger.info("Would launch \(request.windowsPath) with args \(request.arguments)")
+
+                // Ensure control channel is connected so guest receives launch command.
+                if await !controlChannel.connected {
+                    try await controlChannel.connect()
+                }
+
+                try await controlChannel.launchProgram(request)
+                logger.info("Launched \(request.windowsPath) with args \(request.arguments)")
                 await vmController.registerSession(delta: 1)
                 reply(nil)
+            } catch let error as SpiceControlError {
+                logger.error("Failed to launch \(String(data: data, encoding: .utf8) ?? "<request>"): \(error.description)")
+                reply(nsError(error))
             } catch {
                 reply(nsError(error))
             }

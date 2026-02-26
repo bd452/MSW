@@ -207,7 +207,10 @@ public final class SpiceWindowStream {
     /// - Parameter notification: The FrameReady message indicating a new frame is available
     public func handleFrameReady(_ notification: FrameReadyMessage) {
         stateQueue.async {
-            guard notification.windowId == self.state.windowID else {
+            guard let connectedWindowID = self.state.windowID else {
+                return
+            }
+            guard connectedWindowID == 0 || notification.windowId == connectedWindowID else {
                 // Not for this window - ignore (shouldn't happen if routing is correct)
                 return
             }
@@ -223,7 +226,7 @@ public final class SpiceWindowStream {
             }
 
             do {
-                if let frame = try reader.readNextFrame() {
+                if let frame = try reader.readFrame(atSlotIndex: notification.slotIndex) {
                     self.metrics.framesReceived += 1
                     self.deliverFrame(frame)
                 } else {

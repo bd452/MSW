@@ -109,10 +109,12 @@ public final class VMProvisioner: Sendable {
     private let resourcesDirectory: URL?
     private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()
+    private let allowSimulation: Bool
 
-    public init(resourcesDirectory: URL? = nil) {
+    public init(resourcesDirectory: URL? = nil, allowSimulation: Bool = false) {
         self.resourcesDirectory = resourcesDirectory
         self.floppyImageCreator = FloppyImageCreator()
+        self.allowSimulation = allowSimulation
     }
 
     // MARK: - Configuration Creation
@@ -197,6 +199,7 @@ public final class VMProvisioner: Sendable {
         delegate: (any InstallationDelegate)? = nil
     ) async throws -> InstallationResult {
         let startTime = Date()
+        installationTask.start(); defer { installationTask.stop() }
 
         // Validate configuration early, returning error result if invalid
         do {
@@ -218,6 +221,15 @@ public final class VMProvisioner: Sendable {
         if isCancelled() {
             return createCancelledResult(
                 startTime: startTime, diskPath: configuration.diskImagePath)
+        }
+
+        guard allowSimulation else {
+            return handleInstallationError(
+                WinRunError.notSupported(feature: "automated Windows installation"),
+                startTime: startTime,
+                diskPath: configuration.diskImagePath,
+                delegate: delegate
+            )
         }
 
         do {

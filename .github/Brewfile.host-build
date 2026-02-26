@@ -1,0 +1,8 @@
+brew "spice-gtk"
+brew "pkgconf"
+brew "cmake"
+brew "ninja"
+brew "glib"
+brew "spice-protocol"
+brew "wimlib"
+brew "swiftlint"
