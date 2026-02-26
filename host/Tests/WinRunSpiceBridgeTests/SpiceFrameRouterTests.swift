@@ -114,7 +114,8 @@ final class SpiceFrameRouterTests: XCTestCase {
 
         // Create shared memory region with per-window buffers
         let bufferConfig = SharedFrameBufferConfig(slotCount: 3, maxWidth: 100, maxHeight: 100)
-        let regionSize = bufferConfig.totalSize * 2  // Space for 2 windows
+        let perWindowBufferSize = bufferConfig.slotSize * bufferConfig.slotCount
+        let regionSize = perWindowBufferSize * 2  // Space for 2 windows
         let regionPointer = UnsafeMutableRawPointer.allocate(
             byteCount: regionSize,
             alignment: MemoryLayout<UInt64>.alignment
@@ -138,7 +139,7 @@ final class SpiceFrameRouterTests: XCTestCase {
         let allocation1 = WindowBufferAllocatedMessage(
             windowId: 100,
             bufferPointer: UInt64(window1Offset),
-            bufferSize: Int32(bufferConfig.totalSize),
+            bufferSize: Int32(perWindowBufferSize),
             slotSize: Int32(bufferConfig.slotSize),
             slotCount: Int32(bufferConfig.slotCount),
             isCompressed: false,
@@ -209,15 +210,16 @@ final class SpiceFrameRouterTests: XCTestCase {
 
         // Create shared memory region with per-window buffer
         let bufferConfig = SharedFrameBufferConfig(slotCount: 3, maxWidth: 100, maxHeight: 100)
+        let perWindowBufferSize = bufferConfig.slotSize * bufferConfig.slotCount
         let regionPointer = UnsafeMutableRawPointer.allocate(
-            byteCount: bufferConfig.totalSize,
+            byteCount: perWindowBufferSize,
             alignment: MemoryLayout<UInt64>.alignment
         )
-        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: bufferConfig.totalSize)
+        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: perWindowBufferSize)
         defer { regionPointer.deallocate() }
 
         // Set up shared memory region
-        router.setSharedMemoryRegion(basePointer: regionPointer, size: bufferConfig.totalSize)
+        router.setSharedMemoryRegion(basePointer: regionPointer, size: perWindowBufferSize)
         try? await Task.sleep(for: .milliseconds(50))
 
         // Register stream
@@ -231,7 +233,7 @@ final class SpiceFrameRouterTests: XCTestCase {
         let allocation = WindowBufferAllocatedMessage(
             windowId: 100,
             bufferPointer: 0,
-            bufferSize: Int32(bufferConfig.totalSize),
+            bufferSize: Int32(perWindowBufferSize),
             slotSize: Int32(bufferConfig.slotSize),
             slotCount: Int32(bufferConfig.slotCount),
             isCompressed: false,
@@ -409,15 +411,8 @@ final class SpiceFrameRouterTests: XCTestCase {
     ) {
         let bufferPtr = regionPointer.advanced(by: offset)
 
-        // Initialize header
-        let headerPtr = bufferPtr.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
-        var header = config.createHeader()
-        header.writeIndex = 1  // One frame written
-        header.readIndex = 0   // No frames read yet
-        headerPtr.pointee = header
-
-        // Initialize frame slot
-        let slotOffset = SharedFrameBufferHeader.size
+        // Per-window buffers are slot-only rings; slot 0 starts at offset 0.
+        let slotOffset = 0
         let slotPtr = bufferPtr.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
         var slotHeader = FrameSlotHeader()
         slotHeader.windowId = windowID

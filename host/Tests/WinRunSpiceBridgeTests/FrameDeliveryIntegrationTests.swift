@@ -23,17 +23,18 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
     /// Uses per-window buffer allocation with shared memory region.
     func testEndToEndFrameDeliveryPipeline() async {
         let config = SharedFrameBufferConfig(slotCount: 3, maxWidth: 100, maxHeight: 100)
+        let perWindowBufferSize = config.slotSize * config.slotCount
         let regionPointer = UnsafeMutableRawPointer.allocate(
-            byteCount: config.totalSize,
+            byteCount: perWindowBufferSize,
             alignment: MemoryLayout<UInt64>.alignment
         )
-        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: config.totalSize)
+        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: perWindowBufferSize)
         defer { regionPointer.deallocate() }
 
         let router = SpiceFrameRouter(logger: NullLogger())
 
         // Set up shared memory region
-        router.setSharedMemoryRegion(basePointer: regionPointer, size: config.totalSize)
+        router.setSharedMemoryRegion(basePointer: regionPointer, size: perWindowBufferSize)
         try? await Task.sleep(for: .milliseconds(50))
 
         let (stream, delegate) = createConnectedStream(windowID: 12345)
@@ -53,7 +54,7 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
         let allocation = WindowBufferAllocatedMessage(
             windowId: 12345,
             bufferPointer: 0,
-            bufferSize: Int32(config.totalSize),
+            bufferSize: Int32(perWindowBufferSize),
             slotSize: Int32(config.slotSize),
             slotCount: Int32(config.slotCount),
             isCompressed: false,
@@ -85,7 +86,8 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
     /// Uses per-window buffer allocation with shared memory region.
     func testMultiWindowFrameRouting() async {
         let config = SharedFrameBufferConfig(slotCount: 3, maxWidth: 100, maxHeight: 100)
-        let regionSize = config.totalSize * 2  // Space for 2 windows
+        let perWindowBufferSize = config.slotSize * config.slotCount
+        let regionSize = perWindowBufferSize * 2  // Space for 2 windows
         let regionPointer = UnsafeMutableRawPointer.allocate(
             byteCount: regionSize,
             alignment: MemoryLayout<UInt64>.alignment
@@ -112,7 +114,7 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
         router.handleBufferAllocation(WindowBufferAllocatedMessage(
             windowId: 100,
             bufferPointer: UInt64(window1Offset),
-            bufferSize: Int32(config.totalSize),
+            bufferSize: Int32(perWindowBufferSize),
             slotSize: Int32(config.slotSize),
             slotCount: Int32(config.slotCount),
             isCompressed: false,
@@ -121,12 +123,12 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
         ))
 
         // Initialize and allocate buffer for window 200
-        let window2Offset = config.totalSize
+        let window2Offset = perWindowBufferSize
         initializePerWindowBuffer(at: regionPointer, offset: window2Offset, config: config, windowID: 200, frameNumber: 1)
         router.handleBufferAllocation(WindowBufferAllocatedMessage(
             windowId: 200,
             bufferPointer: UInt64(window2Offset),
-            bufferSize: Int32(config.totalSize),
+            bufferSize: Int32(perWindowBufferSize),
             slotSize: Int32(config.slotSize),
             slotCount: Int32(config.slotCount),
             isCompressed: false,
@@ -163,35 +165,29 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
     /// Uses per-window buffer allocation with shared memory region.
     func testFrameDeliveryUpdatesMetrics() async {
         let config = SharedFrameBufferConfig(slotCount: 3, maxWidth: 100, maxHeight: 100)
+        let perWindowBufferSize = config.slotSize * config.slotCount
         let regionPointer = UnsafeMutableRawPointer.allocate(
-            byteCount: config.totalSize,
+            byteCount: perWindowBufferSize,
             alignment: MemoryLayout<UInt64>.alignment
         )
-        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: config.totalSize)
+        regionPointer.initializeMemory(as: UInt8.self, repeating: 0, count: perWindowBufferSize)
         defer { regionPointer.deallocate() }
 
         let router = SpiceFrameRouter(logger: NullLogger())
 
         // Set up shared memory region
-        router.setSharedMemoryRegion(basePointer: regionPointer, size: config.totalSize)
+        router.setSharedMemoryRegion(basePointer: regionPointer, size: perWindowBufferSize)
         try? await Task.sleep(for: .milliseconds(50))
 
         let (stream, delegate) = createConnectedStream(windowID: 100)
         router.registerStream(stream, forWindowID: 100)
         waitForSetup()
 
-        // Initialize buffer header
-        let headerPtr = regionPointer.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
-        var header = config.createHeader()
-        header.writeIndex = 0
-        header.readIndex = 0
-        headerPtr.pointee = header
-
         // Allocate per-window buffer
         router.handleBufferAllocation(WindowBufferAllocatedMessage(
             windowId: 100,
             bufferPointer: 0,
-            bufferSize: Int32(config.totalSize),
+            bufferSize: Int32(perWindowBufferSize),
             slotSize: Int32(config.slotSize),
             slotCount: Int32(config.slotCount),
             isCompressed: false,
@@ -200,9 +196,9 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
         ))
         try? await Task.sleep(for: .milliseconds(100))
 
-        // Write all 3 frames to the ring buffer slots first
+        // Write one frame per slot in the per-window ring buffer.
         for i in 0..<3 {
-            let slotOffset = SharedFrameBufferHeader.size + i * config.slotSize
+            let slotOffset = i * config.slotSize
             let slotPtr = regionPointer.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
             var slotHeader = FrameSlotHeader()
             slotHeader.windowId = 100
@@ -215,10 +211,8 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
             slotHeader.flags = i == 0 ? FrameSlotFlags.keyFrame.rawValue : 0
             slotPtr.pointee = slotHeader
         }
-        // Set writeIndex to 3 (all frames written)
-        headerPtr.pointee.writeIndex = 3
 
-        // Now send frame notifications - each read will advance readIndex
+        // Send notifications that target explicit slot indices.
         for i in 1...3 {
             router.routeFrameReady(FrameReadyMessage(
                 windowId: 100,
@@ -246,15 +240,8 @@ final class FrameDeliveryIntegrationTests: XCTestCase {
     ) {
         let bufferPtr = regionPointer.advanced(by: offset)
 
-        // Initialize header
-        let headerPtr = bufferPtr.bindMemory(to: SharedFrameBufferHeader.self, capacity: 1)
-        var header = config.createHeader()
-        header.writeIndex = 1  // One frame written
-        header.readIndex = 0   // No frames read yet
-        headerPtr.pointee = header
-
-        // Initialize frame slot
-        let slotOffset = SharedFrameBufferHeader.size
+        // Per-window buffers are slot-only rings; slot 0 starts at offset 0.
+        let slotOffset = 0
         let slotPtr = bufferPtr.advanced(by: slotOffset).bindMemory(to: FrameSlotHeader.self, capacity: 1)
         var slotHeader = FrameSlotHeader()
         slotHeader.windowId = windowID
