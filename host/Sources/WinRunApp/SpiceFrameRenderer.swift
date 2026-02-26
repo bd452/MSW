@@ -1,4 +1,5 @@
 import Foundation
+import Compression
 import Metal
 import MetalKit
 import simd
@@ -80,8 +81,37 @@ public final class SpiceFrameRenderer: NSObject, MTKViewDelegate {
     ///   - height: Frame height in pixels
     ///   - scaleFactor: Display scale factor (1.0 for standard, 2.0 for Retina)
     public func updateFrame(pixelData: Data, width: Int, height: Int, scaleFactor: CGFloat = 1.0) {
+        updateFrame(
+            pixelData: pixelData,
+            width: width,
+            height: height,
+            bytesPerRow: width * 4,
+            scaleFactor: scaleFactor
+        )
+    }
+
+    /// Update the renderer with a new frame and explicit row stride.
+    /// - Parameters:
+    ///   - pixelData: Raw BGRA pixel data
+    ///   - width: Frame width in pixels
+    ///   - height: Frame height in pixels
+    ///   - bytesPerRow: Frame row stride in bytes
+    ///   - scaleFactor: Display scale factor (1.0 for standard, 2.0 for Retina)
+    func updateFrame(
+        pixelData: Data,
+        width: Int,
+        height: Int,
+        bytesPerRow: Int,
+        scaleFactor: CGFloat = 1.0
+    ) {
         textureLock.lock()
         defer { textureLock.unlock() }
+
+        guard width > 0, height > 0 else { return }
+        let minimumBytesPerRow = width * 4
+        guard bytesPerRow >= minimumBytesPerRow else { return }
+        let requiredBytes = bytesPerRow * height
+        guard pixelData.count >= requiredBytes else { return }
 
         self.scaleFactor = scaleFactor
 
@@ -95,7 +125,6 @@ public final class SpiceFrameRenderer: NSObject, MTKViewDelegate {
         guard let texture = currentTexture else { return }
 
         // Upload pixel data to texture
-        let bytesPerRow = width * 4 // BGRA = 4 bytes per pixel
         let region = MTLRegion(
             origin: MTLOrigin(x: 0, y: 0, z: 0),
             size: MTLSize(width: width, height: height, depth: 1)
@@ -120,19 +149,33 @@ public final class SpiceFrameRenderer: NSObject, MTKViewDelegate {
     ///   For truly zero-copy, frames should be uncompressed and the data buffer
     ///   should be page-aligned for direct GPU access.
     public func updateFrame(from frame: SharedFrame, scaleFactor: CGFloat = 1.0) {
-        // For compressed frames, we need to decompress first
-        // TODO: Implement LZ4 decompression when compression is used
+        guard frame.width > 0, frame.height > 0 else { return }
+        let minimumStride = frame.width * 4
+        guard frame.stride >= minimumStride else { return }
+        let expectedUncompressedSize = frame.stride * frame.height
+
         if frame.isCompressed {
-            // For now, skip compressed frames - decompression not yet implemented
+            guard let decompressed = Self.decompressLZ4FrameData(
+                frame.data,
+                expectedSize: expectedUncompressedSize
+            ) else {
+                return
+            }
+            updateFrame(
+                pixelData: decompressed,
+                width: frame.width,
+                height: frame.height,
+                bytesPerRow: frame.stride,
+                scaleFactor: scaleFactor
+            )
             return
         }
 
-        // Use the raw data path for minimal copying
-        // The frame data is already in BGRA format which matches our texture format
         updateFrame(
             pixelData: frame.data,
             width: frame.width,
             height: frame.height,
+            bytesPerRow: frame.stride,
             scaleFactor: scaleFactor
         )
     }
@@ -232,6 +275,38 @@ public final class SpiceFrameRenderer: NSObject, MTKViewDelegate {
     }
 
     // MARK: - Private Helpers
+
+    static func decompressLZ4FrameData(_ compressedData: Data, expectedSize: Int) -> Data? {
+        guard expectedSize > 0, !compressedData.isEmpty else { return nil }
+
+        var decompressed = Data(count: expectedSize)
+        let decodedSize = decompressed.withUnsafeMutableBytes { destinationBuffer -> Int in
+            guard let destination = destinationBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                return 0
+            }
+            return compressedData.withUnsafeBytes { sourceBuffer -> Int in
+                guard let source = sourceBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                    return 0
+                }
+                return Int(
+                    compression_decode_buffer(
+                        destination,
+                        expectedSize,
+                        source,
+                        compressedData.count,
+                        nil,
+                        COMPRESSION_LZ4
+                    )
+                )
+            }
+        }
+
+        guard decodedSize == expectedSize else {
+            return nil
+        }
+
+        return decompressed
+    }
 
     private func createTexture(width: Int, height: Int) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(

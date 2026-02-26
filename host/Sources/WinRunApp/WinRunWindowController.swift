@@ -118,6 +118,13 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         )
     }
 
+    func windowStream(_ stream: SpiceWindowStream, didReceiveSharedFrame frame: SharedFrame) {
+        guard let metalView = metalContentView else { return }
+
+        let guestScaleFactor = currentMetadata?.scaleFactor ?? 1.0
+        metalView.updateSharedFrame(frame, guestScaleFactor: guestScaleFactor)
+    }
+
     func windowStream(_ stream: SpiceWindowStream, didUpdateMetadata metadata: WindowMetadata) {
         currentMetadata = metadata
 
