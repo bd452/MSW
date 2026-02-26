@@ -1,4 +1,5 @@
 import Foundation
+import Compression
 import Metal
 import MetalKit
 import simd
@@ -120,21 +121,27 @@ public final class SpiceFrameRenderer: NSObject, MTKViewDelegate {
     ///   For truly zero-copy, frames should be uncompressed and the data buffer
     ///   should be page-aligned for direct GPU access.
     public func updateFrame(from frame: SharedFrame, scaleFactor: CGFloat = 1.0) {
-        // For compressed frames, we need to decompress first
-        // TODO: Implement LZ4 decompression when compression is used
+        let pixelData: Data
         if frame.isCompressed {
-            // For now, skip compressed frames - decompression not yet implemented
-            return
+            guard let decompressed = decompressFrameData(frame) else {
+                return
+            }
+            pixelData = decompressed
+        } else {
+            pixelData = frame.data
         }
 
-        // Use the raw data path for minimal copying
-        // The frame data is already in BGRA format which matches our texture format
-        updateFrame(
-            pixelData: frame.data,
-            width: frame.width,
-            height: frame.height,
-            scaleFactor: scaleFactor
-        )
+        // Preserve guest-provided stride for formats that include row padding.
+        pixelData.withUnsafeBytes { rawBuffer in
+            guard let pointer = rawBuffer.baseAddress else { return }
+            updateFrame(
+                pointer: pointer,
+                width: frame.width,
+                height: frame.height,
+                bytesPerRow: frame.stride,
+                scaleFactor: scaleFactor
+            )
+        }
     }
 
     /// Update the renderer with a frame using a raw memory pointer (zero-copy).
@@ -243,6 +250,39 @@ public final class SpiceFrameRenderer: NSObject, MTKViewDelegate {
         descriptor.usage = [.shaderRead]
         descriptor.storageMode = .shared
         return device.makeTexture(descriptor: descriptor)
+    }
+
+    private func decompressFrameData(_ frame: SharedFrame) -> Data? {
+        let expectedSize = frame.stride * frame.height
+        guard expectedSize > 0 else { return nil }
+
+        var output = Data(count: expectedSize)
+        let decodedCount = output.withUnsafeMutableBytes { outputBuffer -> Int in
+            guard let outputBase = outputBuffer.bindMemory(to: UInt8.self).baseAddress else {
+                return 0
+            }
+
+            return frame.data.withUnsafeBytes { inputBuffer in
+                guard let inputBase = inputBuffer.bindMemory(to: UInt8.self).baseAddress else {
+                    return 0
+                }
+
+                return compression_decode_buffer(
+                    outputBase,
+                    expectedSize,
+                    inputBase,
+                    frame.data.count,
+                    nil,
+                    COMPRESSION_LZ4
+                )
+            }
+        }
+
+        guard decodedCount == expectedSize else {
+            return nil
+        }
+
+        return output
     }
 
     private static func createPipelineState(device: MTLDevice) -> MTLRenderPipelineState {
