@@ -215,7 +215,7 @@ public final class SpiceWindowStream {
                 return
             }
 
-            guard self.state.lifecycle == .connected else {
+            guard self.state.lifecycle != .disconnected else {
                 self.logger.debug("Dropping FrameReady - stream not connected")
                 return
             }
@@ -226,7 +226,8 @@ public final class SpiceWindowStream {
             }
 
             do {
-                if let frame = try reader.readNextFrame() {
+                if let frame = try reader.readFrame(atSlotIndex: notification.slotIndex) {
+                    self.markConnectedIfNeeded()
                     self.metrics.framesReceived += 1
                     self.deliverFrame(frame)
                 } else {
@@ -336,11 +337,9 @@ public final class SpiceWindowStream {
                 callbacks: callbacks
             )
             state.subscription = subscription
-            state.lifecycle = .connected
+            state.hasActivatedConnection = false
             reconnectWorkItem = nil
-            metrics.reconnectAttempts = 0
-            logger.info("Spice stream connected for window \(windowID)")
-            notifyStateChange(.connected)
+            logger.info("Spice stream transport opened for window \(windowID)")
         } catch let error as SpiceStreamError {
             switch error {
             case .sharedMemoryUnavailable(let description):
@@ -362,6 +361,7 @@ public final class SpiceWindowStream {
 
     private func handleFrame(_ frame: Data) {
         stateQueue.async {
+            self.markConnectedIfNeeded()
             self.metrics.framesReceived += 1
             guard let delegate = self.delegate else { return }
             self.delegateQueue.async { [weak self] in
@@ -373,6 +373,7 @@ public final class SpiceWindowStream {
 
     private func handleMetadata(_ metadata: WindowMetadata) {
         stateQueue.async {
+            self.markConnectedIfNeeded()
             self.metrics.metadataUpdates += 1
             guard let delegate = self.delegate else { return }
             self.delegateQueue.async { [weak self] in
@@ -451,6 +452,7 @@ public final class SpiceWindowStream {
     private func finishDisconnect() {
         let hadError = metrics.lastErrorDescription != nil && !metrics.lastErrorDescription!.isEmpty
         state.lifecycle = .disconnected
+        state.hasActivatedConnection = false
         cancelReconnect()
 
         // Notify state change before the close callback
@@ -468,6 +470,18 @@ public final class SpiceWindowStream {
 
     private func transportDescription() -> String {
         configuration.transport.summaryDescription
+    }
+
+    private func markConnectedIfNeeded() {
+        guard state.lifecycle != .disconnected else { return }
+        guard !state.hasActivatedConnection else { return }
+        state.hasActivatedConnection = true
+        state.lifecycle = .connected
+        metrics.reconnectAttempts = 0
+        notifyStateChange(.connected)
+        if let windowID = state.windowID {
+            logger.info("Spice stream became active for window \(windowID)")
+        }
     }
 
     private func notifyStateChange(_ newState: SpiceConnectionState) {
