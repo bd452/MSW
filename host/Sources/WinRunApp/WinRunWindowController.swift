@@ -152,6 +152,12 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         }
     }
 
+    func windowStream(_ stream: SpiceWindowStream, didReceiveSharedFrame frame: SharedFrame) {
+        guard let metalView = metalContentView else { return }
+        let scaleFactor = currentMetadata?.scaleFactor ?? 1.0
+        metalView.updateSharedFrame(frame, guestScaleFactor: scaleFactor)
+    }
+
     func windowStream(_ stream: SpiceWindowStream, didChangeState state: SpiceConnectionState) {
         logger.debug("Spice stream state changed: \(state)")
         metalContentView?.updateConnectionState(state)

@@ -410,7 +410,11 @@ check-linux: lint-host lint-guest build-guest
 	@echo ""
 	@echo "🧪 Running guest tests (some Windows-only tests expected to fail on Linux)..."
 	@cd $(REPO_ROOT)/guest && \
-		if $(DOTNET) test WinRunAgent.Tests/WinRunAgent.Tests.csproj 2>&1 | tee /tmp/test-output.txt | tail -20; then \
+		set -o pipefail; \
+		$(DOTNET) test WinRunAgent.Tests/WinRunAgent.Tests.csproj 2>&1 | tee /tmp/test-output.txt; \
+		TEST_EXIT=$${PIPESTATUS[0]}; \
+		tail -20 /tmp/test-output.txt; \
+		if [ "$$TEST_EXIT" -eq 0 ]; then \
 			echo ""; \
 			echo "✅ All guest tests passed!"; \
 		else \
@@ -422,7 +426,7 @@ check-linux: lint-host lint-guest build-guest
 				echo "⚠️  $$PASSED/$$TOTAL tests passed ($$FAILED failed - expected on Linux due to Windows P/Invoke)"; \
 			else \
 				echo ""; \
-				echo "❌ Too many test failures ($$FAILED). Check for real issues."; \
+				echo "❌ Guest test execution failed (exit=$$TEST_EXIT, passed=$$PASSED, failed=$$FAILED, total=$$TOTAL)."; \
 				exit 1; \
 			fi; \
 		fi
