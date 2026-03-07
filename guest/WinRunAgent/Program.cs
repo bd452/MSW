@@ -76,7 +76,7 @@ public static class Program
             logger,
             msg =>
             {
-                outboundChannel.Writer.TryWrite(msg);
+                _ = outboundChannel.Writer.TryWrite(msg);
             });
 
         var agent = new WinRunAgentService(
