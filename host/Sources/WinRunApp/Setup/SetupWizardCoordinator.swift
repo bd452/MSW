@@ -11,6 +11,7 @@ public enum SetupWizardStep: String, Sendable, Equatable {
     case welcome
     case importISO
     case installing
+    case manualInstall
     case complete
     case error
 }
@@ -31,6 +32,8 @@ public protocol SetupWizardCoordinatorProtocol: AnyObject {
     func handleInstallationComplete(result: ProvisioningResult)
     func retry()
     func chooseNewISO()
+    func beginManualSetup()
+    func finishManualSetup()
     func finish()
 }
 
@@ -160,6 +163,10 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         if result.success {
             transitionTo(.complete)
         } else {
+            if Self.shouldFallbackToManualSetup(result.error) {
+                transitionTo(.manualInstall)
+                return
+            }
             lastError = result.error
             transitionTo(.error)
         }
@@ -184,13 +191,41 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     /// Returns to ISO selection to choose a different ISO.
     public func chooseNewISO() {
-        guard currentStep == .error || currentStep == .importISO else {
+        guard currentStep == .error || currentStep == .importISO || currentStep == .manualInstall else {
             logger.warn("chooseNewISO called from invalid step: \(currentStep.rawValue)")
             return
         }
         selectedISOPath = nil
         lastError = nil
         transitionTo(.importISO)
+    }
+
+    /// Allows explicitly switching from an error state into manual setup.
+    public func beginManualSetup() {
+        guard currentStep == .error || currentStep == .installing else {
+            logger.warn("beginManualSetup called from invalid step: \(currentStep.rawValue)")
+            return
+        }
+        transitionTo(.manualInstall)
+    }
+
+    /// Completes setup after the user finishes manual installation.
+    public func finishManualSetup() {
+        guard currentStep == .manualInstall else {
+            logger.warn("finishManualSetup called from invalid step: \(currentStep.rawValue)")
+            return
+        }
+
+        let diskPath = lastResult?.diskImagePath ?? diskImagePath
+        lastResult = ProvisioningResult(
+            success: true,
+            finalPhase: .complete,
+            durationSeconds: lastResult?.durationSeconds ?? 0,
+            diskImagePath: diskPath,
+            diskUsageBytes: lastResult?.diskUsageBytes
+        )
+        lastError = nil
+        transitionTo(.complete)
     }
 
     /// Performs rollback cleanup and then returns to ISO selection.
@@ -254,8 +289,12 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         case (.welcome, .importISO): return true
         case (.importISO, .installing): return true
         case (.importISO, .importISO): return true  // Re-select ISO
+        case (.installing, .manualInstall): return true
         case (.installing, .complete): return true
         case (.installing, .error): return true
+        case (.manualInstall, .complete): return true
+        case (.manualInstall, .importISO): return true
+        case (.error, .manualInstall): return true
         case (.error, .importISO): return true
         case (.error, .installing): return true  // Retry
         case (.complete, _): return false  // Terminal
@@ -297,6 +336,9 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
         case .installing:
             return createProgressViewController(coordinator: coordinator)
+
+        case .manualInstall:
+            return createManualInstallViewController(coordinator: coordinator)
 
         case .complete:
             return createCompleteViewController(coordinator: coordinator)
@@ -340,6 +382,22 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         return vc
     }
 
+    private static func createManualInstallViewController(
+        coordinator: SetupWizardCoordinator
+    ) -> NSViewController {
+        let vc = ManualInstallViewController(
+            isoPath: coordinator.selectedISOPath,
+            diskImagePath: coordinator.lastResult?.diskImagePath ?? coordinator.diskImagePath
+        )
+        vc.onComplete = { [weak coordinator] in
+            coordinator?.finishManualSetup()
+        }
+        vc.onChooseDifferentISO = { [weak coordinator] in
+            coordinator?.chooseNewISO()
+        }
+        return vc
+    }
+
     private static func createCompleteViewController(
         coordinator: SetupWizardCoordinator
     ) -> NSViewController {
@@ -370,6 +428,9 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
                 onChooseDifferentISO: { [weak coordinator] in
                     coordinator?.chooseNewISO()
                 },
+                onManualSetup: { [weak coordinator] in
+                    coordinator?.beginManualSetup()
+                },
                 onRollback: { [weak coordinator] in
                     coordinator?.rollbackAndChooseNewISO()
                 },
@@ -386,6 +447,9 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
             },
             onChooseDifferentISO: { [weak coordinator] in
                 coordinator?.chooseNewISO()
+            },
+            onManualSetup: { [weak coordinator] in
+                coordinator?.beginManualSetup()
             },
             onContactSupport: nil
         )
@@ -412,6 +476,13 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
             freeDiskSpaceBytes: freeDiskSpace,
             cleanupRecommended: result.finalPhase.isAfter(.creatingDisk)
         )
+    }
+
+    private static func shouldFallbackToManualSetup(_ error: WinRunError?) -> Bool {
+        guard case .notSupported(let feature)? = error else {
+            return false
+        }
+        return feature == "automated Windows installation"
     }
 }
 

@@ -41,9 +41,28 @@ final class WinRunSharedTests: XCTestCase {
         let store = ConfigStore(configURL: configURL)
         let configuration = VMConfiguration(disk: VMDiskConfiguration(imagePath: diskURL, sizeGB: 64))
         try store.save(configuration)
+        XCTAssertTrue(ProvisioningPreflight.markSetupComplete(diskImagePath: diskURL))
 
         let result = ProvisioningPreflight.evaluate(configStore: store, fileManager: .default)
         XCTAssertEqual(result, .ready(configuration: configuration))
+    }
+
+    func testProvisioningPreflightReturnsNeedsSetupWhenDiskExistsButSetupIncomplete() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let diskURL = tempDir.appendingPathComponent("windows.img")
+        FileManager.default.createFile(atPath: diskURL.path, contents: Data(), attributes: nil)
+        let configURL = tempDir.appendingPathComponent("config.json")
+
+        let store = ConfigStore(configURL: configURL)
+        let configuration = VMConfiguration(disk: VMDiskConfiguration(imagePath: diskURL, sizeGB: 64))
+        try store.save(configuration)
+
+        let result = ProvisioningPreflight.evaluate(configStore: store, fileManager: .default)
+        XCTAssertEqual(result, .needsSetup(diskImagePath: diskURL, reason: .setupIncomplete))
     }
 
     func testValidationFailsWhenDiskIsMissing() {

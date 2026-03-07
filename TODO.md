@@ -119,6 +119,9 @@
     - [X] Add structured setup failure context and render diagnostics { host/Sources/WinRunApp/Setup/SetupErrorViewController.swift, host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/SetupFailureContext.swift } <docs/decisions/windows-provisioning.md>
     - [X] Implement retry and choose-ISO transitions in the coordinator { host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift, host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for coordinator state transitions and recovery wiring { new:host/Tests/WinRunAppTests/SetupWizardCoordinatorTests.swift } <docs/development.md>
+    - [X] Add manual setup fallback flow when unattended install is unavailable { host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift, new:host/Sources/WinRunApp/Setup/ManualInstallViewController.swift, host/Sources/WinRunApp/Setup/SetupErrorViewController.swift, host/Sources/WinRunSetup/SetupFailureContext.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Implement QEMU-based manual Windows installation (replaces VZVirtualMachine path) { host/Sources/WinRunApp/Setup/ManualInstallViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Replace VMProvisioner automated-installation stub with production unattended installation backend { host/Sources/WinRunSetup/VMProvisioner.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/windows-provisioning.md>
 
 - [X] Guest Agent Installer { new:guest/WinRunAgent.Installer/, guest/WinRunAgent/WinRunAgent.csproj } <docs/decisions/windows-provisioning.md>
   - [X] MSI installer project { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>

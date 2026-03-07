@@ -4,6 +4,18 @@
 
 WinRun requires a Windows ARM64 virtual machine to run Windows applications. To provide a plug-and-play experience, we must automate the entire Windows installation and configuration process from a user-provided ISO.
 
+## Implementation Status (Current)
+
+- ISO validation is implemented and supports `install.wim`, `install.esd`, and split `install.swm` images.
+- Setup wizard first-run routing, recovery UI, and diagnostics are implemented.
+- Manual setup fallback is implemented in the setup wizard when unattended install is unavailable.
+- **Windows installation uses QEMU** (`qemu-system-aarch64`) because Apple's Virtualization.framework UEFI firmware cannot render graphics during Windows boot (no `ramfb` equivalent; VirtIO GPU requires guest drivers). After installation with VirtIO drivers, the VM runs on Virtualization.framework for normal operation.
+- Unattended installation backend in `VMProvisioner.startInstallation()` is still a stub and currently returns `notSupported("automated Windows installation")` outside simulation/test mode.
+
+### Why QEMU for Installation
+
+Apple's `VZVirtioGraphicsDeviceConfiguration` requires VirtIO GPU drivers in the guest OS to render graphics. The UEFI firmware's GOP driver does not produce visible output for the Windows boot loader (confirmed empirically — VM runs but display is black). QEMU provides `ramfb`, a simple framebuffer device that works during UEFI/Windows Setup without guest drivers. After installation, VirtIO GPU drivers installed from `virtio-win.iso` enable Virtualization.framework to drive the display directly.
+
 ## Recommended Windows Versions
 
 ### Primary Recommendation: Windows 11 IoT Enterprise LTSC 2024 ARM64
@@ -75,12 +87,22 @@ User provides ISO
 └─────────────────────────┘
 ```
 
-### Phase 3: Unattended Installation
+### Phase 3: Installation VM (QEMU)
+
+Windows installation runs in QEMU (`qemu-system-aarch64`), not Virtualization.framework, because the VZ UEFI firmware cannot render Windows boot graphics. QEMU provides:
+- `ramfb` — simple framebuffer for UEFI/setup display (before VirtIO drivers exist)
+- `virtio-gpu-pci` — accelerated graphics (used after VirtIO drivers are installed)
+- `usb-storage` — presents the Windows ISO and VirtIO driver ISO as USB media
+- `virtio-blk` — the raw disk image (same format used by Virtualization.framework later)
+- `swtpm` — software TPM 2.0 emulator (Windows 11 requires TPM 2.0 and checks it during installation)
+- EFI NVRAM — writable pflash for UEFI variable store (boot order, Secure Boot state)
 
 The VM boots with:
-- ISO mounted as virtual CD-ROM
-- Disk attached as primary storage
-- `autounattend.xml` injected via virtual floppy or in ISO
+- Windows ISO mounted via USB mass storage
+- VirtIO driver ISO mounted via USB mass storage (for loading viostor driver during install)
+- Disk attached as VirtIO block device
+- TPM 2.0 via swtpm socket (satisfies Windows 11 hardware requirement)
+- `autounattend.xml` injected via virtual floppy or in ISO (for unattended mode)
 
 **Autounattend.xml responsibilities:**
 - Skip all OOBE screens

@@ -110,6 +110,22 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         XCTAssertNotNil(coordinator.lastError)
     }
 
+    func testHandleInstallationComplete_automatedNotSupported_transitionsToManualInstall() {
+        let coordinator = makeCoordinator()
+        goToInstalling(coordinator)
+
+        let result = ProvisioningResult(
+            success: false,
+            finalPhase: .installingWindows,
+            error: .notSupported(feature: "automated Windows installation"),
+            durationSeconds: 1,
+            diskImagePath: URL(fileURLWithPath: "/tmp/windows.img")
+        )
+        coordinator.handleInstallationComplete(result: result)
+
+        XCTAssertEqual(coordinator.currentStep, .manualInstall)
+    }
+
     // MARK: - Recovery Transition Tests
 
     func testRetry_fromError_transitionsToInstalling() {
@@ -150,6 +166,23 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         coordinator.chooseNewISO()
 
         XCTAssertNil(coordinator.lastError)
+    }
+
+    func testFinishManualSetup_fromManualInstall_transitionsToComplete() {
+        let coordinator = makeCoordinator()
+        goToInstalling(coordinator)
+        coordinator.handleInstallationComplete(result: ProvisioningResult(
+            success: false,
+            finalPhase: .installingWindows,
+            error: .notSupported(feature: "automated Windows installation"),
+            durationSeconds: 1,
+            diskImagePath: URL(fileURLWithPath: "/tmp/windows.img")
+        ))
+        XCTAssertEqual(coordinator.currentStep, .manualInstall)
+
+        coordinator.finishManualSetup()
+
+        XCTAssertEqual(coordinator.currentStep, .complete)
     }
 
     // MARK: - Delegate Tests

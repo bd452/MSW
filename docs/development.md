@@ -7,6 +7,8 @@
 - Swift 5.9 toolchain
 - Homebrew packages (run `./scripts/bootstrap.sh` or `make brew-sync` to install)
 - libspice-glib development headers (included in Brewfile)
+- QEMU (`qemu-system-aarch64`, included in Brewfile) — used during Windows installation
+- swtpm (included in Brewfile) — software TPM 2.0 emulator required by Windows 11
 - (Optional) .NET 9 SDK for running guest linting locally: `brew install dotnet`
 
 ### Windows Guest
@@ -124,12 +126,12 @@ guest/
 
 ### Available Make Targets
 
-| Target | Description |
-|--------|-------------|
-| `make generate-protocol` | Regenerate both Swift and C# code |
-| `make generate-protocol-host` | Regenerate Swift code only (requires macOS) |
-| `make generate-protocol-guest` | Regenerate C# code only (requires .NET) |
-| `make validate-protocol` | Check generated files match source (used in CI) |
+| Target                         | Description                                     |
+| ------------------------------ | ----------------------------------------------- |
+| `make generate-protocol`       | Regenerate both Swift and C# code               |
+| `make generate-protocol-host`  | Regenerate Swift code only (requires macOS)     |
+| `make generate-protocol-guest` | Regenerate C# code only (requires .NET)         |
+| `make validate-protocol`       | Check generated files match source (used in CI) |
 
 ### CI Validation
 
@@ -616,14 +618,14 @@ export DEVELOPER_ID="Developer ID Application: Your Name (ABC123XYZ)"
 
 For GitHub Actions, add these secrets to your repository:
 
-| Secret | Description |
-|--------|-------------|
-| `DEVELOPER_ID` | Full certificate name |
-| `APPLE_CERTIFICATE_P12` | Base64-encoded .p12 certificate |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file |
-| `NOTARIZE_KEY_ID` | App Store Connect API Key ID |
-| `NOTARIZE_KEY_ISSUER` | App Store Connect API Issuer ID |
-| `NOTARIZE_KEY_P8` | Base64-encoded .p8 key file contents |
+| Secret                       | Description                          |
+| ---------------------------- | ------------------------------------ |
+| `DEVELOPER_ID`               | Full certificate name                |
+| `APPLE_CERTIFICATE_P12`      | Base64-encoded .p12 certificate      |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file           |
+| `NOTARIZE_KEY_ID`            | App Store Connect API Key ID         |
+| `NOTARIZE_KEY_ISSUER`        | App Store Connect API Issuer ID      |
+| `NOTARIZE_KEY_P8`            | Base64-encoded .p8 key file contents |
 
 Example workflow step:
 ```yaml
@@ -682,11 +684,11 @@ To enforce CI checks before merge, configure branch protection in GitHub:
 
 CI jobs only run when relevant files change:
 
-| Job | Triggered by changes in |
-|-----|------------------------|
-| Host Build & Test | `host/**`, `shared/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
-| Host Lint | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
-| Guest Build & Test | `guest/**`, `shared/**`, `.github/workflows/ci.yml` |
-| Guest Lint | `guest/**`, `.github/workflows/ci.yml` |
+| Job                | Triggered by changes in                                                       |
+| ------------------ | ----------------------------------------------------------------------------- |
+| Host Build & Test  | `host/**`, `shared/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
+| Host Lint          | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*`              |
+| Guest Build & Test | `guest/**`, `shared/**`, `.github/workflows/ci.yml`                           |
+| Guest Lint         | `guest/**`, `.github/workflows/ci.yml`                                        |
 
 This saves CI minutes when changes are isolated to one platform. The final `CI` gate job treats skipped jobs as successful.

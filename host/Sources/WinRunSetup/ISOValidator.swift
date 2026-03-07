@@ -9,6 +9,11 @@ import WinRunShared
 /// `sources/install.wim` or `sources/install.esd`, and determines the
 /// Windows edition and architecture.
 public actor ISOValidator {
+    private struct MountedISO {
+        let mountPoint: URL
+        let shouldDetachOnCleanup: Bool
+    }
+
     /// Logger for diagnostic output.
     private let logger: Logger?
 
@@ -38,11 +43,11 @@ public actor ISOValidator {
         }
 
         // Mount the ISO and ensure cleanup on all exit paths
-        let mountPoint = try await mountISO(at: isoURL)
+        let mountedISO = try await mountISO(at: isoURL)
 
         do {
             // Find and parse Windows installation metadata
-            let (editionInfo, parseWarnings) = try await parseWindowsMetadata(mountPoint: mountPoint)
+            let (editionInfo, parseWarnings) = try await parseWindowsMetadata(mountPoint: mountedISO.mountPoint)
 
             // Generate validation warnings based on edition info
             var warnings = parseWarnings
@@ -60,7 +65,7 @@ public actor ISOValidator {
             )
 
             // Unmount before returning
-            await unmountISO(mountPoint: mountPoint)
+            await unmountISO(mountedISO)
 
             return ISOValidationResult(
                 isoPath: isoURL,
@@ -69,7 +74,7 @@ public actor ISOValidator {
             )
         } catch {
             // Always unmount on error before rethrowing
-            await unmountISO(mountPoint: mountPoint)
+            await unmountISO(mountedISO)
             throw error
         }
     }
@@ -77,7 +82,7 @@ public actor ISOValidator {
     // MARK: - ISO Mounting
 
     /// Mounts an ISO file and returns the mount point
-    private func mountISO(at isoURL: URL) async throws -> URL {
+    private func mountISO(at isoURL: URL) async throws -> MountedISO {
         logger?.debug("Mounting ISO: \(isoURL.path)")
 
         let process = Process()
@@ -102,6 +107,15 @@ public actor ISOValidator {
         guard process.terminationStatus == 0 else {
             let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+
+            // If the image is already attached, re-use the existing mount point.
+            if errorString.localizedCaseInsensitiveContains("Resource busy"),
+               let existingMount = findExistingMountPoint(for: isoURL)
+            {
+                logger?.debug("Reusing existing ISO mount: \(existingMount.path)")
+                return MountedISO(mountPoint: existingMount, shouldDetachOnCleanup: false)
+            }
+
             throw WinRunError.isoMountFailed(
                 path: isoURL.path,
                 reason: errorString.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -127,7 +141,10 @@ public actor ISOValidator {
         for entity in entities {
             if let mountPoint = entity["mount-point"] as? String {
                 logger?.debug("ISO mounted at: \(mountPoint)")
-                return URL(fileURLWithPath: mountPoint)
+                return MountedISO(
+                    mountPoint: URL(fileURLWithPath: mountPoint),
+                    shouldDetachOnCleanup: true
+                )
             }
         }
 
@@ -138,7 +155,12 @@ public actor ISOValidator {
     }
 
     /// Unmounts an ISO from the given mount point
-    private func unmountISO(mountPoint: URL) async {
+    private func unmountISO(_ mountedISO: MountedISO) async {
+        guard mountedISO.shouldDetachOnCleanup else {
+            return
+        }
+
+        let mountPoint = mountedISO.mountPoint
         logger?.debug("Unmounting ISO from: \(mountPoint.path)")
 
         let process = Process()
@@ -153,6 +175,63 @@ public actor ISOValidator {
         }
     }
 
+    /// Attempts to find an existing mount point for an ISO that is already attached.
+    private func findExistingMountPoint(for isoURL: URL) -> URL? {
+        let infoProcess = Process()
+        infoProcess.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        infoProcess.arguments = ["info", "-plist"]
+
+        let outputPipe = Pipe()
+        infoProcess.standardOutput = outputPipe
+        infoProcess.standardError = FileHandle.nullDevice
+
+        do {
+            try infoProcess.run()
+            infoProcess.waitUntilExit()
+        } catch {
+            return nil
+        }
+
+        guard infoProcess.terminationStatus == 0 else {
+            return nil
+        }
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        guard
+            let plist = try? PropertyListSerialization.propertyList(
+                from: outputData,
+                options: [],
+                format: nil
+            ) as? [String: Any],
+            let images = plist["images"] as? [[String: Any]]
+        else {
+            return nil
+        }
+
+        let standardizedISOPath = isoURL.standardizedFileURL.path
+        for image in images {
+            guard let imagePath = image["image-path"] as? String else {
+                continue
+            }
+
+            if URL(fileURLWithPath: imagePath).standardizedFileURL.path != standardizedISOPath {
+                continue
+            }
+
+            guard let entities = image["system-entities"] as? [[String: Any]] else {
+                continue
+            }
+
+            for entity in entities {
+                if let mountPoint = entity["mount-point"] as? String {
+                    return URL(fileURLWithPath: mountPoint)
+                }
+            }
+        }
+
+        return nil
+    }
+
     // MARK: - Metadata Parsing
 
     /// Parses Windows metadata from a mounted ISO
@@ -161,20 +240,23 @@ public actor ISOValidator {
     ) async throws -> (WindowsEditionInfo?, [ISOValidationWarning]) {
         let sourcesDir = mountPoint.appendingPathComponent("sources")
 
-        // Check for install.wim or install.esd
+        // Check for install.wim, install.esd, or split install.swm images.
         let wimPath = sourcesDir.appendingPathComponent("install.wim")
         let esdPath = sourcesDir.appendingPathComponent("install.esd")
+        let splitWimPath = firstSplitInstallImage(in: sourcesDir)
 
         let installImagePath: URL
         if FileManager.default.fileExists(atPath: wimPath.path) {
             installImagePath = wimPath
         } else if FileManager.default.fileExists(atPath: esdPath.path) {
             installImagePath = esdPath
+        } else if let splitWimPath {
+            installImagePath = splitWimPath
         } else {
             // Not a valid Windows installation ISO
             throw WinRunError.isoInvalid(
                 reason:
-                    "No install.wim or install.esd found. This may not be a Windows installation ISO."
+                    "No install.wim, install.esd, or install.swm found. This may not be a Windows installation ISO."
             )
         }
 
@@ -432,6 +514,29 @@ public actor ISOValidator {
         }
 
         return try await parseWIMHeader(at: bootWimPath)?.architecture
+    }
+
+    /// Finds the first split WIM image (install.swm, install2.swm, ...)
+    /// in the mounted ISO sources directory.
+    private func firstSplitInstallImage(in sourcesDir: URL) -> URL? {
+        guard
+            let entries = try? FileManager.default.contentsOfDirectory(
+                at: sourcesDir,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return nil
+        }
+
+        return entries
+            .filter { url in
+                let name = url.lastPathComponent.lowercased()
+                return name.hasPrefix("install") && name.hasSuffix(".swm")
+            }
+            .min {
+                $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
+            }
     }
 
     // MARK: - Warning Generation

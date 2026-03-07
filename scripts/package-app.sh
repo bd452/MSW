@@ -16,6 +16,7 @@
 #   --msi PATH        Path to WinRunAgent.msi to bundle
 #   --bundle-virtio   Download and bundle VirtIO drivers ISO (~500MB)
 #   --virtio-iso PATH Use local VirtIO ISO instead of downloading
+#   --skip-sign       Skip local code signing step
 #   --help            Show this help message
 #
 # Environment variables:
@@ -41,6 +42,7 @@ OUTPUT_DIR="${REPO_ROOT}/build/WinRun.app"
 BUILD_DIR="${REPO_ROOT}/host/.build/release"
 SKIP_BUILD=false
 SKIP_LIBS=false
+SKIP_SIGN=false
 MSI_PATH=""
 BUNDLE_VIRTIO=false
 VIRTIO_ISO_PATH=""
@@ -77,6 +79,10 @@ while [[ $# -gt 0 ]]; do
             VIRTIO_ISO_PATH="$2"
             BUNDLE_VIRTIO=true
             shift 2
+            ;;
+        --skip-sign)
+            SKIP_SIGN=true
+            shift
             ;;
         --help)
             sed -n '1,/^# ===.*$/{ /^#/!d; s/^# //; s/^#$//; p; }' "$0"
@@ -161,9 +167,13 @@ copy_binaries() {
     # Copy main app binary (renamed to WinRun for the bundle)
     cp "${BUILD_DIR}/WinRunApp" "${OUTPUT_DIR}/Contents/MacOS/WinRun"
 
-    # Copy daemon and CLI binaries
+    # Copy daemon and CLI binaries.
+    #
+    # On case-insensitive filesystems (default macOS), "WinRun" and "winrun"
+    # resolve to the same path. Using "winrun" here would overwrite the GUI app
+    # binary and cause the bundle to launch the CLI with no UI.
     cp "${BUILD_DIR}/winrund" "${OUTPUT_DIR}/Contents/MacOS/winrund"
-    cp "${BUILD_DIR}/winrun" "${OUTPUT_DIR}/Contents/MacOS/winrun"
+    cp "${BUILD_DIR}/winrun" "${OUTPUT_DIR}/Contents/MacOS/winrun-cli"
 
     # Make all binaries executable
     chmod +x "${OUTPUT_DIR}/Contents/MacOS/"*
@@ -499,6 +509,50 @@ fix_library_paths() {
 }
 
 # =============================================================================
+# Sign app bundle for local virtualization entitlement
+# =============================================================================
+
+sign_bundle_for_local_use() {
+    if [[ "$SKIP_SIGN" == "true" ]]; then
+        log_info "Skipping local code signing (--skip-sign specified)"
+        return
+    fi
+
+    if ! command -v codesign >/dev/null 2>&1; then
+        log_warn "codesign not found; skipping local code signing"
+        return
+    fi
+
+    local app_entitlements="${REPO_ROOT}/infrastructure/signing/winrun-app.entitlements"
+    local daemon_entitlements="${REPO_ROOT}/infrastructure/signing/winrund.entitlements"
+    local identity="${WINRUN_CODESIGN_IDENTITY:--}"
+    local macos_dir="${OUTPUT_DIR}/Contents/MacOS"
+
+    if [[ ! -f "$app_entitlements" ]]; then
+        log_warn "App entitlements file missing: ${app_entitlements}"
+        return
+    fi
+    if [[ ! -f "$daemon_entitlements" ]]; then
+        log_warn "Daemon entitlements file missing: ${daemon_entitlements}"
+        return
+    fi
+
+    log_info "Signing bundle for local virtualization entitlement..."
+    log_info "Identity: ${identity}"
+
+    # Sign executables first (entitlements are attached at executable level).
+    codesign --force --sign "${identity}" --timestamp=none \
+        --entitlements "${app_entitlements}" "${macos_dir}/WinRun"
+    codesign --force --sign "${identity}" --timestamp=none \
+        --entitlements "${daemon_entitlements}" "${macos_dir}/winrund"
+    if [[ -f "${macos_dir}/winrun-cli" ]]; then
+        codesign --force --sign "${identity}" --timestamp=none "${macos_dir}/winrun-cli"
+    fi
+
+    log_success "Local executable code signing completed"
+}
+
+# =============================================================================
 # Create PkgInfo file
 # =============================================================================
 
@@ -523,7 +577,7 @@ validate_bundle() {
         "Contents/PkgInfo"
         "Contents/MacOS/WinRun"
         "Contents/MacOS/winrund"
-        "Contents/MacOS/winrun"
+        "Contents/MacOS/winrun-cli"
     )
 
     for file in "${required_files[@]}"; do
@@ -534,7 +588,7 @@ validate_bundle() {
     done
 
     # Check binaries are executable
-    for bin in WinRun winrund winrun; do
+    for bin in WinRun winrund winrun-cli; do
         if [[ -f "${OUTPUT_DIR}/Contents/MacOS/${bin}" ]] && [[ ! -x "${OUTPUT_DIR}/Contents/MacOS/${bin}" ]]; then
             log_error "Binary not executable: ${bin}"
             ((errors++))
@@ -571,6 +625,17 @@ print_summary() {
     fi
 
     echo ""
+
+    # Check runtime dependencies
+    if ! command -v qemu-system-aarch64 >/dev/null 2>&1; then
+        log_warn "qemu-system-aarch64 not found. Required for Windows installation."
+        log_warn "Install with: brew install qemu"
+    fi
+    if ! command -v swtpm >/dev/null 2>&1; then
+        log_warn "swtpm not found. Required for TPM 2.0 (Windows 11 requirement)."
+        log_warn "Install with: brew install swtpm"
+    fi
+
     echo "Next steps:"
     echo "  1. Test the app: open '${OUTPUT_DIR}'"
     echo "  2. Code sign:    codesign --deep --force --sign 'Developer ID' '${OUTPUT_DIR}'"
@@ -602,6 +667,7 @@ main() {
     copy_launchdaemon_plist
     bundle_spice_libraries
     fix_library_paths
+    sign_bundle_for_local_use
     create_pkginfo
     validate_bundle
     print_summary

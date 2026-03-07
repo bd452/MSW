@@ -16,15 +16,18 @@ final class WelcomeViewController: NSViewController {
 
         let title = NSTextField(labelWithString: "Welcome to WinRun")
         title.font = .systemFont(ofSize: 26, weight: .semibold)
+        title.isSelectable = true
 
         let subtitle = NSTextField(wrappingLabelWithString: """
         Run Windows apps seamlessly on your Mac.
         """
         )
         subtitle.font = .systemFont(ofSize: 14)
+        subtitle.isSelectable = true
 
         let requirementsTitle = NSTextField(labelWithString: "What you'll need")
         requirementsTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        requirementsTitle.isSelectable = true
 
         let requirementsBody = NSTextField(wrappingLabelWithString: """
         - A Windows 11 ARM64 installation ISO
@@ -33,6 +36,7 @@ final class WelcomeViewController: NSViewController {
         """
         )
         requirementsBody.font = .systemFont(ofSize: 13)
+        requirementsBody.isSelectable = true
 
         let recommendation = NSTextField(wrappingLabelWithString: """
         Recommended: Windows 11 IoT Enterprise LTSC 2024 ARM64 (best performance and least bloat).
@@ -40,6 +44,7 @@ final class WelcomeViewController: NSViewController {
         )
         recommendation.font = .systemFont(ofSize: 12)
         recommendation.textColor = .secondaryLabelColor
+        recommendation.isSelectable = true
 
         let downloadButton = NSButton(title: "Get Windows from Microsoft…", target: self, action: #selector(openMicrosoftDownload))
         downloadButton.bezelStyle = .rounded

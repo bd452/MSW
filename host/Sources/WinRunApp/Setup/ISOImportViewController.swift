@@ -34,17 +34,22 @@ final class ISOImportViewController: NSViewController {
 
     private func configureLabels() {
         titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
+        titleLabel.isSelectable = true
         subtitleLabel.font = .systemFont(ofSize: 13)
         subtitleLabel.textColor = .secondaryLabelColor
+        subtitleLabel.isSelectable = true
         selectedFileLabel.font = .systemFont(ofSize: 12)
         selectedFileLabel.textColor = .secondaryLabelColor
+        selectedFileLabel.isSelectable = true
         validationStatusLabel.font = .systemFont(ofSize: 12, weight: .medium)
         validationStatusLabel.textColor = .secondaryLabelColor
         validationStatusLabel.stringValue = "No ISO selected"
+        validationStatusLabel.isSelectable = true
         warningsLabel.font = .systemFont(ofSize: 12)
         warningsLabel.textColor = .secondaryLabelColor
         warningsLabel.lineBreakMode = .byWordWrapping
         warningsLabel.maximumNumberOfLines = 0
+        warningsLabel.isSelectable = true
     }
 
     private func configureButtons() {
@@ -125,10 +130,30 @@ final class ISOImportViewController: NSViewController {
                     guard self.lastSelectedISO == url else { return }
                     self.validationStatusLabel.stringValue = "Could not validate ISO"
                     self.validationStatusLabel.textColor = .systemRed
-                    self.warningsLabel.stringValue = (error as NSError).localizedDescription
+                    self.warningsLabel.stringValue = self.validationErrorMessage(from: error)
                 }
             }
         }
+    }
+
+    private func validationErrorMessage(from error: Error) -> String {
+        var lines: [String] = []
+
+        lines.append((error as NSError).localizedDescription)
+
+        if let localized = error as? LocalizedError {
+            if let reason = localized.failureReason, !reason.isEmpty {
+                lines.append(reason)
+            }
+            if let suggestion = localized.recoverySuggestion, !suggestion.isEmpty {
+                lines.append("Suggestion: \(suggestion)")
+            }
+        }
+
+        // De-duplicate in case localizedDescription and failureReason match.
+        var seen = Set<String>()
+        let deduped = lines.filter { seen.insert($0).inserted }
+        return deduped.joined(separator: "\n\n")
     }
 
     private func applyValidationResult(_ result: ISOValidationResult) {
@@ -203,6 +228,7 @@ private final class ISODropZoneView: NSView {
         label.font = .systemFont(ofSize: 14, weight: .medium)
         label.textColor = .secondaryLabelColor
         label.alignment = .center
+        label.isSelectable = true
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
 

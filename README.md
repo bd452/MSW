@@ -15,6 +15,7 @@ Run Windows applications seamlessly on macOS. WinRun uses Apple's Virtualization
 - **macOS 13 (Ventura) or later** on Apple Silicon (M1/M2/M3/M4)
 - **Windows 11 ARM64 ISO** (you provide your own license)
 - **~20GB free disk space** for Windows VM
+- **QEMU** + **swtpm** (installed automatically via `brew bundle` during bootstrap) — used only during initial Windows installation; swtpm provides the TPM 2.0 that Windows 11 requires
 
 ## Quick Start
 
@@ -50,9 +51,10 @@ Windows Server ARM64 **does not include x86/x64 app emulation**. Most Windows ap
 1. Launch `WinRun.app`
 2. The setup wizard will guide you through:
    - Dropping or selecting your Windows ISO
-   - Automated Windows installation (~10-15 minutes)
-   - Driver and agent configuration
-3. Once complete, you're ready to run Windows apps!
+   - Windows installation via QEMU (~10-15 minutes)
+   - VirtIO driver installation (from bundled `virtio-win.iso`)
+   - Agent and service configuration
+3. Once complete, the VM runs natively via Virtualization.framework!
 
 ### 4. Running Windows Apps
 
@@ -92,7 +94,7 @@ See `docs/architecture.md` for detailed component breakdown.
 **macOS Host:**
 - Xcode 15+
 - Swift 5.9+
-- Homebrew
+- Homebrew (QEMU and other dependencies installed via `./scripts/bootstrap.sh`)
 
 **Windows Guest (for agent development):**
 - .NET 9 SDK

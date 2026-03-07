@@ -8,7 +8,7 @@ DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
 .PHONY: help bootstrap build build-host build-guest test test-host test-guest \
         test-guest-remote test-host-remote build-host-remote check-host-remote check-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
-        check-linux install-daemon uninstall-daemon \
+        check-linux install-daemon uninstall-daemon check-deps \
         generate-protocol generate-protocol-host generate-protocol-guest generate-test-data \
         validate-protocol validate-protocol-host validate-protocol-guest \
         ci-watch brew-sync brew-check
@@ -70,6 +70,9 @@ help:
 	@echo "  bootstrap      Install dependencies and setup environment"
 	@echo "  install-daemon Install launchd daemon"
 	@echo "  uninstall-daemon Uninstall launchd daemon"
+	@echo ""
+	@echo "Dependency check:"
+	@echo "  check-deps     Verify runtime dependencies (QEMU, etc.)"
 	@echo ""
 	@echo "Homebrew targets (macOS only):"
 	@echo "  brew-sync      Install/upgrade packages and regenerate Brewfile.lock"
@@ -561,6 +564,40 @@ install-daemon:
 
 uninstall-daemon:
 	$(REPO_ROOT)/scripts/bootstrap.sh --uninstall-daemon
+
+# ============================================================================
+# Runtime Dependency Checks
+# ============================================================================
+
+check-deps:
+	@echo "🔍 Checking runtime dependencies..."
+	@MISSING=0; \
+	if ! command -v qemu-system-aarch64 >/dev/null 2>&1; then \
+		echo "❌ qemu-system-aarch64 not found (needed for Windows installation)"; \
+		echo "   Install with: brew install qemu"; \
+		MISSING=1; \
+	else \
+		echo "✅ qemu-system-aarch64: $$(qemu-system-aarch64 --version | head -1)"; \
+	fi; \
+	if ! command -v swtpm >/dev/null 2>&1; then \
+		echo "❌ swtpm not found (needed for TPM 2.0 — required by Windows 11)"; \
+		echo "   Install with: brew install swtpm"; \
+		MISSING=1; \
+	else \
+		echo "✅ swtpm: $$(swtpm --version 2>&1 | head -1)"; \
+	fi; \
+	if ! command -v codesign >/dev/null 2>&1; then \
+		echo "⚠️  codesign not found (needed for entitlement signing)"; \
+	else \
+		echo "✅ codesign available"; \
+	fi; \
+	if [ "$$MISSING" -eq 1 ]; then \
+		echo ""; \
+		echo "Run 'make bootstrap' or 'make brew-sync' to install missing dependencies."; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "✅ All runtime dependencies present."
 
 # ============================================================================
 # Homebrew Dependency Management

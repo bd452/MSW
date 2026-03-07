@@ -83,12 +83,13 @@ final class SetupFlowController {
         NSApplication.shared.activate(ignoringOtherApps: true)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "WinRun Setup"
+        window.minSize = NSSize(width: 620, height: 460)
         window.contentViewController = controller
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -120,6 +121,10 @@ extension SetupFlowController: SetupWizardCoordinatorDelegate {
         logger.info("Setup wizard finished. success=\(success)")
 
         if success {
+            let completedDiskPath = coordinator.lastResult?.diskImagePath ?? DiskImageConfiguration.defaultPath
+            if !ProvisioningPreflight.markSetupComplete(diskImagePath: completedDiskPath) {
+                logger.warn("Failed to persist setup completion marker at \(completedDiskPath.path)")
+            }
             // Close setup window and proceed to normal operation
             window?.close()
             window = nil
@@ -165,6 +170,8 @@ private final class SetupPlaceholderViewController: NSViewController {
             "No Windows VM disk image was found."
         case .diskImageIsDirectory:
             "The configured VM disk image path points to a directory."
+        case .setupIncomplete:
+            "A VM disk image exists, but setup has not completed yet."
         }
 
         let details = NSTextField(wrappingLabelWithString: """

@@ -9,6 +9,7 @@ final class SetupErrorViewController: NSViewController {
     enum RecoveryActionID: String {
         case retrySetup = "retry_setup"
         case chooseDifferentISO = "choose_different_iso"
+        case manualSetup = "manual_setup"
         case contactSupport = "contact_support"
         case reviewDetails = "review_details"
     }
@@ -78,6 +79,7 @@ final class SetupErrorViewController: NSViewController {
         error: Error,
         onRetrySetup: (() -> Void)? = nil,
         onChooseDifferentISO: (() -> Void)? = nil,
+        onManualSetup: (() -> Void)? = nil,
         onContactSupport: (() -> Void)? = nil,
         recoveryActions: [RecoveryAction] = []
     ) {
@@ -87,6 +89,7 @@ final class SetupErrorViewController: NSViewController {
             ? Self.defaultRecoveryActions(
                 onRetrySetup: onRetrySetup,
                 onChooseDifferentISO: onChooseDifferentISO,
+                onManualSetup: onManualSetup,
                 onContactSupport: onContactSupport
             )
             : recoveryActions
@@ -98,6 +101,7 @@ final class SetupErrorViewController: NSViewController {
         failureContext: SetupFailureContext,
         onRetrySetup: (() -> Void)? = nil,
         onChooseDifferentISO: (() -> Void)? = nil,
+        onManualSetup: (() -> Void)? = nil,
         onRollback: (() -> Void)? = nil,
         onContactSupport: (() -> Void)? = nil
     ) {
@@ -107,6 +111,7 @@ final class SetupErrorViewController: NSViewController {
             failureContext,
             onRetrySetup: onRetrySetup,
             onChooseDifferentISO: onChooseDifferentISO,
+            onManualSetup: onManualSetup,
             onRollback: onRollback,
             onContactSupport: onContactSupport
         )
@@ -122,18 +127,22 @@ final class SetupErrorViewController: NSViewController {
         view = NSView()
 
         titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
+        titleLabel.isSelectable = true
 
         summaryLabel.font = .systemFont(ofSize: 13)
         summaryLabel.textColor = .secondaryLabelColor
         summaryLabel.stringValue = "WinRun ran into a problem while setting up Windows."
+        summaryLabel.isSelectable = true
 
         detailsLabel.font = .systemFont(ofSize: 12)
         detailsLabel.textColor = .secondaryLabelColor
         detailsLabel.maximumNumberOfLines = 0
         detailsLabel.stringValue = formatDetails(error: error)
+        detailsLabel.isSelectable = true
 
         actionsTitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         actionsTitleLabel.textColor = .labelColor
+        actionsTitleLabel.isSelectable = true
 
         actionsStack.orientation = .vertical
         actionsStack.alignment = .leading
@@ -203,6 +212,7 @@ final class SetupErrorViewController: NSViewController {
                 helpLabel.font = .systemFont(ofSize: 12)
                 helpLabel.textColor = .secondaryLabelColor
                 helpLabel.maximumNumberOfLines = 0
+                helpLabel.isSelectable = true
                 row.addArrangedSubview(helpLabel)
             }
 
@@ -213,6 +223,7 @@ final class SetupErrorViewController: NSViewController {
     private static func defaultRecoveryActions(
         onRetrySetup: (() -> Void)?,
         onChooseDifferentISO: (() -> Void)?,
+        onManualSetup: (() -> Void)?,
         onContactSupport: (() -> Void)?
     ) -> [RecoveryAction] {
         let contact = onContactSupport ?? {
@@ -233,6 +244,13 @@ final class SetupErrorViewController: NSViewController {
                 help: "Some ISOs (e.g. Windows Server or non‑ARM64) won’t work well with WinRun.",
                 isPrimary: false,
                 handler: onChooseDifferentISO
+            ),
+            RecoveryAction(
+                id: .manualSetup,
+                title: "Continue with manual setup",
+                help: "Boot the installer manually in WinRun when automated setup is unavailable.",
+                isPrimary: false,
+                handler: onManualSetup
             ),
             RecoveryAction(
                 id: .contactSupport,
@@ -303,6 +321,7 @@ final class SetupErrorViewController: NSViewController {
         _ context: SetupFailureContext,
         onRetrySetup: (() -> Void)?,
         onChooseDifferentISO: (() -> Void)?,
+        onManualSetup: (() -> Void)?,
         onRollback: (() -> Void)?,
         onContactSupport: (() -> Void)?
     ) -> [RecoveryAction] {
@@ -326,6 +345,15 @@ final class SetupErrorViewController: NSViewController {
                     help: suggestedAction.helpText,
                     isPrimary: actions.isEmpty,
                     handler: onChooseDifferentISO
+                ))
+
+            case .manualSetup:
+                actions.append(RecoveryAction(
+                    id: .manualSetup,
+                    title: suggestedAction.displayName,
+                    help: suggestedAction.helpText,
+                    isPrimary: actions.isEmpty,
+                    handler: onManualSetup
                 ))
 
             case .rollback:

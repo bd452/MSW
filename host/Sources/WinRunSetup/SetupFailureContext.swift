@@ -135,8 +135,16 @@ public struct SetupFailureContext: Sendable, Equatable {
         case .configInvalid, .configReadFailed, .configWriteFailed:
             return [.reviewConfig, .contactSupport]
 
-        case .diskCreationFailed, .diskAlreadyExists:
+        case .notSupported(let feature):
+            if feature == "automated Windows installation" {
+                return [.manualSetup, .chooseDifferentISO, .contactSupport]
+            }
+            return [.contactSupport]
+
+        case .diskCreationFailed:
             return [.rollback, .retry, .contactSupport]
+        case .diskAlreadyExists:
+            return [.manualSetup, .rollback, .retry, .contactSupport]
 
         default:
             // Default set based on phase
@@ -160,6 +168,7 @@ public struct SetupFailureContext: Sendable, Equatable {
 public enum RecoveryActionType: String, Sendable, CaseIterable {
     case retry = "retry"
     case chooseDifferentISO = "choose_different_iso"
+    case manualSetup = "manual_setup"
     case freeDiskSpace = "free_disk_space"
     case checkNetwork = "check_network"
     case grantPermission = "grant_permission"
@@ -171,6 +180,7 @@ public enum RecoveryActionType: String, Sendable, CaseIterable {
         switch self {
         case .retry: return "Retry setup"
         case .chooseDifferentISO: return "Choose a different ISO"
+        case .manualSetup: return "Continue with manual setup"
         case .freeDiskSpace: return "Free up disk space"
         case .checkNetwork: return "Check network connection"
         case .grantPermission: return "Grant permission"
@@ -186,6 +196,8 @@ public enum RecoveryActionType: String, Sendable, CaseIterable {
             return "Try again with the same settings."
         case .chooseDifferentISO:
             return "Select a different Windows 11 ARM64 ISO file."
+        case .manualSetup:
+            return "Boot the VM manually and complete Windows setup in the installer UI."
         case .freeDiskSpace:
             return "Delete files to make room for the Windows installation (~64GB needed)."
         case .checkNetwork:

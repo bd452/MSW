@@ -255,15 +255,25 @@ public actor SetupCoordinator {
             overwriteExisting: false
         )
 
-        let result = try await diskCreator.createDiskImage(configuration: diskConfig)
+        let result: DiskImageResult
+        do {
+            result = try await diskCreator.createDiskImage(configuration: diskConfig)
+            updateProgress(phaseProgress: 0.9, message: "Disk image created")
+        } catch WinRunError.diskAlreadyExists {
+            // Resume/retry flows can leave a partial disk image behind.
+            // Reuse the existing disk so setup can proceed to installation/manual fallback.
+            guard let existing = try diskCreator.getDiskImageInfo(at: configuration.diskImagePath) else {
+                throw WinRunError.diskAlreadyExists(path: configuration.diskImagePath.path)
+            }
+            result = existing
+            updateProgress(phaseProgress: 0.9, message: "Using existing disk image")
+        }
 
         context?.diskCreationResult = DiskCreationResult(
             path: result.path,
             requestedSizeBytes: result.sizeBytes,
             isSparse: result.isSparse
         )
-
-        updateProgress(phaseProgress: 0.9, message: "Disk image created")
     }
 
     private func installWindows(configuration: SetupCoordinatorConfiguration) async throws {

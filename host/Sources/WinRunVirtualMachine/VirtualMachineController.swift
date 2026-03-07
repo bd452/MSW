@@ -417,7 +417,9 @@ public actor VirtualMachineController {
         let platform = VZGenericPlatformConfiguration()
         platform.machineIdentifier = VZGenericMachineIdentifier()
         vmConfig.platform = platform
-        vmConfig.bootLoader = VZEFIBootLoader()
+        let bootLoader = VZEFIBootLoader()
+        bootLoader.variableStore = try ensureEFIVariableStore()
+        vmConfig.bootLoader = bootLoader
 
         let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
         let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
@@ -486,6 +488,25 @@ public actor VirtualMachineController {
                 "(size: \(frameConfig.sharedMemorySizeMB)MB, tag: \(SharedMemoryManager.virtioFSTag))"
             )
         }
+    }
+
+    @available(macOS 13, *)
+    private func ensureEFIVariableStore() throws -> VZEFIVariableStore {
+        let storePath = configuration.diskImagePath
+            .deletingPathExtension()
+            .appendingPathExtension("efi-variable-store")
+
+        if FileManager.default.fileExists(atPath: storePath.path) {
+            return VZEFIVariableStore(url: storePath)
+        }
+
+        let parentDir = storePath.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: parentDir.path) {
+            try FileManager.default.createDirectory(
+                at: parentDir, withIntermediateDirectories: true)
+        }
+        logger.info("Creating new EFI variable store at \(storePath.path)")
+        return try VZEFIVariableStore(creatingVariableStoreAt: storePath)
     }
 
     @available(macOS 13, *)
