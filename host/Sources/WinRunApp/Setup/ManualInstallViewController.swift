@@ -472,16 +472,15 @@ enum QEMUInstallHelper {
 
     /// Autounattend XML that bypasses Windows 11 hardware checks (TPM, Secure Boot, RAM).
     /// Only the `windowsPE` pass is used so it doesn't automate the rest of setup.
+    // swiftlint:disable line_length
     private static let bypassAutounattendXML = """
     <?xml version="1.0" encoding="utf-8"?>
     <unattend xmlns="urn:schemas-microsoft-com:unattend"
               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+      <!-- WinPE: bypass hardware checks + load storage driver for installer -->
       <settings pass="windowsPE">
-        <component name="Microsoft-Windows-Setup"
-                   processorArchitecture="arm64"
-                   publicKeyToken="31bf3856ad364e35"
-                   language="neutral"
-                   versionScope="nonSxS">
+        <component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
           <RunSynchronous>
             <RunSynchronousCommand wcm:action="add">
               <Order>1</Order>
@@ -497,29 +496,55 @@ enum QEMUInstallHelper {
             </RunSynchronousCommand>
           </RunSynchronous>
         </component>
-        <component name="Microsoft-Windows-PnpCustomizationsWinPE"
-                   processorArchitecture="arm64"
-                   publicKeyToken="31bf3856ad364e35"
-                   language="neutral"
-                   versionScope="nonSxS">
+        <component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
           <DriverPaths>
-            <PathAndCredentials wcm:action="add" wcm:keyValue="1">
-              <Path>D:\\viostor\\w11\\ARM64</Path>
-            </PathAndCredentials>
-            <PathAndCredentials wcm:action="add" wcm:keyValue="2">
-              <Path>E:\\viostor\\w11\\ARM64</Path>
-            </PathAndCredentials>
-            <PathAndCredentials wcm:action="add" wcm:keyValue="3">
-              <Path>F:\\viostor\\w11\\ARM64</Path>
-            </PathAndCredentials>
-            <PathAndCredentials wcm:action="add" wcm:keyValue="4">
-              <Path>G:\\viostor\\w11\\ARM64</Path>
-            </PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="1"><Path>D:\\viostor\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="2"><Path>E:\\viostor\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="3"><Path>F:\\viostor\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="4"><Path>G:\\viostor\\w11\\ARM64</Path></PathAndCredentials>
           </DriverPaths>
         </component>
       </settings>
+
+      <!-- offlineServicing: inject VirtIO drivers (network, GPU, balloon) into the installed image before first boot -->
+      <settings pass="offlineServicing">
+        <component name="Microsoft-Windows-PnpCustomizationsNonWinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+          <DriverPaths>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="1"><Path>D:\\NetKVM\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="2"><Path>E:\\NetKVM\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="3"><Path>F:\\NetKVM\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="4"><Path>G:\\NetKVM\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="5"><Path>D:\\viogpudo\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="6"><Path>E:\\viogpudo\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="7"><Path>F:\\viogpudo\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="8"><Path>G:\\viogpudo\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="9"><Path>D:\\Balloon\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="10"><Path>E:\\Balloon\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="11"><Path>F:\\Balloon\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="12"><Path>G:\\Balloon\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="13"><Path>D:\\vioser\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="14"><Path>E:\\vioser\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="15"><Path>F:\\vioser\\w11\\ARM64</Path></PathAndCredentials>
+            <PathAndCredentials wcm:action="add" wcm:keyValue="16"><Path>G:\\vioser\\w11\\ARM64</Path></PathAndCredentials>
+          </DriverPaths>
+        </component>
+      </settings>
+
+      <!-- specialize: allow OOBE to proceed without network if driver injection didn't take -->
+      <settings pass="specialize">
+        <component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+          <RunSynchronous>
+            <RunSynchronousCommand wcm:action="add">
+              <Order>1</Order>
+              <Path>reg add HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
+            </RunSynchronousCommand>
+          </RunSynchronous>
+        </component>
+      </settings>
+
     </unattend>
     """
+    // swiftlint:enable line_length
 
     /// Creates a small ISO containing `autounattend.xml` that bypasses
     /// Windows 11 hardware checks. Uses macOS's built-in `hdiutil`.
@@ -634,7 +659,6 @@ enum QEMUInstallHelper {
             "if=pflash,format=raw,file=\(nvram.path)",
 
             "-device", "ramfb",
-            "-device", "virtio-gpu-pci",
 
             "-device", "qemu-xhci",
             "-device", "usb-kbd",
