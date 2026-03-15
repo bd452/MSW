@@ -121,13 +121,20 @@ make test
 # Linux-friendly checks (lint + guest build/test)
 make check-linux
 
+# One-time Linux setup for Wine guest checks
+make setup-wine-tests   # installs Linux dotnet + Wine + Windows dotnet.exe
+
 # Host tests
 make test-host          # Local (requires macOS)
 make test-host-remote   # Remote via GitHub Actions
 
 # Guest tests
 make test-guest         # Local (requires .NET SDK)
+make test-guest-wine    # Local under Wine (optional, needs WINE_DOTNET_EXE or ~/.dotnet-windows/dotnet.exe)
 make test-guest-remote  # Remote via GitHub Actions (recommended for CI parity)
+
+# Linux mid-task loop
+make check-linux-mid    # check-linux + Wine guest tests
 ```
 
 ### Documentation
