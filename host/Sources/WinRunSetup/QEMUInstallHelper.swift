@@ -88,6 +88,12 @@ public final class InstallerLaunchSession: @unchecked Sendable {
     public func waitForExit(
         isCancelled: @escaping @Sendable () -> Bool
     ) async throws -> Int32 {
+        // Unit tests may inject a non-launched Process instance.
+        guard qemuProcess.processIdentifier != 0 else {
+            performCleanupIfNeeded()
+            return 0
+        }
+
         while qemuProcess.isRunning {
             if isCancelled() || Task.isCancelled {
                 terminate()
