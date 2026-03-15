@@ -9,14 +9,15 @@ public struct KeyCodeMapper: Sendable {
         return macToWindowsKeyMap[macKeyCode] ?? UInt32(macKeyCode)
     }
 
-    /// Convert macOS modifier flags to KeyModifiers
+    /// Convert macOS modifier flags to KeyModifiers.
+    /// Command↔Control are swapped so macOS Cmd+C becomes Windows Ctrl+C.
     public static func modifiers(fromMacOS flags: UInt) -> KeyModifiers {
         var result: KeyModifiers = []
-        if flags & (1 << 17) != 0 { result.insert(.shift) }      // NSEvent.ModifierFlags.shift
-        if flags & (1 << 18) != 0 { result.insert(.control) }    // NSEvent.ModifierFlags.control
-        if flags & (1 << 19) != 0 { result.insert(.alt) }        // NSEvent.ModifierFlags.option
-        if flags & (1 << 20) != 0 { result.insert(.command) }    // NSEvent.ModifierFlags.command
-        if flags & (1 << 16) != 0 { result.insert(.capsLock) }   // NSEvent.ModifierFlags.capsLock
+        if flags & (1 << 17) != 0 { result.insert(.shift) }
+        if flags & (1 << 20) != 0 { result.insert(.control) }    // macOS Command → guest Control
+        if flags & (1 << 19) != 0 { result.insert(.alt) }
+        if flags & (1 << 18) != 0 { result.insert(.command) }    // macOS Control → guest Command/Win
+        if flags & (1 << 16) != 0 { result.insert(.capsLock) }
         return result
     }
 
@@ -117,11 +118,15 @@ public struct KeyCodeMapper: Sendable {
         0x7E: 0x26, // Up -> VK_UP
         0x7D: 0x28, // Down -> VK_DOWN
 
-        // Modifiers
-        0x38: 0x10, // Shift -> VK_SHIFT
-        0x3B: 0x11, // Control -> VK_CONTROL
-        0x3A: 0x12, // Option -> VK_MENU (Alt)
-        0x37: 0x5B, // Command -> VK_LWIN
+        // Modifiers (Command↔Control swapped for natural macOS→Windows mapping)
+        0x38: 0x10, // Left Shift -> VK_SHIFT
+        0x3C: 0x10, // Right Shift -> VK_SHIFT
+        0x37: 0x11, // Left Command -> VK_CONTROL (swapped)
+        0x36: 0x11, // Right Command -> VK_CONTROL (swapped)
+        0x3A: 0x12, // Left Option -> VK_MENU (Alt)
+        0x3D: 0x12, // Right Option -> VK_MENU (Alt)
+        0x3B: 0x5B, // Left Control -> VK_LWIN (swapped)
+        0x3E: 0x5C, // Right Control -> VK_RWIN (swapped)
     ]
 
     // macOS keyCode -> PC Set 1 scancode (without E0 prefix).
@@ -171,22 +176,23 @@ public struct KeyCodeMapper: Sendable {
         0x7A: 0x3B, 0x78: 0x3C, 0x63: 0x3D, 0x76: 0x3E, 0x60: 0x3F, 0x61: 0x40,
         0x62: 0x41, 0x64: 0x42, 0x65: 0x43, 0x6D: 0x44, 0x67: 0x57, 0x6F: 0x58,
 
-        // Modifiers
+        // Modifiers (Command↔Control swapped)
         0x38: 0x2A, // Left Shift
         0x3C: 0x36, // Right Shift
-        0x3B: 0x1D, // Left Control
-        0x3E: 0x1D, // Right Control (extended)
+        0x37: 0x1D, // Left Command → Left Control scan code
+        0x36: 0x1D, // Right Command → Right Control scan code (extended)
         0x3A: 0x38, // Left Alt
         0x3D: 0x38, // Right Alt (extended)
-        0x37: 0x5B, // Left Command (LWIN, extended)
-        0x36: 0x5C, // Right Command (RWIN, extended)
+        0x3B: 0x5B, // Left Control → Left Win scan code (extended)
+        0x3E: 0x5C, // Right Control → Right Win scan code (extended)
         0x39: 0x3A, // Caps Lock
     ]
 
     private static let extendedScanCodeKeys: Set<UInt16> = [
         0x75, 0x73, 0x77, 0x74, 0x79, // Del/Home/End/PgUp/PgDn
         0x7B, 0x7C, 0x7D, 0x7E,       // arrows
-        0x3E, 0x3D,                   // right ctrl/alt
-        0x37, 0x36,                   // cmd -> win
+        0x3D,                         // right alt
+        0x36,                         // right cmd → right ctrl (extended)
+        0x3B, 0x3E,                   // left/right ctrl → win (extended)
     ]
 }

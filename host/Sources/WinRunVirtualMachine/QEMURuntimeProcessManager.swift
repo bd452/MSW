@@ -58,6 +58,8 @@ final class QEMURuntimeProcessManager {
             throw QEMURuntimeProcessError.unsupportedNetworkMode(configuration.network.mode.rawValue)
         }
 
+        await cleanupStaleRuntime()
+
         let context = try prepareLaunchContext(configuration: configuration)
 
         do {
@@ -68,6 +70,7 @@ final class QEMURuntimeProcessManager {
             )
             let process = try launchQEMU(binary: context.qemuBinary, arguments: context.arguments)
             qemuProcess = process
+            writeRuntimePID(process.processIdentifier)
             try await waitForSpiceReady(timeoutSeconds: 25)
         } catch {
             logger.error("Runtime start failed; cleaning up partial processes: \(error.localizedDescription)")
@@ -77,6 +80,7 @@ final class QEMURuntimeProcessManager {
             swtpmProcess = nil
             qemuStderrPipe = nil
             swtpmStderrPipe = nil
+            removeRuntimePIDFile()
             throw error
         }
     }
@@ -88,6 +92,7 @@ final class QEMURuntimeProcessManager {
         swtpmProcess = nil
         qemuStderrPipe = nil
         swtpmStderrPipe = nil
+        removeRuntimePIDFile()
     }
 
     func checkHealth() throws {
@@ -133,6 +138,97 @@ final class QEMURuntimeProcessManager {
             "-device", "tpm-tis-device,tpmdev=tpm0",
             "-nic", "user,model=virtio-net-pci,mac=\(mac)",
         ]
+    }
+
+    // MARK: - Stale Runtime Cleanup
+
+    /// Terminates any QEMU process left over from a previous app instance so the
+    /// SPICE port is free for a fresh launch.
+    private func cleanupStaleRuntime() async {
+        let pidFile = runtimePIDFilePath()
+        let fm = FileManager.default
+
+        if let pidString = try? String(contentsOfFile: pidFile, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            let pid = Int32(pidString), pid > 0 {
+            if isProcessAlive(pid) {
+                logger.warn("Terminating stale QEMU from previous run (pid=\(pid))")
+                await terminatePID(pid, graceSeconds: 6)
+            }
+            try? fm.removeItem(atPath: pidFile)
+        }
+
+        guard canConnectToLocalPort(spicePort) else { return }
+        logger.warn("SPICE port \(spicePort) still occupied; searching for occupant")
+
+        if let occupantPID = findPIDOnPort(spicePort) {
+            logger.warn("Killing port occupant pid=\(occupantPID)")
+            await terminatePID(occupantPID, graceSeconds: 6)
+        }
+
+        for _ in 0..<20 where canConnectToLocalPort(spicePort) {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+
+        if canConnectToLocalPort(spicePort) {
+            logger.error("SPICE port \(spicePort) is still occupied after cleanup; launch will likely fail")
+        }
+    }
+
+    private func runtimePIDFilePath() -> String {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/WinRun/qemu-\(spicePort).pid")
+            .path
+    }
+
+    private func writeRuntimePID(_ pid: Int32) {
+        let path = runtimePIDFilePath()
+        let dir = (path as NSString).deletingLastPathComponent
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? "\(pid)".write(toFile: path, atomically: true, encoding: .utf8)
+    }
+
+    private func removeRuntimePIDFile() {
+        try? FileManager.default.removeItem(atPath: runtimePIDFilePath())
+    }
+
+    private func isProcessAlive(_ pid: Int32) -> Bool {
+        #if canImport(Darwin)
+        return kill(pid, 0) == 0
+        #else
+        return false
+        #endif
+    }
+
+    private func terminatePID(_ pid: Int32, graceSeconds: TimeInterval) async {
+        #if canImport(Darwin)
+        kill(pid, SIGTERM)
+        let deadline = Date().addingTimeInterval(graceSeconds)
+        while Date() < deadline {
+            if !isProcessAlive(pid) { return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+        if isProcessAlive(pid) {
+            logger.warn("Process pid=\(pid) did not exit gracefully; sending SIGKILL")
+            kill(pid, SIGKILL)
+        }
+        #endif
+    }
+
+    /// Uses lsof to find which PID is listening on the given TCP port.
+    private func findPIDOnPort(_ port: UInt16) -> Int32? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        process.arguments = ["-ti", ":\(port)"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        process.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else { return nil }
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: "\n").compactMap { Int32($0) }.first
     }
 
     private struct LaunchContext {

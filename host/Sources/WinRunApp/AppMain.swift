@@ -66,6 +66,11 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
             NSMenuItem(
+                title: "Send Ctrl+Alt+Delete",
+                action: #selector(sendCtrlAltDelete),
+                keyEquivalent: ""))
+        appMenu.addItem(
+            NSMenuItem(
                 title: "Show VM Console",
                 action: #selector(openConsole),
                 keyEquivalent: ""))
@@ -212,7 +217,8 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         do {
             let request = ProgramLaunchRequest(windowsPath: executable)
             try await serviceProvider.executeProgram(request)
-            windowController.presentWindow(title: executable)
+            windowController.presentWindow(title: executable, executablePath: executable)
+            windowController.updateDockIdentity(programName: executable)
             logger.info("Launched \(executable)")
         } catch {
             logger.error("Failed to launch program: \(error)")
@@ -317,6 +323,12 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             consoleWindowController.showConsole(agentStatus: .notFound)
         }
+    }
+
+    // MARK: - Guest Input
+
+    @objc private func sendCtrlAltDelete() {
+        windowController.sendCtrlAltDel()
     }
 
     // MARK: - About / Settings / Help
