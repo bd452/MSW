@@ -62,6 +62,7 @@ After completing a task:
 3. **Run local checks**:
    - On macOS: `make check` (full lint + build + test for host and guest)
    - On Linux (cloud agents): `make check-linux` (lint + guest build/test; host build/test skipped)
+   - One-time Linux setup for Wine loop: `make setup-wine-tests` (installs Linux dotnet + Wine + Windows dotnet.exe)
    - For guest-focused mid-task loops on Linux: `make check-linux-mid` (adds Wine guest tests)
 4. **Run remote tests at full-task completion and iterate until they pass**:
    - **For host changes**:
@@ -233,6 +234,7 @@ Tests are not optional for qualifying code — CI will enforce this by requiring
 # Full CI check — run before pushing
 make check           # macOS: full host + guest coverage
 make check-linux     # Linux: lint + guest build/test (host build/test skipped)
+make setup-wine-tests # Linux one-time setup (Linux dotnet + Wine + Windows dotnet.exe)
 make check-linux-mid # Linux mid-task loop (check-linux + Wine guest tests)
 
 # All tests only
@@ -245,6 +247,7 @@ make test-host    # test only (requires macOS)
 # Guest only (local)
 make check-guest        # lint + build + test (NOTE: doesn't catch CRLF issues)
 make test-guest         # test only
+make setup-wine-tests   # Linux one-time setup for Wine guest tests
 make test-guest-wine    # test under Wine (optional local Windows approximation)
 
 # Remote tests (platform-specific validation)

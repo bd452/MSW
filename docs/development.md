@@ -412,18 +412,32 @@ make check-remote        # full CI remotely (host on macOS, guest on Windows)
 # Linux-friendly (runs what works locally on Linux)
 make check-linux         # lint both + guest build/test
 make check-linux-mid     # check-linux + Wine guest tests (recommended mid-task)
+
+# One-time setup for Wine guest tests (Linux)
+make setup-wine-tests
+make verify-wine-tests
 ```
 
 ### Wine-Assisted Guest Tests (Linux)
 
 `make test-guest-wine` runs guest tests through Wine using a Windows `dotnet.exe`, which provides a closer approximation to native Windows behavior during development.
 
-Requirements:
-- `wine` + `winepath` installed
-- A Windows .NET SDK extracted/installed locally, with `dotnet.exe` available
+One-time setup:
+```bash
+make setup-wine-tests
+make verify-wine-tests
+```
+
+Requirements (handled by `make setup-wine-tests`):
+- `wine`
+- `curl`, `jq`, and `unzip`
+- Linux .NET SDK in `~/.dotnet` (for `check-linux`/`check-linux-mid`)
+- A Windows .NET SDK extracted locally, with `dotnet.exe` available
 
 Environment variables:
 - `WINE_DOTNET_EXE` — path to Windows `dotnet.exe` (default: `~/.dotnet-windows/dotnet.exe`)
+- `LINUX_DOTNET` — Linux `dotnet` path used for restore priming (defaults to `dotnet` or `~/.dotnet/dotnet`)
+- `WINEPREFIX` — Wine prefix path (default: `~/.wine-winrun`)
 - `WINE_TEST_CONFIGURATION` — test configuration (`Debug` by default)
 - `WINE_TEST_PROJECT` — override test project path (defaults to `guest/WinRunAgent.Tests/WinRunAgent.Tests.csproj`)
 
@@ -511,6 +525,9 @@ make test-guest-remote    # REQUIRED: Tests on Windows CI (catches platform-spec
 
 **On Linux (or non-macOS environments like Cursor web agent):**
 ```bash
+# One-time setup per machine/agent
+make setup-wine-tests
+
 # Mid-task loop: run fast native checks + Wine guest tests
 make check-linux-mid      # Lint/build/test + Wine guest tests
 

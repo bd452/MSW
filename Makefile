@@ -5,7 +5,7 @@ REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 SWIFTLINT := $(shell command -v swiftlint 2>/dev/null || echo "$(REPO_ROOT)/.tools/swiftlint/swiftlint-static")
 DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
 
-.PHONY: help bootstrap build build-host build-guest test test-host test-guest test-guest-wine \
+.PHONY: help bootstrap setup-wine-tests verify-wine-tests build build-host build-guest test test-host test-guest test-guest-wine \
         test-guest-remote test-host-remote build-host-remote check-host-remote check-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
         check-linux check-linux-mid install-daemon uninstall-daemon \
@@ -73,6 +73,8 @@ help:
 	@echo ""
 	@echo "Setup targets:"
 	@echo "  bootstrap      Install dependencies and setup environment"
+	@echo "  setup-wine-tests  Install Linux/Wine prerequisites for guest test loop"
+	@echo "  verify-wine-tests Verify Wine guest test prerequisites are available"
 	@echo "  install-daemon Install launchd daemon"
 	@echo "  uninstall-daemon Uninstall launchd daemon"
 	@echo ""
@@ -86,6 +88,12 @@ help:
 
 bootstrap:
 	$(REPO_ROOT)/scripts/bootstrap.sh
+
+setup-wine-tests:
+	$(REPO_ROOT)/scripts/setup-wine-tests.sh
+
+verify-wine-tests:
+	$(REPO_ROOT)/scripts/setup-wine-tests.sh --verify-only
 
 build: build-host build-guest
 

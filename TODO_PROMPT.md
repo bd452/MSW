@@ -63,6 +63,7 @@ After completing a task:
    2.a. If the new code makes changes to areas with existing test coverage, update the relevant tests if necessary.
 3. **Run local mid-task checks**:
    - Baseline: `make check-linux`
+   - One-time Linux setup for Wine loop: `make setup-wine-tests` (installs Linux dotnet + Wine + Windows dotnet.exe)
    - Preferred for guest development loops: `make check-linux-mid` (adds Wine guest tests)
 4. **Run remote tests at full-task completion and iterate until they pass**:
    - For host changes: `make test-host-remote`
@@ -242,6 +243,7 @@ make test-host    # test only
 # Guest only (requires .NET 8 SDK or use remote)
 make check-guest        # lint + build + test (local)
 make test-guest         # test only (local)
+make setup-wine-tests   # Linux one-time setup for Wine guest tests
 make test-guest-wine    # test under Wine (optional local Windows approximation)
 make check-linux-mid    # Linux dev loop: check-linux + Wine guest tests
 
