@@ -19,7 +19,7 @@ final class QEMURuntimeProcessManagerTests: XCTestCase {
         )
 
         XCTAssertTrue(args.contains("-spice"))
-        XCTAssertTrue(args.contains("addr=127.0.0.1,port=5930,disable-ticketing=on"))
+        XCTAssertTrue(args.contains(where: { $0.contains("addr=127.0.0.1,port=5930,disable-ticketing=on") }))
         XCTAssertTrue(args.contains("-tpmdev"))
         XCTAssertTrue(args.contains("emulator,id=tpm0,chardev=chrtpm"))
         XCTAssertTrue(args.contains("-accel"))

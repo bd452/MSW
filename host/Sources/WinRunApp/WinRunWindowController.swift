@@ -29,6 +29,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     private var sharedMemoryMapping: SharedMemoryFileMapping?
     private var loggedFirstRawFrame = false
     private var loggedFirstSharedFrame = false
+    private var hasObservedVisualContent = false
 
     /// Clipboard synchronization
     private let clipboardManager: ClipboardManager
@@ -82,15 +83,6 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         logger.info("Window created with Metal rendering layer and input forwarding")
         stream.connect(toWindowID: activeWindowID)
         consoleLog("Requested Spice stream connect for windowID=\(activeWindowID)")
-
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await self.controlChannel.connect()
-            } catch {
-                self.logger.warn("Failed to connect control channel: \(error)")
-            }
-        }
     }
 
     // MARK: - MetalContentViewInputDelegate
@@ -110,12 +102,6 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     func metalContentViewDidRequestRetry(_ view: MetalContentView) {
         logger.info("User requested connection retry")
         stream.reconnect()
-        Task { [weak self] in
-            guard let self else { return }
-            if await !self.controlChannel.connected {
-                try? await self.controlChannel.connect()
-            }
-        }
     }
 
     // MARK: - SpiceWindowStreamDelegate
@@ -125,6 +111,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
             loggedFirstRawFrame = true
             consoleLog("Received first raw frame (\(frame.count) bytes)")
         }
+        markVisualContentObserved()
         guard let metalView = metalContentView else { return }
 
         // Use metadata dimensions if available, otherwise estimate from frame size
@@ -157,6 +144,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         consoleLog(
             "Metadata update window=\(metadata.windowID) size=\(Int(metadata.frame.width))x\(Int(metadata.frame.height))"
         )
+        markVisualContentObserved()
         applyMetadata(metadata)
     }
 
@@ -165,6 +153,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
             loggedFirstSharedFrame = true
             consoleLog("Received first shared frame number=\(frame.frameNumber)")
         }
+        markVisualContentObserved()
         guard let metalView = metalContentView else { return }
         let scaleFactor = currentMetadata?.scaleFactor ?? 1.0
         metalView.updateSharedFrame(frame, guestScaleFactor: scaleFactor)
@@ -342,6 +331,17 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     private func consoleLog(_ message: String) {
         let line = "[CONSOLE] \(message)\n"
         _ = line.withCString { fputs($0, stderr) }
+    }
+
+    private func markVisualContentObserved() {
+        guard !hasObservedVisualContent else { return }
+        hasObservedVisualContent = true
+        // Control channel is intentionally NOT connected here.
+        // QEMU's SPICE server only supports one display client at a time.
+        // Opening a second SpiceSession for the control channel causes the
+        // server to tear down display channels on the render session, resulting
+        // in a black screen. The control channel needs to share the render
+        // session's transport (future work) rather than opening its own.
     }
 }
 

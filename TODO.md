@@ -23,6 +23,11 @@
     - [ ] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/ClipboardManager.swift, host/Sources/WinRunShared/InputModels.swift } <docs/decisions/spice-bridge.md>
     - [X] Handle window lifecycle + reconnection to streams { host/Sources/WinRunApp/WinRunWindowController.swift, host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [ ] Harden keyboard/mouse fidelity for login + desktop workflows { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunSpiceBridge/KeyCodeMapper.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/spice-bridge.md>
+    - [ ] Share single SPICE session between render stream and control channel { host/Sources/WinRunApp/WinRunWindowController.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/spice-bridge.md>
+      - QEMU's SPICE server only supports one display client; opening a second SpiceSession for the control channel tears down display channels on the render session
+      - Control channel is currently wired but intentionally disconnected to avoid this
+      - Fix: route control/port channel callbacks through the render session's existing transport instead of opening a separate session
+      - Blocked features until fixed: guest agent frame routing (FrameReady), settings push (FrameBufferMode), window metadata from agent
   - [ ] Runtime ownership + reuse policy { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift, host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunShared/RuntimeEnvironment.swift } <docs/architecture.md>
     - [ ] Reuse compatible runtime instance on app start when present
     - [ ] Replace stale/incompatible runtime instance deterministically
