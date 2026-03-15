@@ -294,8 +294,90 @@ final class InstallationLifecycleTests: XCTestCase {
         }
     }
 
+    func testInstallToFirstBootTransitionOccursInOrder() async throws {
+        let delegate = try await runInstallationWithDelegate()
+
+        guard
+            let firstInstallingFeaturesIndex = delegate.progressUpdates.firstIndex(where: { $0.phase == .installingFeatures }),
+            let firstFirstBootIndex = delegate.progressUpdates.firstIndex(where: { $0.phase == .firstBoot })
+        else {
+            XCTFail("Expected installingFeatures and firstBoot phase updates")
+            return
+        }
+
+        XCTAssertLessThan(
+            firstInstallingFeaturesIndex,
+            firstFirstBootIndex,
+            "installingFeatures should occur before firstBoot"
+        )
+    }
+
+    func testFirstBootProgressIncrementsAndMessageIsSet() async throws {
+        let delegate = try await runInstallationWithDelegate()
+
+        let firstBootUpdates = delegate.progressUpdates.filter { $0.phase == .firstBoot }
+        XCTAssertEqual(firstBootUpdates.count, 10, "Simulation should emit 10 progress steps for firstBoot")
+
+        var previousPhaseProgress = 0.0
+        for update in firstBootUpdates {
+            XCTAssertGreaterThan(
+                update.phaseProgress,
+                previousPhaseProgress,
+                "firstBoot phaseProgress should increase monotonically"
+            )
+            XCTAssertEqual(update.message, "Completing first-time setup...")
+            previousPhaseProgress = update.phaseProgress
+        }
+
+        XCTAssertEqual(firstBootUpdates.last?.phaseProgress, 1.0, accuracy: 0.0001)
+    }
+
+    func testCancelAtFirstBootDoesNotContinueToPostInstall() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+
+        let localProvisioner = provisioner!
+        let delegate = CancellingInstallationDelegate(targetPhase: .firstBoot) {
+            localProvisioner.cancelInstallation()
+        }
+
+        let result = try await localProvisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertTrue(result.finalPhase.isTerminal)
+        XCTAssertTrue(delegate.observedPhases.contains(.firstBoot))
+        XCTAssertFalse(delegate.observedPhases.contains(.postInstall))
+        XCTAssertFalse(delegate.observedPhases.contains(.complete))
+    }
+
     func testIsInstalling_InitiallyFalse() {
         XCTAssertFalse(provisioner.isInstalling)
+    }
+
+    // MARK: - Shared Test Helpers
+
+    private func runInstallationWithDelegate() async throws -> MockInstallationDelegate {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+        let delegate = MockInstallationDelegate()
+
+        let result = try await provisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+        XCTAssertTrue(result.success)
+        return delegate
     }
 }
 
