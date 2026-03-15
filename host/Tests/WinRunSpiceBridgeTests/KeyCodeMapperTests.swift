@@ -1,95 +1,118 @@
-import XCTest
+import Testing
 @testable import WinRunSpiceBridge
 
-final class KeyCodeMapperTests: XCTestCase {
+@Suite("KeyCodeMapper")
+struct KeyCodeMapperTests {
     // MARK: - Command ↔ Control Swap
 
-    func testCommandMapsToControl() {
+    @Test("macOS Command modifier maps to guest Control")
+    func commandMapsToControl() {
         let commandFlag: UInt = 1 << 20
         let mods = KeyCodeMapper.modifiers(fromMacOS: commandFlag)
-        XCTAssertTrue(mods.contains(.control))
-        XCTAssertFalse(mods.contains(.command))
+        #expect(mods.contains(.control))
+        #expect(!mods.contains(.command))
     }
 
-    func testControlMapsToCommand() {
+    @Test("macOS Control modifier maps to guest Command/Win")
+    func controlMapsToCommand() {
         let controlFlag: UInt = 1 << 18
         let mods = KeyCodeMapper.modifiers(fromMacOS: controlFlag)
-        XCTAssertTrue(mods.contains(.command))
-        XCTAssertFalse(mods.contains(.control))
+        #expect(mods.contains(.command))
+        #expect(!mods.contains(.control))
     }
 
-    func testLeftCommandKeyCode() {
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x37), 0x11) // VK_CONTROL
+    @Test("Left Command key produces VK_CONTROL")
+    func leftCommandKeyCode() {
+        let vk = KeyCodeMapper.windowsKeyCode(fromMacOS: 0x37)
+        #expect(vk == 0x11) // VK_CONTROL
     }
 
-    func testLeftControlKeyCode() {
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3B), 0x5B) // VK_LWIN
+    @Test("Left Control key produces VK_LWIN")
+    func leftControlKeyCode() {
+        let vk = KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3B)
+        #expect(vk == 0x5B) // VK_LWIN
     }
 
-    func testRightCommandKeyCode() {
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x36), 0x11) // VK_CONTROL
+    @Test("Right Command key produces VK_CONTROL")
+    func rightCommandKeyCode() {
+        let vk = KeyCodeMapper.windowsKeyCode(fromMacOS: 0x36)
+        #expect(vk == 0x11) // VK_CONTROL
     }
 
-    func testRightControlKeyCode() {
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3E), 0x5C) // VK_RWIN
+    @Test("Right Control key produces VK_RWIN")
+    func rightControlKeyCode() {
+        let vk = KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3E)
+        #expect(vk == 0x5C) // VK_RWIN
     }
 
     // MARK: - Scan Codes
 
-    func testLeftCommandScanCode() {
-        XCTAssertEqual(KeyCodeMapper.windowsScanCode(fromMacOS: 0x37), 0x1D)
-        XCTAssertFalse(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x37))
+    @Test("Left Command scan code is Left Ctrl (0x1D, not extended)")
+    func leftCommandScanCode() {
+        let scan = KeyCodeMapper.windowsScanCode(fromMacOS: 0x37)
+        #expect(scan == 0x1D)
+        #expect(!KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x37))
     }
 
-    func testRightCommandScanCode() {
-        XCTAssertEqual(KeyCodeMapper.windowsScanCode(fromMacOS: 0x36), 0x1D)
-        XCTAssertTrue(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x36))
+    @Test("Right Command scan code is Right Ctrl (0x1D, extended)")
+    func rightCommandScanCode() {
+        let scan = KeyCodeMapper.windowsScanCode(fromMacOS: 0x36)
+        #expect(scan == 0x1D)
+        #expect(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x36))
     }
 
-    func testLeftControlScanCode() {
-        XCTAssertEqual(KeyCodeMapper.windowsScanCode(fromMacOS: 0x3B), 0x5B)
-        XCTAssertTrue(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x3B))
+    @Test("Left Control scan code is Left Win (0x5B, extended)")
+    func leftControlScanCode() {
+        let scan = KeyCodeMapper.windowsScanCode(fromMacOS: 0x3B)
+        #expect(scan == 0x5B)
+        #expect(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x3B))
     }
 
     // MARK: - Modifier Key Down Detection
 
-    func testCommandKeyDownDetection() {
+    @Test("isModifierKeyDown detects Command key from command flag")
+    func commandKeyDownDetection() {
         let commandFlag: UInt = 1 << 20
-        XCTAssertTrue(KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x37, flags: commandFlag))
-        XCTAssertFalse(KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x37, flags: 0))
+        #expect(KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x37, flags: commandFlag))
+        #expect(!KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x37, flags: 0))
     }
 
-    func testControlKeyDownDetection() {
+    @Test("isModifierKeyDown detects Control key from control flag")
+    func controlKeyDownDetection() {
         let controlFlag: UInt = 1 << 18
-        XCTAssertTrue(KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x3B, flags: controlFlag))
-        XCTAssertFalse(KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x3B, flags: 0))
+        #expect(KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x3B, flags: controlFlag))
+        #expect(!KeyCodeMapper.isModifierKeyDown(macKeyCode: 0x3B, flags: 0))
     }
 
     // MARK: - Standard Key Mappings
 
-    func testLetterKeys() {
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x00), 0x41) // A
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x08), 0x43) // C
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x09), 0x56) // V
+    @Test("Letter keys map correctly")
+    func letterKeys() {
+        #expect(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x00) == 0x41) // A
+        #expect(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x08) == 0x43) // C
+        #expect(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x09) == 0x56) // V
     }
 
-    func testArrowKeysExtended() {
-        XCTAssertTrue(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7B))  // Left
-        XCTAssertTrue(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7C))  // Right
-        XCTAssertTrue(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7D))  // Down
-        XCTAssertTrue(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7E))  // Up
+    @Test("Arrow keys have extended scan codes")
+    func arrowKeysExtended() {
+        #expect(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7B)) // Left
+        #expect(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7C)) // Right
+        #expect(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7D)) // Down
+        #expect(KeyCodeMapper.isExtendedScanCode(fromMacOS: 0x7E)) // Up
     }
 
-    func testRightSideModifierVKCodes() {
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3C), 0x10) // Right Shift
-        XCTAssertEqual(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3D), 0x12) // Right Option/Alt
+    @Test("Right-side modifier VK codes are mapped")
+    func rightSideModifierVKCodes() {
+        #expect(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3C) == 0x10) // Right Shift
+        #expect(KeyCodeMapper.windowsKeyCode(fromMacOS: 0x3D) == 0x12) // Right Option/Alt
     }
 
-    func testCombinedModifiers() {
+    @Test("Combined modifiers map correctly with swap")
+    func combinedModifiers() {
         let cmdShift: UInt = (1 << 20) | (1 << 17)
         let mods = KeyCodeMapper.modifiers(fromMacOS: cmdShift)
-        XCTAssertTrue(mods.contains(.control))
-        XCTAssertTrue(mods.contains(.shift))
-        XCTAssertFalse(mods.contains(.command))
+        #expect(mods.contains(.control))
+        #expect(mods.contains(.shift))
+        #expect(!mods.contains(.command))
     }
 }
