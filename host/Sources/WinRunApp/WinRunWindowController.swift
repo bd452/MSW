@@ -34,6 +34,10 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     /// Clipboard synchronization
     private let clipboardManager: ClipboardManager
 
+    /// Cached app icon from guest (keyed by executable path)
+    private var iconCache: [String: NSImage] = [:]
+    private var currentExecutablePath: String?
+
     override init() {
         self.logger = StandardLogger(subsystem: "WinRunWindowController")
         self.stream = SpiceWindowStream(configuration: SpiceStreamConfiguration.environmentDefault())
@@ -47,7 +51,8 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         clipboardManager.delegate = self
     }
 
-    func presentWindow(title: String) {
+    func presentWindow(title: String, executablePath: String? = nil) {
+        currentExecutablePath = executablePath
         let contentRect = NSRect(x: 100, y: 100, width: 800, height: 600)
         let window = NSWindow(
             contentRect: contentRect,
@@ -83,6 +88,12 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         logger.info("Window created with Metal rendering layer and input forwarding")
         stream.connect(toWindowID: activeWindowID)
         consoleLog("Requested Spice stream connect for windowID=\(activeWindowID)")
+    }
+
+    // MARK: - Guest Input Helpers
+
+    func sendCtrlAltDel() {
+        metalContentView?.sendCtrlAltDel()
     }
 
     // MARK: - MetalContentViewInputDelegate
@@ -193,11 +204,11 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
         didReceiveMessage message: Any,
         type: SpiceMessageType
     ) {
-        guard type == .windowMetadata, let metadataMessage = message as? WindowMetadataMessage else {
-            return
+        if type == .windowMetadata, let metadataMessage = message as? WindowMetadataMessage {
+            handleWindowMetadataMessage(metadataMessage)
+        } else if type == .iconData, let iconMessage = message as? IconDataMessage {
+            handleIconDataMessage(iconMessage)
         }
-
-        handleWindowMetadataMessage(metadataMessage)
     }
 
     func controlChannel(
@@ -220,6 +231,49 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     }
 
     // MARK: - Internal Helpers
+
+    private func handleIconDataMessage(_ message: IconDataMessage) {
+        guard let image = NSImage(data: message.pngData), image.isValid else {
+            logger.warn("Received invalid icon data for \(message.executablePath)")
+            return
+        }
+        logger.info("Received icon for \(message.executablePath) (\(message.width)x\(message.height))")
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.iconCache[message.executablePath] = image
+            if let current = self.currentExecutablePath,
+               message.executablePath.lowercased().hasSuffix(current.lowercased())
+                || current.lowercased().hasSuffix(message.executablePath.lowercased()) {
+                self.applyDockIcon(image)
+            }
+        }
+    }
+
+    private func applyDockIcon(_ image: NSImage) {
+        NSApplication.shared.applicationIconImage = image
+        window?.miniwindowImage = image
+    }
+
+    func updateDockIdentity(programName: String) {
+        let name = programName
+            .replacingOccurrences(of: "\\", with: "/")
+            .components(separatedBy: "/").last?
+            .replacingOccurrences(of: ".exe", with: "")
+            .replacingOccurrences(of: ".msi", with: "")
+            ?? programName
+
+        DispatchQueue.main.async { [weak self] in
+            let dockTile = NSApplication.shared.dockTile
+            dockTile.badgeLabel = nil
+
+            if let cachedIcon = self?.iconCache[programName] {
+                self?.applyDockIcon(cachedIcon)
+            }
+
+            self?.window?.title = name
+        }
+    }
 
     private func handleWindowMetadataMessage(_ message: WindowMetadataMessage) {
         DispatchQueue.main.async { [weak self] in

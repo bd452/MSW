@@ -49,11 +49,11 @@ final class MetalContentView: NSView {
 
     // MARK: - Connection State Overlay
 
-    private var connectionOverlay: NSVisualEffectView?
-    private var statusLabel: NSTextField?
-    private var retryButton: NSButton?
-    private var spinner: NSProgressIndicator?
-    private var currentConnectionState: SpiceConnectionState = .disconnected
+    var connectionOverlay: NSVisualEffectView?
+    var statusLabel: NSTextField?
+    var retryButton: NSButton?
+    var spinner: NSProgressIndicator?
+    var currentConnectionState: SpiceConnectionState = .disconnected
 
     // MARK: - Initialization
 
@@ -372,6 +372,66 @@ final class MetalContentView: NSView {
         KeyCodeMapper.modifiers(fromMacOS: event.modifierFlags.rawValue)
     }
 
+    // MARK: - Edit Menu Actions
+
+    @objc func cut(_ sender: Any?) {
+        sendGuestShortcut(vk: 0x58, scanCode: 0x2D)
+    }
+
+    @objc func copy(_ sender: Any?) {
+        sendGuestShortcut(vk: 0x43, scanCode: 0x2E)
+    }
+
+    @objc func paste(_ sender: Any?) {
+        sendGuestShortcut(vk: 0x56, scanCode: 0x2F)
+    }
+
+    override func selectAll(_ sender: Any?) {
+        sendGuestShortcut(vk: 0x41, scanCode: 0x1E)
+    }
+
+    @objc func undo(_ sender: Any?) {
+        sendGuestShortcut(vk: 0x5A, scanCode: 0x2C)
+    }
+
+    @objc func redo(_ sender: Any?) {
+        sendGuestShortcut(vk: 0x59, scanCode: 0x15)
+    }
+
+    /// Sends Ctrl+Alt+Delete to the guest for login/security screen access.
+    func sendCtrlAltDel() {
+        let mods: KeyModifiers = [.control, .alt]
+        sendKeyEvent(.down, vk: 0x11, scan: 0x1D, mods: mods)
+        sendKeyEvent(.down, vk: 0x12, scan: 0x38, mods: mods)
+        sendKeyEvent(.down, vk: 0x2E, scan: 0x53, extended: true, mods: mods)
+        sendKeyEvent(.up, vk: 0x2E, scan: 0x53, extended: true)
+        sendKeyEvent(.up, vk: 0x12, scan: 0x38)
+        sendKeyEvent(.up, vk: 0x11, scan: 0x1D)
+    }
+
+    private func sendGuestShortcut(vk: UInt32, scanCode: UInt32) {
+        sendKeyEvent(.down, vk: vk, scan: scanCode, mods: [.control])
+        sendKeyEvent(.up, vk: vk, scan: scanCode, mods: [.control])
+    }
+
+    private func sendKeyEvent(
+        _ type: KeyEventType,
+        vk: UInt32,
+        scan: UInt32,
+        extended: Bool = false,
+        mods: KeyModifiers = []
+    ) {
+        let event = KeyboardInputEvent(
+            windowID: windowID,
+            eventType: type,
+            keyCode: vk,
+            scanCode: scan,
+            isExtendedKey: extended,
+            modifiers: mods
+        )
+        inputDelegate?.metalContentView(self, didReceiveKeyboardEvent: event)
+    }
+
     // MARK: - Drag and Drop
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -480,114 +540,5 @@ final class MetalContentView: NSView {
             return "Z:" + relativePath.replacingOccurrences(of: "/", with: "\\")
         }
         return nil
-    }
-}
-
-// MARK: - Connection Overlay
-
-@available(macOS 13, *)
-extension MetalContentView {
-    private func setupConnectionOverlay() {
-        let overlay = NSVisualEffectView()
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.material = .hudWindow
-        overlay.blendingMode = .withinWindow
-        overlay.state = .active
-        overlay.wantsLayer = true
-        overlay.layer?.cornerRadius = 12
-        overlay.isHidden = true
-
-        addSubview(overlay)
-        NSLayoutConstraint.activate([
-            overlay.centerXAnchor.constraint(equalTo: centerXAnchor),
-            overlay.centerYAnchor.constraint(equalTo: centerYAnchor),
-            overlay.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.8),
-            overlay.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
-        ])
-
-        let spinner = NSProgressIndicator()
-        spinner.translatesAutoresizingMaskIntoConstraints = false
-        spinner.style = .spinning
-        spinner.controlSize = .regular
-        spinner.isDisplayedWhenStopped = false
-        overlay.addSubview(spinner)
-
-        let label = NSTextField(labelWithString: "")
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .labelColor
-        label.alignment = .center
-        label.lineBreakMode = .byWordWrapping
-        label.maximumNumberOfLines = 3
-        overlay.addSubview(label)
-
-        let button = NSButton(title: "Retry", target: self, action: #selector(retryButtonClicked))
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.bezelStyle = .rounded
-        button.isHidden = true
-        overlay.addSubview(button)
-
-        NSLayoutConstraint.activate([
-            spinner.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            spinner.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 20),
-            label.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 20),
-            label.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -20),
-            label.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 12),
-            button.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            button.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 16),
-            button.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -20)
-        ])
-
-        connectionOverlay = overlay
-        statusLabel = label
-        retryButton = button
-        self.spinner = spinner
-    }
-
-    func updateConnectionState(_ state: SpiceConnectionState) {
-        currentConnectionState = state
-
-        if connectionOverlay == nil {
-            setupConnectionOverlay()
-        }
-
-        guard let overlay = connectionOverlay,
-              let label = statusLabel,
-              let button = retryButton,
-              let spinner = spinner else { return }
-
-        switch state {
-        case .connected:
-            overlay.isHidden = true
-            spinner.stopAnimation(nil)
-        case .disconnected:
-            overlay.isHidden = false
-            label.stringValue = "Disconnected"
-            button.isHidden = true
-            spinner.stopAnimation(nil)
-        case .connecting:
-            overlay.isHidden = false
-            label.stringValue = "Connecting..."
-            button.isHidden = true
-            spinner.startAnimation(nil)
-        case .reconnecting(let attempt, let maxAttempts):
-            overlay.isHidden = false
-            if let max = maxAttempts {
-                label.stringValue = "Reconnecting (attempt \(attempt) of \(max))..."
-            } else {
-                label.stringValue = "Reconnecting (attempt \(attempt))..."
-            }
-            button.isHidden = true
-            spinner.startAnimation(nil)
-        case .failed(let reason):
-            overlay.isHidden = false
-            label.stringValue = "Connection failed:\n\(reason)"
-            button.isHidden = false
-            spinner.stopAnimation(nil)
-        }
-    }
-
-    @objc private func retryButtonClicked() {
-        inputDelegate?.metalContentViewDidRequestRetry(self)
     }
 }
