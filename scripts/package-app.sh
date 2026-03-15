@@ -16,6 +16,7 @@
 #   --msi PATH        Path to WinRunAgent.msi to bundle
 #   --bundle-virtio   Download and bundle VirtIO drivers ISO (~500MB)
 #   --virtio-iso PATH Use local VirtIO ISO instead of downloading
+#   --skip-sign       Skip local code signing step
 #   --help            Show this help message
 #
 # Environment variables:
@@ -41,6 +42,7 @@ OUTPUT_DIR="${REPO_ROOT}/build/WinRun.app"
 BUILD_DIR="${REPO_ROOT}/host/.build/release"
 SKIP_BUILD=false
 SKIP_LIBS=false
+SKIP_SIGN=false
 MSI_PATH=""
 BUNDLE_VIRTIO=false
 VIRTIO_ISO_PATH=""
@@ -77,6 +79,10 @@ while [[ $# -gt 0 ]]; do
             VIRTIO_ISO_PATH="$2"
             BUNDLE_VIRTIO=true
             shift 2
+            ;;
+        --skip-sign)
+            SKIP_SIGN=true
+            shift
             ;;
         --help)
             sed -n '1,/^# ===.*$/{ /^#/!d; s/^# //; s/^#$//; p; }' "$0"
@@ -135,6 +141,9 @@ create_bundle_structure() {
     # Create directory structure per operations.md
     mkdir -p "${OUTPUT_DIR}/Contents/MacOS"
     mkdir -p "${OUTPUT_DIR}/Contents/Resources/provision"
+    mkdir -p "${OUTPUT_DIR}/Contents/Resources/qemu/bin"
+    mkdir -p "${OUTPUT_DIR}/Contents/Resources/qemu/lib"
+    mkdir -p "${OUTPUT_DIR}/Contents/Resources/qemu/share/qemu"
     mkdir -p "${OUTPUT_DIR}/Contents/Frameworks"
     mkdir -p "${OUTPUT_DIR}/Contents/Library/LaunchDaemons"
 
@@ -161,14 +170,127 @@ copy_binaries() {
     # Copy main app binary (renamed to WinRun for the bundle)
     cp "${BUILD_DIR}/WinRunApp" "${OUTPUT_DIR}/Contents/MacOS/WinRun"
 
-    # Copy daemon and CLI binaries
+    # Copy daemon and CLI binaries.
+    #
+    # On case-insensitive filesystems (default macOS), "WinRun" and "winrun"
+    # resolve to the same path. Using "winrun" here would overwrite the GUI app
+    # binary and cause the bundle to launch the CLI with no UI.
     cp "${BUILD_DIR}/winrund" "${OUTPUT_DIR}/Contents/MacOS/winrund"
-    cp "${BUILD_DIR}/winrun" "${OUTPUT_DIR}/Contents/MacOS/winrun"
+    cp "${BUILD_DIR}/winrun" "${OUTPUT_DIR}/Contents/MacOS/winrun-cli"
 
     # Make all binaries executable
     chmod +x "${OUTPUT_DIR}/Contents/MacOS/"*
 
     log_success "Binaries copied"
+}
+
+# =============================================================================
+# Bundle QEMU runtime tools (qemu + swtpm + firmware + dependent dylibs)
+# =============================================================================
+
+bundle_qemu_tools() {
+    log_info "Bundling QEMU runtime tools..."
+
+    local qemu_prefix="${WINRUN_QEMU_PREFIX:-}"
+    local swtpm_prefix="${WINRUN_SWTPM_PREFIX:-}"
+
+    if [[ -z "$qemu_prefix" ]]; then
+        if command -v brew >/dev/null 2>&1; then
+            qemu_prefix="$(brew --prefix qemu 2>/dev/null || true)"
+        fi
+    fi
+    if [[ -z "$swtpm_prefix" ]]; then
+        if command -v brew >/dev/null 2>&1; then
+            swtpm_prefix="$(brew --prefix swtpm 2>/dev/null || true)"
+        fi
+    fi
+
+    local qemu_bin="${qemu_prefix}/bin/qemu-system-aarch64"
+    local swtpm_bin="${swtpm_prefix}/bin/swtpm"
+    local qemu_share="${qemu_prefix}/share/qemu"
+    local dest_root="${OUTPUT_DIR}/Contents/Resources/qemu"
+    local dest_bin="${dest_root}/bin"
+    local dest_lib="${dest_root}/lib"
+    local dest_share="${dest_root}/share/qemu"
+
+    if [[ ! -x "$qemu_bin" ]]; then
+        log_error "qemu-system-aarch64 not found. Set WINRUN_QEMU_PREFIX or install: brew install qemu"
+        exit 1
+    fi
+    if ! "${REPO_ROOT}/scripts/check-qemu-spice.sh" "$qemu_bin" >/dev/null; then
+        log_error "The selected qemu-system-aarch64 does not support SPICE: ${qemu_bin}"
+        log_error "Provide a SPICE-enabled build with WINRUN_QEMU_BINARY or WINRUN_QEMU_PREFIX."
+        exit 1
+    fi
+    if [[ ! -x "$swtpm_bin" ]]; then
+        log_error "swtpm not found. Set WINRUN_SWTPM_PREFIX or install: brew install swtpm"
+        exit 1
+    fi
+    if [[ ! -d "$qemu_share" ]]; then
+        log_error "QEMU share directory not found at ${qemu_share}"
+        exit 1
+    fi
+
+    cp "$qemu_bin" "${dest_bin}/qemu-system-aarch64"
+    cp "$swtpm_bin" "${dest_bin}/swtpm"
+    chmod +x "${dest_bin}/qemu-system-aarch64" "${dest_bin}/swtpm"
+
+    cp "${qemu_share}/edk2-aarch64-code.fd" "${dest_share}/edk2-aarch64-code.fd"
+    cp "${qemu_share}/edk2-arm-vars.fd" "${dest_share}/edk2-arm-vars.fd"
+
+    # Copy non-system dylib dependencies for qemu + swtpm into app bundle.
+    local copied_libs=0
+    for executable in "${dest_bin}/qemu-system-aarch64" "${dest_bin}/swtpm"; do
+        while IFS= read -r dep; do
+            [[ -z "$dep" ]] && continue
+            [[ "$dep" == /usr/lib/* ]] && continue
+            [[ "$dep" == /System/* ]] && continue
+            if [[ -f "$dep" ]]; then
+                local dep_name
+                dep_name="$(basename "$dep")"
+                if [[ ! -f "${dest_lib}/${dep_name}" ]]; then
+                    cp "$dep" "${dest_lib}/${dep_name}"
+                    chmod +w "${dest_lib}/${dep_name}" 2>/dev/null || true
+                    ((copied_libs+=1))
+                fi
+            fi
+        done < <(otool -L "$executable" | awk 'NR>1 {print $1}')
+    done
+
+    for executable in "${dest_bin}/qemu-system-aarch64" "${dest_bin}/swtpm"; do
+        while IFS= read -r dep; do
+            [[ -z "$dep" ]] && continue
+            [[ "$dep" == /usr/lib/* ]] && continue
+            [[ "$dep" == /System/* ]] && continue
+            local dep_name
+            dep_name="$(basename "$dep")"
+            if [[ -f "${dest_lib}/${dep_name}" ]]; then
+                install_name_tool -change "$dep" "@loader_path/../lib/${dep_name}" "$executable" 2>/dev/null || true
+            fi
+        done < <(otool -L "$executable" | awk 'NR>1 {print $1}')
+    done
+
+    if [[ -d "$dest_lib" ]]; then
+        shopt -s nullglob
+        for lib in "${dest_lib}"/*.dylib; do
+            local lib_name
+            lib_name="$(basename "$lib")"
+            install_name_tool -id "@loader_path/${lib_name}" "$lib" 2>/dev/null || true
+            while IFS= read -r dep; do
+                [[ -z "$dep" ]] && continue
+                [[ "$dep" == /usr/lib/* ]] && continue
+                [[ "$dep" == /System/* ]] && continue
+                local dep_name
+                dep_name="$(basename "$dep")"
+                if [[ -f "${dest_lib}/${dep_name}" ]]; then
+                    install_name_tool -change "$dep" "@loader_path/${dep_name}" "$lib" 2>/dev/null || true
+                fi
+            done < <(otool -L "$lib" | awk 'NR>1 {print $1}')
+        done
+        shopt -u nullglob
+    fi
+
+    log_success "QEMU runtime bundled (copied ${copied_libs} dependent dylibs)"
 }
 
 # =============================================================================
@@ -499,6 +621,63 @@ fix_library_paths() {
 }
 
 # =============================================================================
+# Sign app bundle for local virtualization entitlement
+# =============================================================================
+
+sign_bundle_for_local_use() {
+    if [[ "$SKIP_SIGN" == "true" ]]; then
+        log_info "Skipping local code signing (--skip-sign specified)"
+        return
+    fi
+
+    if ! command -v codesign >/dev/null 2>&1; then
+        log_warn "codesign not found; skipping local code signing"
+        return
+    fi
+
+    local app_entitlements="${REPO_ROOT}/infrastructure/signing/winrun-app.entitlements"
+    local daemon_entitlements="${REPO_ROOT}/infrastructure/signing/winrund.entitlements"
+    local identity="${WINRUN_CODESIGN_IDENTITY:--}"
+    local macos_dir="${OUTPUT_DIR}/Contents/MacOS"
+
+    if [[ ! -f "$app_entitlements" ]]; then
+        log_warn "App entitlements file missing: ${app_entitlements}"
+        return
+    fi
+    if [[ ! -f "$daemon_entitlements" ]]; then
+        log_warn "Daemon entitlements file missing: ${daemon_entitlements}"
+        return
+    fi
+
+    log_info "Signing bundle for local virtualization entitlement..."
+    log_info "Identity: ${identity}"
+
+    # Sign executables first (entitlements are attached at executable level).
+    codesign --force --sign "${identity}" --timestamp=none \
+        --entitlements "${app_entitlements}" "${macos_dir}/WinRun"
+    codesign --force --sign "${identity}" --timestamp=none \
+        --entitlements "${daemon_entitlements}" "${macos_dir}/winrund"
+    if [[ -f "${macos_dir}/winrun-cli" ]]; then
+        codesign --force --sign "${identity}" --timestamp=none "${macos_dir}/winrun-cli"
+    fi
+    if [[ -f "${OUTPUT_DIR}/Contents/Resources/qemu/bin/qemu-system-aarch64" ]]; then
+        codesign --force --sign "${identity}" --timestamp=none \
+            "${OUTPUT_DIR}/Contents/Resources/qemu/bin/qemu-system-aarch64"
+    fi
+    if [[ -f "${OUTPUT_DIR}/Contents/Resources/qemu/bin/swtpm" ]]; then
+        codesign --force --sign "${identity}" --timestamp=none \
+            "${OUTPUT_DIR}/Contents/Resources/qemu/bin/swtpm"
+    fi
+    shopt -s nullglob
+    for lib in "${OUTPUT_DIR}/Contents/Resources/qemu/lib/"*.dylib; do
+        codesign --force --sign "${identity}" --timestamp=none "$lib"
+    done
+    shopt -u nullglob
+
+    log_success "Local executable code signing completed"
+}
+
+# =============================================================================
 # Create PkgInfo file
 # =============================================================================
 
@@ -523,7 +702,11 @@ validate_bundle() {
         "Contents/PkgInfo"
         "Contents/MacOS/WinRun"
         "Contents/MacOS/winrund"
-        "Contents/MacOS/winrun"
+        "Contents/MacOS/winrun-cli"
+        "Contents/Resources/qemu/bin/qemu-system-aarch64"
+        "Contents/Resources/qemu/bin/swtpm"
+        "Contents/Resources/qemu/share/qemu/edk2-aarch64-code.fd"
+        "Contents/Resources/qemu/share/qemu/edk2-arm-vars.fd"
     )
 
     for file in "${required_files[@]}"; do
@@ -534,7 +717,7 @@ validate_bundle() {
     done
 
     # Check binaries are executable
-    for bin in WinRun winrund winrun; do
+    for bin in WinRun winrund winrun-cli; do
         if [[ -f "${OUTPUT_DIR}/Contents/MacOS/${bin}" ]] && [[ ! -x "${OUTPUT_DIR}/Contents/MacOS/${bin}" ]]; then
             log_error "Binary not executable: ${bin}"
             ((errors++))
@@ -571,6 +754,7 @@ print_summary() {
     fi
 
     echo ""
+
     echo "Next steps:"
     echo "  1. Test the app: open '${OUTPUT_DIR}'"
     echo "  2. Code sign:    codesign --deep --force --sign 'Developer ID' '${OUTPUT_DIR}'"
@@ -596,12 +780,14 @@ main() {
     build_host
     create_bundle_structure
     copy_binaries
+    bundle_qemu_tools
     copy_plist_and_resources
     copy_provisioning_assets
     handle_virtio_drivers
     copy_launchdaemon_plist
     bundle_spice_libraries
     fix_library_paths
+    sign_bundle_for_local_use
     create_pkginfo
     validate_bundle
     print_summary

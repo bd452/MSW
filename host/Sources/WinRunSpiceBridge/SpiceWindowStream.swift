@@ -22,6 +22,9 @@ public final class SpiceWindowStream {
     private var reconnectPolicy: ReconnectPolicy
     private var reconnectWorkItem: DispatchWorkItem?
     private var metrics = SpiceStreamMetrics()
+    private var rawFrameCallbackCount: UInt64 = 0
+    private var sharedFrameDeliveryCount: UInt64 = 0
+    private var frameReadyCount: UInt64 = 0
 
     /// Shared frame buffer reader for zero-copy frame access
     private var frameBufferReader: SharedFrameBufferReader?
@@ -73,6 +76,9 @@ public final class SpiceWindowStream {
             self.state.isUserInitiatedClose = false
             self.state.lifecycle = .connecting
             self.metrics.lastErrorDescription = nil
+            self.rawFrameCallbackCount = 0
+            self.sharedFrameDeliveryCount = 0
+            self.frameReadyCount = 0
             self.notifyStateChange(.connecting)
             self.openStream(for: windowID)
         }
@@ -207,11 +213,22 @@ public final class SpiceWindowStream {
     /// - Parameter notification: The FrameReady message indicating a new frame is available
     public func handleFrameReady(_ notification: FrameReadyMessage) {
         stateQueue.async {
+            self.frameReadyCount += 1
+            if self.frameReadyCount <= 10 || self.frameReadyCount % 120 == 0 {
+                self.logger.debug(
+                    "FrameReady notification #\(self.frameReadyCount) window=\(notification.windowId) "
+                        + "frame=\(notification.frameNumber) slot=\(notification.slotIndex)"
+                )
+            }
             guard let connectedWindowID = self.state.windowID else {
+                self.logger.warn("Dropping FrameReady - missing connected window ID")
                 return
             }
             guard connectedWindowID == 0 || notification.windowId == connectedWindowID else {
                 // Not for this window - ignore (shouldn't happen if routing is correct)
+                self.logger.debug(
+                    "Dropping FrameReady - window mismatch connected=\(connectedWindowID) got=\(notification.windowId)"
+                )
                 return
             }
 
@@ -230,7 +247,7 @@ public final class SpiceWindowStream {
                     self.metrics.framesReceived += 1
                     self.deliverFrame(frame)
                 } else {
-                    self.logger.debug("FrameReady but no frame available in buffer")
+                    self.logger.debug("FrameReady but no frame available in buffer for slot=\(notification.slotIndex)")
                 }
             } catch {
                 self.logger.error("Failed to read frame from shared memory: \(error)")
@@ -241,6 +258,13 @@ public final class SpiceWindowStream {
     /// Delivers a frame from shared memory to the delegate.
     private func deliverFrame(_ frame: SharedFrame) {
         guard let delegate else { return }
+        sharedFrameDeliveryCount += 1
+        if sharedFrameDeliveryCount <= 10 || sharedFrameDeliveryCount % 120 == 0 {
+            logger.debug(
+                "Delivering shared frame #\(sharedFrameDeliveryCount) window=\(frame.windowId) "
+                    + "frame=\(frame.frameNumber) size=\(frame.width)x\(frame.height) bytes=\(frame.data.count)"
+            )
+        }
 
         // Convert SharedFrame to the format expected by the delegate
         // The delegate receives raw frame data; decompression happens at render time if needed
@@ -310,10 +334,13 @@ public final class SpiceWindowStream {
             self.transport.sendDragDropEvent(event)
         }
     }
+}
 
-    // MARK: - Private Implementation
+// MARK: - Private Implementation
 
-    private func openStream(for windowID: UInt64) {
+private extension SpiceWindowStream {
+    func openStream(for windowID: UInt64) {
+        logger.debug("Opening stream internals for window \(windowID)")
         let callbacks = SpiceStreamCallbacks(
             onFrame: { [weak self] data in
                 self?.handleFrame(data)
@@ -360,9 +387,15 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleFrame(_ frame: Data) {
+    func handleFrame(_ frame: Data) {
         stateQueue.async {
+            self.rawFrameCallbackCount += 1
             self.metrics.framesReceived += 1
+            if self.rawFrameCallbackCount <= 10 || self.rawFrameCallbackCount % 120 == 0 {
+                self.logger.debug(
+                    "Received raw frame callback #\(self.rawFrameCallbackCount) bytes=\(frame.count)"
+                )
+            }
             guard let delegate = self.delegate else { return }
             self.delegateQueue.async { [weak self] in
                 guard let self else { return }
@@ -371,9 +404,14 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleMetadata(_ metadata: WindowMetadata) {
+    func handleMetadata(_ metadata: WindowMetadata) {
         stateQueue.async {
             self.metrics.metadataUpdates += 1
+            self.logger.debug(
+                "Received metadata callback id=\(metadata.windowID) title=\(metadata.title) "
+                    + "size=\(Int(metadata.frame.width))x\(Int(metadata.frame.height)) "
+                    + "scale=\(metadata.scaleFactor)"
+            )
             guard let delegate = self.delegate else { return }
             self.delegateQueue.async { [weak self] in
                 guard let self else { return }
@@ -382,7 +420,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleClipboard(_ clipboard: ClipboardData) {
+    func handleClipboard(_ clipboard: ClipboardData) {
         stateQueue.async {
             guard let delegate = self.delegate else { return }
             self.delegateQueue.async { [weak self] in
@@ -392,7 +430,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleClose(reason: SpiceStreamCloseReason) {
+    func handleClose(reason: SpiceStreamCloseReason) {
         stateQueue.async {
             self.logger.warn("Spice stream closed: \(reason)")
             let wasUserInitiated = self.state.isUserInitiatedClose
@@ -414,7 +452,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func scheduleReconnect(reason: SpiceStreamCloseReason) {
+    func scheduleReconnect(reason: SpiceStreamCloseReason) {
         guard let windowID = state.windowID else { return }
         metrics.reconnectAttempts += 1
         let attempt = metrics.reconnectAttempts
@@ -443,17 +481,16 @@ public final class SpiceWindowStream {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-    private func cancelReconnect() {
+    func cancelReconnect() {
         reconnectWorkItem?.cancel()
         reconnectWorkItem = nil
     }
 
-    private func finishDisconnect() {
+    func finishDisconnect() {
         let hadError = metrics.lastErrorDescription != nil && !metrics.lastErrorDescription!.isEmpty
         state.lifecycle = .disconnected
         cancelReconnect()
 
-        // Notify state change before the close callback
         if hadError {
             notifyStateChange(.failed(reason: metrics.lastErrorDescription!))
         } else {
@@ -466,11 +503,11 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func transportDescription() -> String {
+    func transportDescription() -> String {
         configuration.transport.summaryDescription
     }
 
-    private func notifyStateChange(_ newState: SpiceConnectionState) {
+    func notifyStateChange(_ newState: SpiceConnectionState) {
         guard let delegate else { return }
         delegateQueue.async { [weak self] in
             guard let self else { return }

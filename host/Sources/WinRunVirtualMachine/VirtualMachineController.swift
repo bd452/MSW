@@ -4,7 +4,7 @@ import WinRunShared
 import Virtualization
 #endif
 
-public enum VirtualMachineLifecycleError: Error, CustomStringConvertible {
+public enum VirtualMachineLifecycleError: Error, CustomStringConvertible, LocalizedError {
     case startTimeout
     case invalidSnapshot(String)
     case virtualizationUnavailable(String)
@@ -18,7 +18,7 @@ public enum VirtualMachineLifecycleError: Error, CustomStringConvertible {
         case .invalidSnapshot(let reason):
             return "Unable to use saved VM state: \(reason)"
         case .virtualizationUnavailable(let reason):
-            return "Virtualization.framework is unavailable: \(reason)"
+            return "VM backend is unavailable: \(reason)"
         case .alreadyStopped:
             return "The Windows VM is already stopped."
         case .unexpectedStop(let reason):
@@ -28,34 +28,24 @@ public enum VirtualMachineLifecycleError: Error, CustomStringConvertible {
             return "The Windows VM stopped unexpectedly."
         }
     }
+
+    public var errorDescription: String? {
+        description
+    }
 }
 
 public actor VirtualMachineController {
     public private(set) var state: VMState
-    private let configuration: VMConfiguration
-    private let logger: Logger
+    let configuration: VMConfiguration
+    let logger: Logger
     private var uptimeStart: Date?
-    private var suspendedStateURL: URL?
     private var configurationValidated = false
     private var bootCount: Int = 0
     private var suspendCount: Int = 0
     private var totalSessionsLaunched: Int = 0
     private var idleSuspendTask: Task<Void, Never>?
-
-#if canImport(Virtualization)
-    @available(macOS 13, *)
-    private var nativeVM: VZVirtualMachine?
-    @available(macOS 13, *)
-    private var cachedConfiguration: VZVirtualMachineConfiguration?
-    @available(macOS 13, *)
-    private var vmDelegate: VirtualMachineDelegate?
-
-    /// The vsock device for guest-host communication, available after VM starts.
-    @available(macOS 13, *)
-    private var vsockDevice: VZVirtioSocketDevice? {
-        nativeVM?.socketDevices.first as? VZVirtioSocketDevice
-    }
-#endif
+    private var runtimeManager: QEMURuntimeProcessManager?
+    private var runtimeMonitorTask: Task<Void, Never>?
 
     /// The frame streaming configuration for this VM.
     public var frameStreamingConfiguration: FrameStreamingConfiguration {
@@ -119,20 +109,14 @@ public actor VirtualMachineController {
         cancelIdleSuspendTimer()
         state.status = .suspending
         logger.info("Suspending Windows VM after idle timeout")
-        let snapshotURL = try await saveSnapshotInternal(to: defaultSnapshotURL())
 
-#if canImport(Virtualization)
-        if #available(macOS 13, *), let vm = nativeVM {
-            try await NativeVirtualMachineBridge.stop(vm)
-        } else {
-            try await simulateShutdown()
+        if let manager = runtimeManager {
+            await manager.stop()
         }
-#else
-        try await simulateShutdown()
-#endif
+        runtimeManager = nil
+        runtimeMonitorTask?.cancel()
+        runtimeMonitorTask = nil
 
-        suspendedStateURL = snapshotURL
-        clearNativeVM()
         let uptimeSeconds = uptime()
         suspendCount += 1
         uptimeStart = nil
@@ -149,17 +133,12 @@ public actor VirtualMachineController {
         logger.info("Stopping Windows VM")
         state.status = .stopping
 
-#if canImport(Virtualization)
-        if #available(macOS 13, *), let vm = nativeVM {
-            try await NativeVirtualMachineBridge.stop(vm)
-        } else {
-            try await simulateShutdown()
+        if let manager = runtimeManager {
+            await manager.stop()
         }
-#else
-        try await simulateShutdown()
-#endif
-
-        clearNativeVM()
+        runtimeManager = nil
+        runtimeMonitorTask?.cancel()
+        runtimeMonitorTask = nil
         cleanupSharedMemory()
         uptimeStart = nil
         state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
@@ -169,54 +148,45 @@ public actor VirtualMachineController {
 
     @discardableResult
     public func saveSnapshot(to url: URL? = nil) async throws -> URL {
-        guard state.status == .running else {
-            throw VirtualMachineLifecycleError.invalidSnapshot("VM must be running to capture state")
-        }
-        let destination = url ?? defaultSnapshotURL()
-        return try await saveSnapshotInternal(to: destination)
+        _ = url
+        throw VirtualMachineLifecycleError.invalidSnapshot(
+            "Snapshot save is not yet supported with the QEMU runtime backend"
+        )
     }
 
     // MARK: - Private helpers
 
     private func start(resumeFromSnapshot: Bool) async throws -> VMState {
+        fputs("[VM] start() called, current status=\(state.status.rawValue), resumeFromSnapshot=\(resumeFromSnapshot)\n", stderr)
+
         if state.status == .running {
+            fputs("[VM] Already running, returning current state\n", stderr)
             return snapshotState()
         }
         if state.status == .starting {
+            fputs("[VM] Already starting, waiting for ready\n", stderr)
             return try await waitForReady()
         }
 
+        fputs("[VM] Validating configuration...\n", stderr)
         try validateConfigurationIfNeeded()
-
-        if configuration.frameStreaming.sharedMemoryEnabled {
-            do {
-                let region = try initializeSharedMemory()
-                logger.info("Initialized frame shared memory at \(region.fileURL.path) (\(region.size) bytes)")
-            } catch {
-                logger.error("Failed to initialize frame shared memory: \(error)")
-                throw VirtualMachineLifecycleError.virtualizationUnavailable(
-                    "Failed to initialize frame shared memory: \(error.localizedDescription)"
-                )
-            }
-        }
+        fputs("[VM] Configuration validated\n", stderr)
 
         state.status = .starting
+        fputs("[VM] Status set to 'starting'\n", stderr)
         logger.info(resumeFromSnapshot ? "Resuming Windows VM from snapshot" : "Booting Windows VM")
-
-#if canImport(Virtualization)
-        if #available(macOS 13, *) {
-            do {
-                try await bootNativeVirtualMachine(resumeFromSnapshot: resumeFromSnapshot)
-            } catch let validationError as VMConfigurationValidationError {
-                logger.error("Failed to build VM configuration: \(validationError.description)")
-                throw VirtualMachineLifecycleError.virtualizationUnavailable(validationError.description)
-            }
-        } else {
-            try await simulateBoot()
+        if resumeFromSnapshot {
+            logger.info("QEMU backend resumes with a cold boot (snapshot restore not implemented)")
         }
-#else
-        try await simulateBoot()
-#endif
+        let manager = runtimeManager ?? QEMURuntimeProcessManager(logger: logger)
+        do {
+            try await manager.start(configuration: configuration)
+            runtimeManager = manager
+            startRuntimeMonitor()
+        } catch {
+            state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
+            throw VirtualMachineLifecycleError.virtualizationUnavailable(error.localizedDescription)
+        }
 
         uptimeStart = Date()
         state = VMState(status: .running, uptime: 0, activeSessions: state.activeSessions)
@@ -234,6 +204,9 @@ public actor VirtualMachineController {
     private func waitForReady(timeout: TimeInterval = 60) async throws -> VMState {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
+            if state.status == .starting {
+                try runtimeManager?.checkHealth()
+            }
             if state.status == .running || state.status == .stopped || state.status == .suspended {
                 return snapshotState()
             }
@@ -251,10 +224,6 @@ public actor VirtualMachineController {
     private func uptime() -> TimeInterval {
         guard let start = uptimeStart else { return state.uptime }
         return Date().timeIntervalSince(start)
-    }
-
-    private func defaultSnapshotURL() -> URL {
-        configuration.diskImagePath.deletingPathExtension().appendingPathExtension("vmstate")
     }
 
     private func scheduleIdleSuspendTimer(reason: String) {
@@ -288,21 +257,15 @@ public actor VirtualMachineController {
         }
     }
 
-    private func clearNativeVM() {
-#if canImport(Virtualization)
-        nativeVM = nil
-        cachedConfiguration = nil
-        vmDelegate = nil
-#endif
-    }
-
     // MARK: - VM Delegate Handlers
 
     /// Called when the guest VM stops gracefully (e.g., shutdown from within Windows).
     func handleGuestDidStop() {
         logger.info("Handling graceful VM stop")
         cancelIdleSuspendTimer()
-        clearNativeVM()
+        runtimeMonitorTask?.cancel()
+        runtimeMonitorTask = nil
+        runtimeManager = nil
         cleanupSharedMemory()
         uptimeStart = nil
         state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
@@ -313,37 +276,13 @@ public actor VirtualMachineController {
     func handleGuestDidStopWithError(_ error: Error) {
         logger.error("Handling unexpected VM stop: \(error.localizedDescription)")
         cancelIdleSuspendTimer()
-        clearNativeVM()
+        runtimeMonitorTask?.cancel()
+        runtimeMonitorTask = nil
+        runtimeManager = nil
         cleanupSharedMemory()
         uptimeStart = nil
         state = VMState(status: .stopped, uptime: 0, activeSessions: 0)
         logMetrics(event: "vm_unexpected_stop")
-    }
-
-    private func saveSnapshotInternal(to url: URL) async throws -> URL {
-#if canImport(Virtualization)
-        if #available(macOS 13, *), let vm = nativeVM {
-            try await NativeVirtualMachineBridge.saveMachineState(vm, to: url)
-        } else {
-            try await simulateSnapshot()
-        }
-#else
-        try await simulateSnapshot()
-#endif
-        suspendedStateURL = url
-        return url
-    }
-
-    private func simulateBoot() async throws {
-        try await Task.sleep(nanoseconds: 500_000_000)
-    }
-
-    private func simulateShutdown() async throws {
-        try await Task.sleep(nanoseconds: 200_000_000)
-    }
-
-    private func simulateSnapshot() async throws {
-        try await Task.sleep(nanoseconds: 150_000_000)
     }
 
     private func validateConfigurationIfNeeded() throws {
@@ -373,137 +312,26 @@ public actor VirtualMachineController {
         logger.info("VM metrics: \(snapshot.description)")
     }
 
-    #if canImport(Virtualization)
-    /// Returns the vsock device if available. Used by VirtualMachineVsock extension.
-    @available(macOS 13, *)
-    func getVsockDevice() -> VZVirtioSocketDevice? {
-        vsockDevice
-    }
-    #endif
-
 #if canImport(Virtualization)
     @available(macOS 13, *)
-    private func bootNativeVirtualMachine(resumeFromSnapshot: Bool) async throws {
-        let config = try cachedConfiguration ?? buildNativeConfiguration()
-        cachedConfiguration = config
-
-        let vm: VZVirtualMachine
-        if let existing = nativeVM {
-            vm = existing
-        } else {
-            vm = VZVirtualMachine(configuration: config)
-            nativeVM = vm
-
-            // Set up the delegate to receive VM lifecycle events
-            let delegate = VirtualMachineDelegate(controller: self, logger: logger)
-            vmDelegate = delegate
-            vm.delegate = delegate
-        }
-
-        if resumeFromSnapshot, let resumeURL = suspendedStateURL, FileManager.default.fileExists(atPath: resumeURL.path) {
-            try await NativeVirtualMachineBridge.restoreMachineState(vm, from: resumeURL)
-            suspendedStateURL = nil
-        } else {
-            try await NativeVirtualMachineBridge.start(vm)
-        }
-    }
-
-    @available(macOS 13, *)
-    private func buildNativeConfiguration() throws -> VZVirtualMachineConfiguration {
-        let vmConfig = VZVirtualMachineConfiguration()
-        vmConfig.cpuCount = max(2, configuration.resources.cpuCount)
-        vmConfig.memorySize = UInt64(configuration.resources.memorySizeGB) * 1024 * 1024 * 1024
-
-        let platform = VZGenericPlatformConfiguration()
-        platform.machineIdentifier = VZGenericMachineIdentifier()
-        vmConfig.platform = platform
-        vmConfig.bootLoader = VZEFIBootLoader()
-
-        let blockAttachment = try VZDiskImageStorageDeviceAttachment(url: configuration.diskImagePath, readOnly: false)
-        let blockDevice = VZVirtioBlockDeviceConfiguration(attachment: blockAttachment)
-        vmConfig.storageDevices = [blockDevice]
-
-        let networkAttachment = try makeNetworkAttachment()
-        let networkDevice = VZVirtioNetworkDeviceConfiguration()
-        networkDevice.attachment = networkAttachment
-
-        // Apply custom MAC address if configured
-        if let macAddressString = configuration.network.macAddress,
-           let macAddress = VZMACAddress(string: macAddressString) {
-            networkDevice.macAddress = macAddress
-            logger.debug("Applied custom MAC address: \(macAddressString)")
-        }
-
-        vmConfig.networkDevices = [networkDevice]
-
-        let graphics = VZVirtioGraphicsDeviceConfiguration()
-        graphics.scanouts = [VZVirtioGraphicsScanoutConfiguration(widthInPixels: 1920, heightInPixels: 1200)]
-        vmConfig.graphicsDevices = [graphics]
-
-        vmConfig.pointingDevices = [VZUSBScreenCoordinatePointingDeviceConfiguration()]
-        vmConfig.keyboards = [VZUSBKeyboardConfiguration()]
-        vmConfig.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
-        vmConfig.memoryBalloonDevices = [VZVirtioTraditionalMemoryBalloonDeviceConfiguration()]
-
-        // Configure frame streaming devices
-        try configureFrameStreamingDevices(vmConfig)
-
-        try vmConfig.validate()
-        return vmConfig
-    }
-
-    /// Configures vsock, shared memory, and console devices for frame streaming.
-    @available(macOS 13, *)
-    private func configureFrameStreamingDevices(_ vmConfig: VZVirtualMachineConfiguration) throws {
-        let frameConfig = configuration.frameStreaming
-
-        // Add VirtIO socket device for vsock communication
-        if frameConfig.vsockEnabled {
-            let vsockDevice = VZVirtioSocketDeviceConfiguration()
-            vmConfig.socketDevices = [vsockDevice]
-            logger.debug("Configured vsock device for frame streaming")
-        }
-
-        // Add VirtIO console device for Spice port channel
-        if frameConfig.spiceConsoleEnabled {
-            let consoleDevice = VZVirtioConsoleDeviceConfiguration()
-            // VZVirtioConsoleDeviceConfiguration has a default port at index 0
-            // Configure it for our Spice control channel using index access
-            if let port = consoleDevice.ports[0] {
-                port.name = "com.winrun.control"
-                port.isConsole = false
-            }
-            vmConfig.consoleDevices = [consoleDevice]
-            logger.debug("Configured Spice console port for control channel")
-        }
-
-        // Add VirtioFS device for shared memory frame buffer
-        if frameConfig.sharedMemoryEnabled {
-            let fsDevice = try createFrameBufferShareDevice()
-            vmConfig.directorySharingDevices = [fsDevice]
-            logger.debug(
-                "Configured VirtioFS device for shared frame buffer " +
-                "(size: \(frameConfig.sharedMemorySizeMB)MB, tag: \(SharedMemoryManager.virtioFSTag))"
-            )
-        }
-    }
-
-    @available(macOS 13, *)
-    private func makeNetworkAttachment() throws -> VZNetworkDeviceAttachment {
-        switch configuration.network.mode {
-        case .nat:
-            return VZNATNetworkDeviceAttachment()
-        case .bridged:
-            guard let identifier = configuration.network.interfaceIdentifier else {
-                throw VMConfigurationValidationError.bridgedInterfaceNotSpecified
-            }
-            guard let interface = VZBridgedNetworkInterface.networkInterfaces.first(where: {
-                $0.identifier == identifier || $0.localizedDisplayName == identifier
-            }) else {
-                throw VMConfigurationValidationError.bridgedInterfaceUnavailable(identifier)
-            }
-            return VZBridgedNetworkDeviceAttachment(interface: interface)
-        }
+    func getVsockDevice() -> VZVirtioSocketDevice? {
+        nil
     }
 #endif
+
+    private func startRuntimeMonitor() {
+        runtimeMonitorTask?.cancel()
+        runtimeMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self else { return }
+                do {
+                    try await self.runtimeManager?.checkHealth()
+                } catch {
+                    await self.handleGuestDidStopWithError(error)
+                    return
+                }
+            }
+        }
+    }
 }

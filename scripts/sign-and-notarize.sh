@@ -285,6 +285,28 @@ sign_target() {
                 run_cmd codesign "${codesign_args[@]}" "$executable"
             done
         fi
+
+        # Sign bundled QEMU runtime binaries/libraries if present.
+        local qemu_bin_dir="${TARGET_PATH}/Contents/Resources/qemu/bin"
+        if [[ -d "$qemu_bin_dir" ]]; then
+            log_info "Signing bundled QEMU executables..."
+            for executable in "$qemu_bin_dir"/*; do
+                [[ -x "$executable" ]] || continue
+                log_debug "Signing: $executable"
+                run_cmd codesign "${codesign_args[@]}" "$executable"
+            done
+        fi
+        local qemu_lib_dir="${TARGET_PATH}/Contents/Resources/qemu/lib"
+        if [[ -d "$qemu_lib_dir" ]]; then
+            shopt -s nullglob
+            log_info "Signing bundled QEMU libraries..."
+            for lib in "$qemu_lib_dir"/*.dylib; do
+                [[ -e "$lib" ]] || continue
+                log_debug "Signing: $lib"
+                run_cmd codesign "${codesign_args[@]}" "$lib"
+            done
+            shopt -u nullglob
+        fi
     fi
 
     # Sign the main target

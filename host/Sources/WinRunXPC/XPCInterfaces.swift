@@ -17,7 +17,7 @@ import WinRunShared
     func syncShortcuts(_ destinationPath: NSString, reply: @escaping (NSData?, NSError?) -> Void)
 }
 
-public final class WinRunDaemonClient {
+public final class WinRunDaemonClient: VMServiceProvider {
     private let logger: Logger
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()

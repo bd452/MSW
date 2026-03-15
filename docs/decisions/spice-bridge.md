@@ -137,6 +137,18 @@ All frame data transfers via VM shared memory (zero-copy):
 ### Deprecated: Single Shared Buffer
 The original design used a single `SharedFrameBufferWriter`/`SharedFrameBufferReader` pair shared across all windows. This is now deprecated in favor of per-window buffers. Legacy code paths using `setFrameBufferReader(reader)` are marked `@available(*, deprecated)`.
 
+## SPICE Session Constraint: Single Display Client
+
+QEMU's SPICE server only supports one active display client at a time. If a second `SpiceSession` connects (e.g., for a control channel), the server tears down display/input channels on the first session, resulting in a black screen.
+
+**Implication:** The `SpiceControlChannel` cannot open its own independent `SpiceSession`. It must share the render stream's existing session/transport. Until transport sharing is implemented, the control channel remains wired but intentionally disconnected. This blocks:
+- Guest agent frame routing (`FrameReady` notifications via control channel)
+- Settings push (`FrameBufferMode` changes to guest)
+- Guest agent window metadata streaming
+- Any protocol messaging that flows through `SpiceControlChannel`
+
+**Fix path:** Expose the render stream's `LibSpiceStreamTransport` to the control channel so it can register port-channel callbacks on the same session rather than creating its own. The C shim already discovers the port channel in `on_channel_new` — the change is plumbing, not protocol.
+
 ## Resilience + Telemetry
 - Implement reconnect/backoff policies for Spice channels; the UI must remain responsive when the guest agent crashes or restarts.
 - Emit structured metrics (latency, dropped frames, reconnect counts) through the shared logging pipeline for observability.

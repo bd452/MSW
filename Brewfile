@@ -19,5 +19,9 @@ brew "glib"
 brew "spice-protocol"
 brew "wimlib"
 
+# Runtime dependencies (Windows installation)
+brew "qemu"       # qemu-system-aarch64 for Windows installation VM
+brew "swtpm"      # Software TPM 2.0 emulator (required by Windows 11)
+
 # Development tools
 brew "swiftlint"

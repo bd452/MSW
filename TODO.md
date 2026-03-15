@@ -1,4 +1,4 @@
-- [X] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
+- [ ] Host Platform { host/Sources/WinRunSpiceBridge/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunDaemon/main.swift } <docs/decisions/spice-bridge.md, docs/decisions/virtualization.md, docs/decisions/protocols.md, docs/architecture.md>
   - [X] WinRunSpiceBridge production binding { host/Sources/WinRunSpiceBridge/, host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h, host/Package.swift } <docs/decisions/spice-bridge.md>
     - [X] Replace mock timer stream with libspice-glib delegate plumbing { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift } <docs/decisions/spice-bridge.md>
     - [X] Add C shim + pkg-config wiring for libspice-glib { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Package.swift } <docs/decisions/spice-bridge.md>
@@ -8,7 +8,7 @@
     - [X] Implement Spice clipboard channel integration (send/request + callbacks) in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/protocols.md>
     - [X] Implement Spice file transfer for drag/drop in C shim { host/Sources/CSpiceBridge/CSpiceBridge.c, host/Sources/CSpiceBridge/include/CSpiceBridge.h } <docs/decisions/spice-bridge.md>
 - [X] Virtualization lifecycle management { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, infrastructure/launchd/com.winrun.daemon.plist } <docs/decisions/virtualization.md>
-    - [X] Drive Virtualization.framework boot/stop/snapshot flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+    - [X] Drive QEMU runtime boot/stop lifecycle flows { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift } <docs/decisions/virtualization.md>
     - [X] Persist VM disk/network configuration + validation { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/VMConfiguration.swift } <docs/decisions/virtualization.md>
     - [X] Emit uptime + session metrics to logger { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/Logging.swift } <docs/decisions/virtualization.md>
   - [X] Daemon + XPC integration { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, infrastructure/launchd/com.winrun.daemon.plist, scripts/bootstrap.sh } <docs/decisions/protocols.md>
@@ -18,10 +18,27 @@
     - [X] Implement real session listing backed by guest agent { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift, host/Sources/WinRunSpiceBridge/SpiceMessageSerializer.swift } <docs/decisions/protocols.md>
     - [X] Implement close-session command forwarding to guest agent { host/Sources/WinRunDaemon/main.swift, host/Sources/WinRunSpiceBridge/SpiceHostMessages.swift, host/Sources/WinRunSpiceBridge/SpiceGuestMessages.swift, host/Sources/WinRunSpiceBridge/SpiceMessageSerializer.swift } <docs/decisions/protocols.md>
     - [X] Implement shortcut listing + sync backed by guest events and launcher generation { host/Sources/WinRunDaemon/main.swift, apps/launchers/, host/Sources/WinRunCLI/WinRunCLI.swift } <docs/decisions/protocols.md, docs/development.md>
-  - [X] WinRun.app window shell { host/Sources/WinRunApp/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md>
+  - [ ] WinRun.app window shell { host/Sources/WinRunApp/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md>
     - [X] Render Spice frames via Metal layer + support Retina scaling { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
-    - [X] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/ClipboardManager.swift, host/Sources/WinRunShared/InputModels.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Forward input, clipboard, menus, drag/drop via shared models { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunApp/ClipboardManager.swift, host/Sources/WinRunShared/InputModels.swift } <docs/decisions/spice-bridge.md>
     - [X] Handle window lifecycle + reconnection to streams { host/Sources/WinRunApp/WinRunWindowController.swift, host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
+    - [ ] Harden keyboard/mouse fidelity for login + desktop workflows { host/Sources/WinRunApp/MetalContentView.swift, host/Sources/WinRunSpiceBridge/KeyCodeMapper.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/spice-bridge.md>
+    - [ ] Share single SPICE session between render stream and control channel { host/Sources/WinRunApp/WinRunWindowController.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift, host/Sources/WinRunSpiceBridge/SpiceStreamTransport.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/spice-bridge.md>
+      - QEMU's SPICE server only supports one display client; opening a second SpiceSession for the control channel tears down display channels on the render session
+      - Control channel is currently wired but intentionally disconnected to avoid this
+      - Fix: route control/port channel callbacks through the render session's existing transport instead of opening a separate session
+      - Blocked features until fixed: guest agent frame routing (FrameReady), settings push (FrameBufferMode), window metadata from agent
+    - [ ] Register .exe and .msi file type associations in app Info.plist { host/Sources/WinRunApp/Resources/Info.plist, scripts/package-app.sh }
+    - [ ] Dynamic per-instance Dock identity (program name + extracted icon per running window) { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunApp/WinRunWindowController.swift }
+  - [ ] Runtime ownership + reuse policy { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift, host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunShared/RuntimeEnvironment.swift } <docs/architecture.md>
+    - [ ] Reuse compatible runtime instance on app start when present
+    - [ ] Replace stale/incompatible runtime instance deterministically
+    - [ ] Persist runtime metadata (pid/socket/version/protocol/build) for attach-or-relaunch decisions
+  - [ ] Promote seamless per-app windows to primary UX (console as fallback) { host/Sources/WinRunApp/, host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/ } <docs/architecture.md, docs/decisions/spice-bridge.md, docs/decisions/protocols.md>
+    - [ ] Ensure per-window frame/metadata/input isolation by window/session ID
+    - [ ] Launch multiple Windows apps into independent native host windows
+    - [ ] Keep reconnect/session lifecycle robust across app/window churn
+    - [ ] Handle multi-window applications (parent/child relationships, dialog spawning) { host/Sources/WinRunApp/WinRunWindowController.swift, guest/WinRunAgent/Services/WindowTracker.cs } <docs/decisions/protocols.md>
   - [X] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, apps/launchers/ } <docs/decisions/protocols.md, docs/development.md>
     - [X] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
     - [X] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ } <docs/development.md>
@@ -33,6 +50,12 @@
   - [X] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunSpiceBridgeTests/, new:host/Tests/WinRunVirtualMachineTests/ } <docs/development.md>
     - [X] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [X] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
+  - [ ] VirtioFS filesystem sharing { host/Sources/WinRunVirtualMachine/VirtualMachineController+Configuration.swift, host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift }
+    - [ ] Enable VirtioFS mount (/Users → Z:\) when guest agent is available { host/Sources/WinRunVirtualMachine/VirtualMachineController+Configuration.swift }
+    - [ ] Validate filesystem access and permissions from guest { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift }
+  - [ ] CLI extended commands { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunShared/ }
+    - [ ] Add `winrun install` command for .msi and setup.exe installers { host/Sources/WinRunCLI/WinRunCLI.swift }
+    - [ ] Implement macOS↔Windows path translation in CLI and shared utilities { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunShared/ }
 
 - [X] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
   - [X] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
@@ -57,7 +80,7 @@
     - [X] Add xUnit tests for trackers, launchers, messaging { guest/WinRunAgent.Tests/WindowTrackerTests.cs, guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/ProgramLauncherTests.cs } <docs/development.md>
     - [X] Create integration tests for Spice channel serialization { guest/WinRunAgent.Tests/MessagesTests.cs, new:guest/WinRunAgent.Tests/SpiceChannelTests.cs } <docs/development.md>
 
-- [X] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
+- [ ] Setup & Provisioning { host/Sources/WinRunSetup/, host/Sources/WinRunApp/Setup/, infrastructure/windows/ } <docs/decisions/windows-provisioning.md, docs/architecture.md>
   - [X] ISO validation + Windows version detection { new:host/Sources/WinRunSetup/ISOValidator.swift, new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
     - [X] Mount and parse Windows ISO metadata (install.wim/esd) { new:host/Sources/WinRunSetup/ISOValidator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Detect architecture (ARM64 required) and Windows edition { new:host/Sources/WinRunSetup/WindowsEditionInfo.swift } <docs/decisions/windows-provisioning.md>
@@ -119,6 +142,9 @@
     - [X] Add structured setup failure context and render diagnostics { host/Sources/WinRunApp/Setup/SetupErrorViewController.swift, host/Sources/WinRunSetup/SetupCoordinator.swift, new:host/Sources/WinRunSetup/SetupFailureContext.swift } <docs/decisions/windows-provisioning.md>
     - [X] Implement retry and choose-ISO transitions in the coordinator { host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift, host/Sources/WinRunSetup/SetupCoordinator.swift } <docs/decisions/windows-provisioning.md>
     - [X] Add unit tests for coordinator state transitions and recovery wiring { new:host/Tests/WinRunAppTests/SetupWizardCoordinatorTests.swift } <docs/development.md>
+    - [X] Add manual setup fallback flow when unattended install is unavailable { host/Sources/WinRunApp/Setup/SetupWizardCoordinator.swift, new:host/Sources/WinRunApp/Setup/ManualInstallViewController.swift, host/Sources/WinRunApp/Setup/SetupErrorViewController.swift, host/Sources/WinRunSetup/SetupFailureContext.swift } <docs/decisions/windows-provisioning.md>
+    - [X] Implement QEMU-based manual Windows installation (replaces VZVirtualMachine path) { host/Sources/WinRunApp/Setup/ManualInstallViewController.swift } <docs/decisions/windows-provisioning.md>
+    - [ ] Replace VMProvisioner automated-installation stub with production unattended installation backend { host/Sources/WinRunSetup/VMProvisioner.swift, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/windows-provisioning.md>
 
 - [X] Guest Agent Installer { new:guest/WinRunAgent.Installer/, guest/WinRunAgent/WinRunAgent.csproj } <docs/decisions/windows-provisioning.md>
   - [X] MSI installer project { new:guest/WinRunAgent.Installer/WinRunAgent.Installer.wixproj, new:guest/WinRunAgent.Installer/Product.wxs } <docs/decisions/windows-provisioning.md>
@@ -134,9 +160,9 @@
 
 - [X] Frame Streaming Pipeline { host/Sources/WinRunVirtualMachine/, guest/WinRunAgent/Services/, host/Sources/WinRunSpiceBridge/ } <docs/decisions/spice-bridge.md, docs/architecture.md>
   - [X] VM configuration for guest-host communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
-    - [X] Add VZVirtioSocketDeviceConfiguration for vsock communication { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+    - [X] Configure QEMU/SPICE transport for host↔guest control messaging { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift, host/Sources/WinRunSpiceBridge/SpiceControlChannel.swift } <docs/decisions/virtualization.md>
     - [X] Configure shared memory region for frame buffer { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/spice-bridge.md>
-    - [X] Add VZVirtioConsoleDeviceConfiguration for Spice port channel { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/protocols.md>
+    - [X] Configure QEMU Spice port/control channel plumbing { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift, host/Sources/CSpiceBridge/CSpiceBridge.c } <docs/decisions/protocols.md>
   - [X] Shared memory frame buffer infrastructure { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
     - [X] Define shared memory ring buffer protocol for frames { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift, new:guest/WinRunAgent/Services/SharedFrameBuffer.cs } <docs/decisions/spice-bridge.md>
     - [X] Implement host-side memory mapping and frame reading { new:host/Sources/WinRunSpiceBridge/SharedFrameBuffer.swift } <docs/decisions/spice-bridge.md>
@@ -166,9 +192,9 @@
     - [X] Route frames from shared memory to appropriate SpiceWindowStream { host/Sources/WinRunSpiceBridge/SpiceWindowStream.swift } <docs/decisions/spice-bridge.md>
     - [X] Implement zero-copy path from shared memory to Metal texture { host/Sources/WinRunApp/SpiceFrameRenderer.swift } <docs/decisions/spice-bridge.md>
     - [X] Wire VM shared memory for per-window frame buffers { host/Sources/WinRunVirtualMachine/, host/Sources/WinRunSpiceBridge/, guest/WinRunAgent/Services/ } <docs/decisions/spice-bridge.md>
-      - [X] Configure VM shared memory region via Virtualization.framework { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
-        - Use VZVirtioFileSystemDeviceConfiguration or direct memory mapping
-        - Expose shared region to both host process and guest VM
+      - [X] Configure VM shared frame memory region for QEMU runtime { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+        - Use shared memory/file mapping compatible with host and guest processes
+        - Expose shared region to both host process and guest VM runtime
         - Size based on expected max windows × buffer size (e.g., 10 windows × 50MB = 500MB)
       - [X] Update guest PerWindowBufferManager to allocate from shared region { guest/WinRunAgent/Services/PerWindowFrameBuffer.cs }
         - Replace Marshal.AllocHGlobal with allocation from shared region
@@ -218,12 +244,26 @@
     - Evaluate whether guest clipboard changes can be pushed immediately vs polled
     - Document any Spice protocol limitations discovered
 
-- [ ] VM Lifecycle Enhancement { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
-  - [ ] Implement graceful shutdown before force stop { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
-    - Current implementation uses forceful vm.stop() which terminates immediately
-    - Use vm.requestStop() first (sends ACPI power button event) to allow guest graceful shutdown
-    - Add configurable timeout (default 30s) before falling back to force stop
+- [X] VM Lifecycle Enhancement { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift } <docs/decisions/virtualization.md>
+  - [X] Implement graceful shutdown before force stop { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+    - QEMU process manager now attempts graceful termination before forced kill
+    - Uses timeout-based fallback for deterministic shutdown behavior
     - Improves data integrity and user experience
+
+- [ ] VM Suspend/Resume (Save State) { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift } <docs/decisions/virtualization.md>
+  - [ ] Implement QEMU save/restore VM state for ~2s fast resume { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift }
+  - [ ] Wire save-state into VirtualMachineController suspend/resume path (replace cold-boot stub) { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+  - [ ] Auto-suspend VM state to disk after configurable idle timeout { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/VMConfiguration.swift }
+
+- [ ] Runtime Integration (local end-to-end) { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunDaemon/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunApp/Setup/ManualInstallViewController.swift } <docs/decisions/virtualization.md, docs/decisions/protocols.md>
+  - [X] Boot VM via QEMU backend and verify console rendering
+  - [ ] Validate daemon mode and embedded mode with consistent runtime ownership behavior
+  - [ ] Validate end-to-end app → daemon/embedded → VM → agent → Spice → per-window rendering path
+  - [ ] Validate retry/startup reliability under stale process/socket/lock scenarios
+
+- [ ] Installer Flow Notifications { host/Sources/WinRunDaemon/WinRunDaemon.swift, host/Sources/WinRunApp/ } <docs/architecture.md>
+  - [ ] Show macOS user notification when guest detects new desktop shortcut { host/Sources/WinRunDaemon/WinRunDaemon.swift }
+  - [ ] Prompt user approval to add generated launcher to ~/Applications { host/Sources/WinRunDaemon/WinRunDaemon.swift, host/Sources/WinRunApp/ }
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>

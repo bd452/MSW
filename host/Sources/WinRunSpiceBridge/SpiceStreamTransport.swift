@@ -49,7 +49,10 @@ protocol SpiceStreamTransport {
             windowID: UInt64,
             callbacks: SpiceStreamCallbacks
         ) throws -> SpiceStreamSubscription {
-            let trampoline = CallbackTrampoline(callbacks: callbacks)
+            logger.info(
+                "Opening libspice stream window=\(windowID) transport=\(configuration.transport.summaryDescription)"
+            )
+            let trampoline = CallbackTrampoline(callbacks: callbacks, logger: logger, windowID: windowID)
             let unmanaged = Unmanaged.passRetained(trampoline)
             var errorBuffer = [CChar](repeating: 0, count: 512)
 
@@ -79,12 +82,15 @@ protocol SpiceStreamTransport {
             guard handle != nil else {
                 unmanaged.release()
                 let message = String(cString: errorBuffer)
+                logger.error("libspice openStream failed window=\(windowID) error=\(message)")
                 throw SpiceStreamError.connectionFailed(message.isEmpty ? "Unknown libspice error" : message)
             }
 
             self.currentHandle = handle
+            logger.info("libspice stream open succeeded window=\(windowID)")
 
             return SpiceStreamSubscription {
+                self.logger.info("Closing libspice stream window=\(windowID)")
                 if let handle {
                     winrun_spice_stream_close(handle)
                 }
@@ -316,10 +322,11 @@ protocol SpiceStreamTransport {
             controlTrampolineRef?.release()
 
             controlCallback = callback
-            let trampoline = ControlCallbackTrampoline(callback: callback)
+            let trampoline = ControlCallbackTrampoline(callback: callback, logger: logger)
             controlTrampolineRef = Unmanaged.passRetained(trampoline)
 
             winrun_spice_set_control_callback(handle, controlMessageThunk, controlTrampolineRef!.toOpaque())
+            logger.debug("Registered libspice control callback")
         }
 
         /// Clean up control callback trampoline when stream closes
@@ -358,36 +365,67 @@ protocol SpiceStreamTransport {
 
     private final class CallbackTrampoline {
         private let callbacks: SpiceStreamCallbacks
+        private let logger: Logger
+        private let windowID: UInt64
+        private var frameCount: UInt64 = 0
+        private var metadataCount: UInt64 = 0
+        private var closeCount: UInt64 = 0
+        private var clipboardCount: UInt64 = 0
 
-        init(callbacks: SpiceStreamCallbacks) {
+        init(callbacks: SpiceStreamCallbacks, logger: Logger, windowID: UInt64) {
             self.callbacks = callbacks
+            self.logger = logger
+            self.windowID = windowID
         }
 
         func handleFrame(_ data: Data) {
+            frameCount += 1
+            if frameCount <= 5 || frameCount % 120 == 0 {
+                logger.debug("libspice frame callback window=\(windowID) count=\(frameCount) bytes=\(data.count)")
+            }
             callbacks.onFrame(data)
         }
 
         func handleMetadata(_ metadata: WindowMetadata) {
+            metadataCount += 1
+            logger.debug(
+                "libspice metadata callback window=\(windowID) count=\(metadataCount) id=\(metadata.windowID) "
+                    + "size=\(Int(metadata.frame.width))x\(Int(metadata.frame.height))"
+            )
             callbacks.onMetadata(metadata)
         }
 
         func handleClose(_ reason: SpiceStreamCloseReason) {
+            closeCount += 1
+            logger.warn("libspice close callback window=\(windowID) count=\(closeCount) reason=\(reason)")
             callbacks.onClosed(reason)
         }
 
         func handleClipboard(_ clipboard: ClipboardData) {
+            clipboardCount += 1
+            logger.debug(
+                "libspice clipboard callback window=\(windowID) count=\(clipboardCount) "
+                    + "format=\(clipboard.format) bytes=\(clipboard.data.count)"
+            )
             callbacks.onClipboard(clipboard)
         }
     }
 
     private final class ControlCallbackTrampoline {
         private let callback: (Data) -> Void
+        private let logger: Logger
+        private var messageCount: UInt64 = 0
 
-        init(callback: @escaping (Data) -> Void) {
+        init(callback: @escaping (Data) -> Void, logger: Logger) {
             self.callback = callback
+            self.logger = logger
         }
 
         func handleControlMessage(_ data: Data) {
+            messageCount += 1
+            if messageCount <= 10 || messageCount % 100 == 0 {
+                logger.debug("libspice control message callback count=\(messageCount) bytes=\(data.count)")
+            }
             callback(data)
         }
     }
@@ -466,99 +504,4 @@ protocol SpiceStreamTransport {
                 .takeUnretainedValue()
             trampoline.handleClose(SpiceStreamCloseReason(code: code, message: message))
         }
-#else
-    // MARK: - Mock Implementation (non-macOS)
-
-    final class MockSpiceStreamTransport: SpiceStreamTransport {
-        private final class TimerBox {
-            var timer: DispatchSourceTimer?
-        }
-
-        private let logger: Logger
-
-        init(logger: Logger) {
-            self.logger = logger
-        }
-
-        func openStream(
-            configuration: SpiceStreamConfiguration,
-            windowID: UInt64,
-            callbacks: SpiceStreamCallbacks
-        ) throws -> SpiceStreamSubscription {
-            logger.info(
-                "Mock Spice stream open for window \(windowID) via \(configuration.transport.summaryDescription)"
-            )
-            let box = TimerBox()
-            let timer = DispatchSource.makeTimerSource(queue: .global(qos: .userInitiated))
-            timer.schedule(deadline: .now(), repeating: 1.0)
-            timer.setEventHandler {
-                let fakeFrame = Data(repeating: UInt8.random(in: 0...255), count: 1024)
-                callbacks.onFrame(fakeFrame)
-                let metadata = WindowMetadata(
-                    windowID: windowID,
-                    title: "Mock Window \(windowID)",
-                    frame: CGRect(x: 100, y: 100, width: 800, height: 600),
-                    isResizable: true
-                )
-                callbacks.onMetadata(metadata)
-            }
-            timer.resume()
-            box.timer = timer
-
-            return SpiceStreamSubscription {
-                box.timer?.cancel()
-            }
-        }
-
-        func closeStream(_ subscription: SpiceStreamSubscription) {
-            subscription.cleanup()
-        }
-
-        // MARK: - Input Forwarding (Mock)
-
-        func sendMouseEvent(_ event: MouseInputEvent) {
-            logger.debug("Mock: sendMouseEvent type=\(event.eventType) at (\(event.x), \(event.y))")
-        }
-
-        func sendKeyboardEvent(_ event: KeyboardInputEvent) {
-            logger.debug("Mock: sendKeyboardEvent type=\(event.eventType) keyCode=\(event.keyCode)")
-        }
-
-        // MARK: - Clipboard (Mock)
-
-        func sendClipboard(_ clipboard: ClipboardData) {
-            logger.debug(
-                "Mock: sendClipboard format=\(clipboard.format) size=\(clipboard.data.count)")
-        }
-
-        func requestClipboard(format: ClipboardFormat) {
-            logger.debug("Mock: requestClipboard format=\(format)")
-        }
-
-        // MARK: - Drag and Drop (Mock)
-
-        func sendDragDropEvent(_ event: DragDropEvent) {
-            logger.debug(
-                "Mock: sendDragDropEvent type=\(event.eventType) files=\(event.files.count)")
-        }
-
-        // MARK: - Control Channel (Mock)
-
-        private var mockControlCallback: ((Data) -> Void)?
-
-        func setControlCallback(_ callback: @escaping (Data) -> Void) {
-            mockControlCallback = callback
-            logger.debug("Mock: setControlCallback")
-        }
-
-        func sendControlMessage(_ data: Data) -> Bool {
-            logger.debug("Mock: sendControlMessage size=\(data.count)")
-            return true
-        }
-
-        /// Simulate receiving a control message (for testing)
-        func simulateControlMessage(_ data: Data) {
-            mockControlCallback?(data)
-        }
-    }
 #endif

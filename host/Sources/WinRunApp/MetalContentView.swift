@@ -101,122 +101,6 @@ final class MetalContentView: NSView {
         registerForDraggedTypes([.fileURL, .string])
     }
 
-    private func setupConnectionOverlay() {
-        // Create blur effect overlay
-        let overlay = NSVisualEffectView()
-        overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.material = .hudWindow
-        overlay.blendingMode = .withinWindow
-        overlay.state = .active
-        overlay.wantsLayer = true
-        overlay.layer?.cornerRadius = 12
-        overlay.isHidden = true
-
-        addSubview(overlay)
-        NSLayoutConstraint.activate([
-            overlay.centerXAnchor.constraint(equalTo: centerXAnchor),
-            overlay.centerYAnchor.constraint(equalTo: centerYAnchor),
-            overlay.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.8),
-            overlay.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
-        ])
-
-        // Create spinner
-        let spinner = NSProgressIndicator()
-        spinner.translatesAutoresizingMaskIntoConstraints = false
-        spinner.style = .spinning
-        spinner.controlSize = .regular
-        spinner.isDisplayedWhenStopped = false
-        overlay.addSubview(spinner)
-
-        // Create status label
-        let label = NSTextField(labelWithString: "")
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .labelColor
-        label.alignment = .center
-        label.lineBreakMode = .byWordWrapping
-        label.maximumNumberOfLines = 3
-        overlay.addSubview(label)
-
-        // Create retry button (hidden by default)
-        let button = NSButton(title: "Retry", target: self, action: #selector(retryButtonClicked))
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.bezelStyle = .rounded
-        button.isHidden = true
-        overlay.addSubview(button)
-
-        NSLayoutConstraint.activate([
-            spinner.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            spinner.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 20),
-
-            label.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 20),
-            label.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -20),
-            label.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 12),
-
-            button.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            button.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 16),
-            button.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -20)
-        ])
-
-        self.connectionOverlay = overlay
-        self.statusLabel = label
-        self.retryButton = button
-        self.spinner = spinner
-    }
-
-    /// Update the connection state overlay display
-    func updateConnectionState(_ state: SpiceConnectionState) {
-        currentConnectionState = state
-
-        // Ensure overlay is set up
-        if connectionOverlay == nil {
-            setupConnectionOverlay()
-        }
-
-        guard let overlay = connectionOverlay,
-              let label = statusLabel,
-              let button = retryButton,
-              let spinner = spinner else { return }
-
-        switch state {
-        case .connected:
-            overlay.isHidden = true
-            spinner.stopAnimation(nil)
-
-        case .disconnected:
-            overlay.isHidden = false
-            label.stringValue = "Disconnected"
-            button.isHidden = true
-            spinner.stopAnimation(nil)
-
-        case .connecting:
-            overlay.isHidden = false
-            label.stringValue = "Connecting..."
-            button.isHidden = true
-            spinner.startAnimation(nil)
-
-        case .reconnecting(let attempt, let maxAttempts):
-            overlay.isHidden = false
-            if let max = maxAttempts {
-                label.stringValue = "Reconnecting (attempt \(attempt) of \(max))..."
-            } else {
-                label.stringValue = "Reconnecting (attempt \(attempt))..."
-            }
-            button.isHidden = true
-            spinner.startAnimation(nil)
-
-        case .failed(let reason):
-            overlay.isHidden = false
-            label.stringValue = "Connection failed:\n\(reason)"
-            button.isHidden = false
-            spinner.stopAnimation(nil)
-        }
-    }
-
-    @objc private func retryButtonClicked() {
-        inputDelegate?.metalContentViewDidRequestRetry(self)
-    }
-
     // MARK: - View Lifecycle
 
     override func viewDidMoveToWindow() {
@@ -410,10 +294,25 @@ final class MetalContentView: NSView {
         // to Windows coordinate system (origin at top-left)
         let flippedY = bounds.height - point.y
 
-        // Scale to guest pixel coordinates
+        let xScale: CGFloat
+        let yScale: CGFloat
+        if expectedFrameSize.width > 0, expectedFrameSize.height > 0, bounds.width > 0, bounds.height > 0 {
+            xScale = expectedFrameSize.width / bounds.width
+            yScale = expectedFrameSize.height / bounds.height
+        } else {
+            xScale = currentScaleFactor
+            yScale = currentScaleFactor
+        }
+
+        let scaledX = point.x * xScale
+        let scaledY = flippedY * yScale
+
+        let maxX = max(expectedFrameSize.width - 1, 0)
+        let maxY = max(expectedFrameSize.height - 1, 0)
+
         return NSPoint(
-            x: point.x * currentScaleFactor,
-            y: flippedY * currentScaleFactor
+            x: expectedFrameSize.width > 0 ? min(max(scaledX, 0), maxX) : max(scaledX, 0),
+            y: expectedFrameSize.height > 0 ? min(max(scaledY, 0), maxY) : max(scaledY, 0)
         )
     }
 
@@ -430,14 +329,19 @@ final class MetalContentView: NSView {
     override func flagsChanged(with event: NSEvent) {
         // Handle modifier key changes
         let keyCode = KeyCodeMapper.windowsKeyCode(fromMacOS: event.keyCode)
-        let isKeyDown = event.modifierFlags.rawValue > 0
+        let scanCode = KeyCodeMapper.windowsScanCode(fromMacOS: event.keyCode)
+        let isExtendedKey = KeyCodeMapper.isExtendedScanCode(fromMacOS: event.keyCode)
+        let isKeyDown = KeyCodeMapper.isModifierKeyDown(
+            macKeyCode: event.keyCode,
+            flags: event.modifierFlags.rawValue
+        )
 
         let keyboardEvent = KeyboardInputEvent(
             windowID: windowID,
             eventType: isKeyDown ? .down : .up,
             keyCode: keyCode,
-            scanCode: UInt32(event.keyCode),
-            isExtendedKey: false,
+            scanCode: scanCode,
+            isExtendedKey: isExtendedKey,
             modifiers: modifiers(from: event),
             character: nil
         )
@@ -446,16 +350,17 @@ final class MetalContentView: NSView {
 
     private func handleKeyboardEvent(_ event: NSEvent, type: KeyEventType) {
         let keyCode = KeyCodeMapper.windowsKeyCode(fromMacOS: event.keyCode)
+        let scanCode = KeyCodeMapper.windowsScanCode(fromMacOS: event.keyCode)
         let character = event.characters
 
-        // Check for extended keys (right-side modifiers, arrow keys, etc.)
-        let isExtendedKey = [0x7B, 0x7C, 0x7D, 0x7E, 0x73, 0x74, 0x75, 0x77, 0x79].contains(Int(event.keyCode))
+        // Use mapper-driven extended key semantics for Spice scancode input.
+        let isExtendedKey = KeyCodeMapper.isExtendedScanCode(fromMacOS: event.keyCode)
 
         let keyboardEvent = KeyboardInputEvent(
             windowID: windowID,
             eventType: type,
             keyCode: keyCode,
-            scanCode: UInt32(event.keyCode),
+            scanCode: scanCode,
             isExtendedKey: isExtendedKey,
             modifiers: modifiers(from: event),
             character: character
@@ -575,5 +480,114 @@ final class MetalContentView: NSView {
             return "Z:" + relativePath.replacingOccurrences(of: "/", with: "\\")
         }
         return nil
+    }
+}
+
+// MARK: - Connection Overlay
+
+@available(macOS 13, *)
+extension MetalContentView {
+    private func setupConnectionOverlay() {
+        let overlay = NSVisualEffectView()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.material = .hudWindow
+        overlay.blendingMode = .withinWindow
+        overlay.state = .active
+        overlay.wantsLayer = true
+        overlay.layer?.cornerRadius = 12
+        overlay.isHidden = true
+
+        addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.centerXAnchor.constraint(equalTo: centerXAnchor),
+            overlay.centerYAnchor.constraint(equalTo: centerYAnchor),
+            overlay.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.8),
+            overlay.widthAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        ])
+
+        let spinner = NSProgressIndicator()
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.style = .spinning
+        spinner.controlSize = .regular
+        spinner.isDisplayedWhenStopped = false
+        overlay.addSubview(spinner)
+
+        let label = NSTextField(labelWithString: "")
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        label.textColor = .labelColor
+        label.alignment = .center
+        label.lineBreakMode = .byWordWrapping
+        label.maximumNumberOfLines = 3
+        overlay.addSubview(label)
+
+        let button = NSButton(title: "Retry", target: self, action: #selector(retryButtonClicked))
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.bezelStyle = .rounded
+        button.isHidden = true
+        overlay.addSubview(button)
+
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            spinner.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 20),
+            label.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 20),
+            label.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -20),
+            label.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 12),
+            button.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            button.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 16),
+            button.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -20)
+        ])
+
+        connectionOverlay = overlay
+        statusLabel = label
+        retryButton = button
+        self.spinner = spinner
+    }
+
+    func updateConnectionState(_ state: SpiceConnectionState) {
+        currentConnectionState = state
+
+        if connectionOverlay == nil {
+            setupConnectionOverlay()
+        }
+
+        guard let overlay = connectionOverlay,
+              let label = statusLabel,
+              let button = retryButton,
+              let spinner = spinner else { return }
+
+        switch state {
+        case .connected:
+            overlay.isHidden = true
+            spinner.stopAnimation(nil)
+        case .disconnected:
+            overlay.isHidden = false
+            label.stringValue = "Disconnected"
+            button.isHidden = true
+            spinner.stopAnimation(nil)
+        case .connecting:
+            overlay.isHidden = false
+            label.stringValue = "Connecting..."
+            button.isHidden = true
+            spinner.startAnimation(nil)
+        case .reconnecting(let attempt, let maxAttempts):
+            overlay.isHidden = false
+            if let max = maxAttempts {
+                label.stringValue = "Reconnecting (attempt \(attempt) of \(max))..."
+            } else {
+                label.stringValue = "Reconnecting (attempt \(attempt))..."
+            }
+            button.isHidden = true
+            spinner.startAnimation(nil)
+        case .failed(let reason):
+            overlay.isHidden = false
+            label.stringValue = "Connection failed:\n\(reason)"
+            button.isHidden = false
+            spinner.stopAnimation(nil)
+        }
+    }
+
+    @objc private func retryButtonClicked() {
+        inputDelegate?.metalContentViewDidRequestRetry(self)
     }
 }

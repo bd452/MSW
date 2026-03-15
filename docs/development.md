@@ -7,6 +7,8 @@
 - Swift 5.9 toolchain
 - Homebrew packages (run `./scripts/bootstrap.sh` or `make brew-sync` to install)
 - libspice-glib development headers (included in Brewfile)
+- QEMU (`qemu-system-aarch64`, included in Brewfile) — used during Windows installation and runtime
+- swtpm (included in Brewfile) — software TPM 2.0 emulator required by Windows 11
 - (Optional) .NET 9 SDK for running guest linting locally: `brew install dotnet`
 
 ### Windows Guest
@@ -124,12 +126,12 @@ guest/
 
 ### Available Make Targets
 
-| Target | Description |
-|--------|-------------|
-| `make generate-protocol` | Regenerate both Swift and C# code |
-| `make generate-protocol-host` | Regenerate Swift code only (requires macOS) |
-| `make generate-protocol-guest` | Regenerate C# code only (requires .NET) |
-| `make validate-protocol` | Check generated files match source (used in CI) |
+| Target                         | Description                                     |
+| ------------------------------ | ----------------------------------------------- |
+| `make generate-protocol`       | Regenerate both Swift and C# code               |
+| `make generate-protocol-host`  | Regenerate Swift code only (requires macOS)     |
+| `make generate-protocol-guest` | Regenerate C# code only (requires .NET)         |
+| `make validate-protocol`       | Check generated files match source (used in CI) |
 
 ### CI Validation
 
@@ -200,6 +202,77 @@ git commit -m "Upgrade Homebrew dependencies"
 
 > **Note:** `make brew-sync` requires macOS. The `Brewfile.lock` ensures CI uses the same package versions.
 
+### Runtime Environment
+
+WinRun uses a centralized `RuntimeEnvironment` configuration that controls two things:
+- **Service mode**: whether the VM runs in-process (`embedded`) or via the `winrund` daemon (`xpc`)
+- **Security policy**: development (permissive auth, high rate limits) or production (strict auth, normal rate limits)
+
+The environment is determined by the `WINRUN_ENV` variable, falling back to a compile-time default:
+
+| Build   | Default `WINRUN_ENV` | Service Mode | Security Policy |
+| ------- | -------------------- | ------------ | --------------- |
+| Debug   | `development`        | embedded     | development     |
+| Release | `production`         | xpc          | production      |
+
+**Override at launch:**
+```bash
+# Test the daemon/XPC path from a debug build
+WINRUN_ENV=production host/.build/debug/WinRunApp
+
+# Test embedded mode from a release build (debugging)
+WINRUN_ENV=development open build/WinRun.app
+```
+
+**Make targets for running the app:**
+
+| Target          | What it does                                        | When to use                          |
+| --------------- | --------------------------------------------------- | ------------------------------------ |
+| `make run`      | Build debug, sign, run (embedded, no daemon)        | Fast iteration during development    |
+| `make run-app`  | Package full .app bundle, open it                   | When you need icons, Dock, resources |
+| `make run-prod` | Build debug, sign, run with `WINRUN_ENV=production` | Testing daemon/XPC path              |
+| `make package`  | Build release .app bundle                           | Distribution / full packaging        |
+
+> **Note:** `make run` and `make run-prod` sign the debug binary with the `com.apple.security.virtualization` entitlement for compatibility with VM-related host capabilities.
+
+> **Note:** The CLI (`winrun`) always communicates via XPC, so it requires a running daemon regardless of `WINRUN_ENV`. Install it with `make install-daemon`.
+
+### Managed QEMU Workflow (Recommended)
+
+WinRun can provision a managed SPICE-enabled QEMU toolchain for development:
+
+```bash
+# Build/install managed QEMU in:
+# ~/.winrun/tools/qemu-spice
+make qemu-bootstrap
+```
+
+`make run` automatically uses this managed prefix when present. You can inspect both managed/system candidates with:
+
+```bash
+make qemu-doctor
+```
+
+### QEMU Runtime Overrides (Development)
+
+If your default `qemu-system-aarch64` lacks SPICE support, point WinRun to a known-good build:
+
+```bash
+WINRUN_QEMU_BINARY=/path/to/qemu-system-aarch64 \
+WINRUN_SWTPM_BINARY=/path/to/swtpm \
+make run
+```
+
+Prefix-based overrides are also supported:
+
+```bash
+WINRUN_QEMU_PREFIX=/path/to/prefix \
+WINRUN_SWTPM_PREFIX=/path/to/prefix \
+make run
+```
+
+Use `scripts/check-qemu-spice.sh` to verify SPICE support explicitly.
+
 ### Build Everything
 ```
 ./scripts/build-all.sh
@@ -210,7 +283,7 @@ git commit -m "Upgrade Homebrew dependencies"
 (cd host && swift build -c release)
 ```
 
-> **Note:** Debug builds (`swift build`) use permissive authentication that allows unsigned clients and higher rate limits. Release builds (`swift build -c release`) enforce code signature verification and stricter throttling. See `XPCAuthenticationConfig` and `ThrottlingConfig` in `WinRunShared`.
+> **Note:** Debug builds (`swift build`) use development security policy (permissive auth, high rate limits). Release builds (`swift build -c release`) use production security policy (strict auth, normal throttling). Override with `WINRUN_ENV`. See `RuntimeEnvironment` in `WinRunShared`.
 
 ### Build Guest Agent Only
 ```
@@ -653,14 +726,14 @@ export DEVELOPER_ID="Developer ID Application: Your Name (ABC123XYZ)"
 
 For GitHub Actions, add these secrets to your repository:
 
-| Secret | Description |
-|--------|-------------|
-| `DEVELOPER_ID` | Full certificate name |
-| `APPLE_CERTIFICATE_P12` | Base64-encoded .p12 certificate |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file |
-| `NOTARIZE_KEY_ID` | App Store Connect API Key ID |
-| `NOTARIZE_KEY_ISSUER` | App Store Connect API Issuer ID |
-| `NOTARIZE_KEY_P8` | Base64-encoded .p8 key file contents |
+| Secret                       | Description                          |
+| ---------------------------- | ------------------------------------ |
+| `DEVELOPER_ID`               | Full certificate name                |
+| `APPLE_CERTIFICATE_P12`      | Base64-encoded .p12 certificate      |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file           |
+| `NOTARIZE_KEY_ID`            | App Store Connect API Key ID         |
+| `NOTARIZE_KEY_ISSUER`        | App Store Connect API Issuer ID      |
+| `NOTARIZE_KEY_P8`            | Base64-encoded .p8 key file contents |
 
 Example workflow step:
 ```yaml
@@ -719,11 +792,11 @@ To enforce CI checks before merge, configure branch protection in GitHub:
 
 CI jobs only run when relevant files change:
 
-| Job | Triggered by changes in |
-|-----|------------------------|
-| Host Build & Test | `host/**`, `shared/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
-| Host Lint | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
-| Guest Build & Test | `guest/**`, `shared/**`, `.github/workflows/ci.yml` |
-| Guest Lint | `guest/**`, `.github/workflows/ci.yml` |
+| Job                | Triggered by changes in                                                       |
+| ------------------ | ----------------------------------------------------------------------------- |
+| Host Build & Test  | `host/**`, `shared/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*` |
+| Host Lint          | `host/**`, `.github/workflows/ci.yml`, `.github/Brewfile.host-*`              |
+| Guest Build & Test | `guest/**`, `shared/**`, `.github/workflows/ci.yml`                           |
+| Guest Lint         | `guest/**`, `.github/workflows/ci.yml`                                        |
 
 This saves CI minutes when changes are isolated to one platform. The final `CI` gate job treats skipped jobs as successful.

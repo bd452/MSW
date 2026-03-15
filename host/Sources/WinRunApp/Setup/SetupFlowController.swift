@@ -16,6 +16,7 @@ final class SetupFlowController {
     private let preflight: ProvisioningPreflightResult
     private let presentSetupWindow: SetupWindowPresenter
     private let setupCoordinatorFactory: () -> SetupCoordinator
+    private let environment: RuntimeEnvironment
 
     private var window: NSWindow?
     private var wizardCoordinator: SetupWizardCoordinator?
@@ -23,24 +24,27 @@ final class SetupFlowController {
 
     init(
         preflight: ProvisioningPreflightResult,
+        environment: RuntimeEnvironment = .current,
         logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupFlowController"),
         presentSetupWindow: @escaping SetupWindowPresenter = SetupFlowController.defaultSetupWindowPresenter,
         setupCoordinatorFactory: @escaping () -> SetupCoordinator = { SetupCoordinator() }
     ) {
         self.preflight = preflight
+        self.environment = environment
         self.logger = logger
         self.presentSetupWindow = presentSetupWindow
         self.setupCoordinatorFactory = setupCoordinatorFactory
     }
 
     func routeToSetupOrNormalOperation(normalOperation: @escaping NormalOperationBlock) {
+        normalOperationBlock = normalOperation
+
         switch preflight {
         case .ready:
-            normalOperation()
+            ensureDaemonThenProceed()
 
         case .needsSetup(let diskImagePath, let reason):
             logger.info("Routing to setup UI. diskImagePath=\(diskImagePath.path) reason=\(reason.rawValue)")
-            normalOperationBlock = normalOperation
             presentSetupWizard(diskImagePath: diskImagePath, reason: reason)
         }
     }
@@ -83,12 +87,13 @@ final class SetupFlowController {
         NSApplication.shared.activate(ignoringOtherApps: true)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "WinRun Setup"
+        window.minSize = NSSize(width: 620, height: 460)
         window.contentViewController = controller
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -120,13 +125,66 @@ extension SetupFlowController: SetupWizardCoordinatorDelegate {
         logger.info("Setup wizard finished. success=\(success)")
 
         if success {
+            let completedDiskPath = coordinator.lastResult?.diskImagePath ?? DiskImageConfiguration.defaultPath
+            if !ProvisioningPreflight.markSetupComplete(diskImagePath: completedDiskPath) {
+                logger.warn("Failed to persist setup completion marker at \(completedDiskPath.path)")
+            }
             // Close setup window and proceed to normal operation
             window?.close()
             window = nil
             wizardCoordinator = nil
-            normalOperationBlock?()
+            ensureDaemonThenProceed()
         } else {
             // User cancelled or gave up - quit the app
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func ensureDaemonThenProceed() {
+        guard environment.serviceMode == .xpc else {
+            normalOperationBlock?()
+            return
+        }
+        let result = DaemonInstaller.ensureDaemonInstalled(logger: logger)
+        switch result {
+        case .alreadyRunning, .installed:
+            normalOperationBlock?()
+
+        case .userCancelled:
+            showDaemonRequiredAlert(
+                message: "WinRun needs the background daemon to run Windows apps. "
+                    + "You can install it later by running:\n\n"
+                    + "  make install-daemon\n\n"
+                    + "in the project directory."
+            )
+
+        case .failed(let reason):
+            logger.error("Daemon installation failed: \(reason)")
+            showDaemonRequiredAlert(
+                message: "Could not install the WinRun daemon:\n\n\(reason)\n\n"
+                    + "You can install it manually by running:\n\n"
+                    + "  make install-daemon\n\n"
+                    + "in the project directory, then relaunch WinRun."
+            )
+        }
+    }
+
+    private func showDaemonRequiredAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Daemon Installation"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Try Again")
+        alert.addButton(withTitle: "Continue Anyway")
+        alert.addButton(withTitle: "Quit")
+
+        let response = alert.runModal()
+        switch response {
+        case .alertFirstButtonReturn:
+            ensureDaemonThenProceed()
+        case .alertSecondButtonReturn:
+            normalOperationBlock?()
+        default:
             NSApplication.shared.terminate(nil)
         }
     }
@@ -165,6 +223,8 @@ private final class SetupPlaceholderViewController: NSViewController {
             "No Windows VM disk image was found."
         case .diskImageIsDirectory:
             "The configured VM disk image path points to a directory."
+        case .setupIncomplete:
+            "A VM disk image exists, but setup has not completed yet."
         }
 
         let details = NSTextField(wrappingLabelWithString: """

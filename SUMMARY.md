@@ -2,7 +2,7 @@
 
 ## Overview
 
-A seamless Windows-on-macOS solution using Virtualization.framework + Spice protocol to run Windows GUI apps as native-feeling macOS windows.
+A seamless Windows-on-macOS solution using QEMU (HVF acceleration) + Spice protocol to run Windows GUI apps as native-feeling macOS windows.
 
 -----
 
@@ -16,7 +16,7 @@ A seamless Windows-on-macOS solution using Virtualization.framework + Spice prot
 
 - Launch daemon (plist in `/Library/LaunchDaemons/`)
 - Runs as privileged user for VM management
-- Swift-based, using Virtualization.framework
+- Swift-based, using a managed QEMU subprocess backend
 
 **Responsibilities:**
 
@@ -624,9 +624,10 @@ When a user launches WinRun.app without an existing Windows VM, the setup wizard
 After the user provides an ISO:
 1. WinRun validates the ISO (ARM64 architecture, edition detection)
 2. Displays warnings if ISO is suboptimal (e.g., Windows Server lacks x86 emulation)
-3. Creates disk image and begins automated Windows installation (~10-15 min)
-4. Installs VirtIO drivers, WinRun agent, and optimizes Windows
-5. Shows "Ready!" screen with quick-start tips
+3. Creates disk image and launches Windows installation via QEMU (~10-15 min)
+4. User installs VirtIO drivers from the bundled driver ISO during setup
+5. After installation, the VM runs on Virtualization.framework for normal operation
+6. Shows "Ready!" screen with quick-start tips
 
 ### First Time Setup (CLI)
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-WinRun provides a seamless Windows-on-macOS experience, allowing users to run Windows applications as native-feeling macOS windows. The system uses Apple's Virtualization.framework to run Windows ARM64 in a lightweight VM, with the Spice protocol handling display streaming and input forwarding.
+WinRun provides a seamless Windows-on-macOS experience, allowing users to run Windows applications as native-feeling macOS windows. The system uses QEMU with HVF acceleration to run Windows ARM64 in a lightweight VM, with the Spice protocol handling display streaming and input forwarding.
 
 ## Repository Layout
 
@@ -44,7 +44,7 @@ docs/                       Architecture and decision documentation
 
 ## Build Targets
 
-- **winrund (Swift)** — Privileged daemon launched through LaunchDaemons. Wraps Virtualization.framework and exposes an XPC API for lifecycle + program execution calls.
+- **winrund (Swift)** — Privileged daemon launched through LaunchDaemons. Manages a QEMU/HVF-accelerated Windows VM and exposes an XPC API for lifecycle + program execution calls.
 - **WinRun.app (Swift/AppKit)** — Per-window process that connects to Spice, renders frames, forwards input, and proxies clipboard/menus. Also contains the first-run setup wizard.
 - **winrun CLI (Swift CLI)** — Developer tooling for launching programs, managing configuration, creating launchers, and triggering setup.
 - **WinRunAgent (C#)** — Guest-side Windows service that enumerates windows, captures per-window surfaces, injects input, and reports metadata/shortcut events to the host via Spice custom channels.
@@ -64,7 +64,7 @@ docs/                       Architecture and decision documentation
 │  │ (per window) │           │  (daemon)    │                                │
 │  └──────┬───────┘           └──────┬───────┘                                │
 │         │                          │                                         │
-│         │ Spice                    │ Virtualization.framework               │
+│         │ Spice                    │ QEMU (HVF)               │
 │         │                          │                                         │
 │         ▼                          ▼                                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -226,7 +226,7 @@ WinRun.app/
 
 ## Security Model
 
-1. **VM Isolation**: Windows runs in a sandboxed VM via Virtualization.framework
+1. **VM Isolation**: Windows runs in a sandboxed VM via QEMU with HVF acceleration
 2. **XPC Authentication**: Daemon verifies client code signatures
 3. **No Network Bypass**: All network traffic goes through VM NAT
 4. **Minimal Privileges**: App runs as user, daemon as root only for VM management

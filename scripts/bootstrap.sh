@@ -117,6 +117,20 @@ bootstrap() {
   echo "[bootstrap] Installing brew dependencies..."
   brew bundle --file="${REPO_ROOT}/Brewfile"
 
+  if [[ "${WINRUN_SKIP_QEMU_BOOTSTRAP:-0}" != "1" ]]; then
+    echo "[bootstrap] Ensuring managed SPICE-enabled QEMU is available..."
+    "${REPO_ROOT}/scripts/build-qemu-spice.sh"
+  else
+    echo "[bootstrap] Skipping managed QEMU bootstrap (WINRUN_SKIP_QEMU_BOOTSTRAP=1)"
+    echo "[bootstrap] Verifying current QEMU has SPICE support..."
+    if ! "${REPO_ROOT}/scripts/check-qemu-spice.sh"; then
+      echo "[bootstrap] QEMU is installed but lacks SPICE support."
+      echo "[bootstrap] WinRun runtime requires SPICE-enabled qemu-system-aarch64."
+      echo "[bootstrap] Provide an override with WINRUN_QEMU_BINARY or WINRUN_QEMU_PREFIX."
+      exit 1
+    fi
+  fi
+
   echo "[bootstrap] Creating Application Support directory..."
   mkdir -p "${HOME}/Library/Application Support/WinRun"
 

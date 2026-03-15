@@ -1,16 +1,25 @@
 import AppKit
 import Foundation
+import WinRunSetup
 import WinRunShared
+import WinRunVirtualMachine
 import WinRunXPC
 
 /// Application delegate managing WinRun app lifecycle and menu bar.
 @available(macOS 13, *)
 final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
-    private let daemonClient = WinRunDaemonClient()
+    private let serviceProvider: VMServiceProvider = {
+        switch RuntimeEnvironment.current.serviceMode {
+        case .embedded: return EmbeddedServiceProvider()
+        case .xpc: return WinRunDaemonClient()
+        }
+    }()
     private let logger = StandardLogger(subsystem: "WinRunApp")
     private let windowController = WinRunWindowController()
+    private let consoleWindowController = VMConsoleWindowController()
     private var setupFlowController: SetupFlowController?
     private let settingsController = SettingsWindowController.shared
+    private var bootInProgress = false
 
     func start(arguments: [String]) {
         setupMenuBar()
@@ -19,16 +28,9 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         let setupFlowController = SetupFlowController(preflight: preflight)
         self.setupFlowController = setupFlowController
         setupFlowController.routeToSetupOrNormalOperation { [self] in
-            Task {
-                do {
-                    _ = try await self.daemonClient.ensureVMRunning()
-                    let executable = arguments.dropFirst().first ?? "C:/Windows/System32/notepad.exe"
-                    let request = ProgramLaunchRequest(windowsPath: executable)
-                    try await self.daemonClient.executeProgram(request)
-                    self.windowController.presentWindow(title: executable)
-                } catch {
-                    self.logger.error("Failed to start Windows program: \(error)")
-                }
+            let executable = arguments.dropFirst().first ?? "C:/Windows/System32/notepad.exe"
+            Task { @MainActor in
+                await self.bootAndLaunch(executable)
             }
         }
     }
@@ -61,6 +63,17 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
             NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(
+            NSMenuItem(
+                title: "Show VM Console",
+                action: #selector(openConsole),
+                keyEquivalent: ""))
+        appMenu.addItem(
+            NSMenuItem(
+                title: "Maintenance Boot (QEMU)…",
+                action: #selector(startMaintenanceBoot),
+                keyEquivalent: ""))
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
             NSMenuItem(
@@ -161,6 +174,152 @@ final class WinRunApplicationDelegate: NSObject, NSApplicationDelegate {
         helpMenuItem.submenu = helpMenu
         return helpMenuItem
     }
+
+    // MARK: - Boot + Launch
+
+    @MainActor
+    private func bootAndLaunch(_ executable: String) async {
+        guard !bootInProgress else {
+            logger.warn("Ignoring duplicate bootAndLaunch while boot is already in progress")
+            return
+        }
+        bootInProgress = true
+        defer { bootInProgress = false }
+
+        fputs("[APP] bootAndLaunch starting, executable=\(executable)\n", stderr)
+        fputs("[APP] serviceMode=\(RuntimeEnvironment.current.serviceMode)\n", stderr)
+
+        // Embedded mode: start QEMU runtime in-process, then open Spice console.
+        if let embedded = serviceProvider as? EmbeddedServiceProvider {
+            await bootEmbedded(embedded)
+            return
+        }
+
+        // XPC/daemon mode: single-step boot + agent launch
+        do {
+            _ = try await serviceProvider.ensureVMRunning()
+        } catch {
+            logger.error("Failed to start VM: \(error)")
+            showVMError(
+                title: "Could not start Windows VM",
+                detail: error.localizedDescription,
+                recovery: "Make sure the WinRun daemon is installed and running.\n"
+                    + "You can install it with: make install-daemon"
+            )
+            return
+        }
+
+        do {
+            let request = ProgramLaunchRequest(windowsPath: executable)
+            try await serviceProvider.executeProgram(request)
+            windowController.presentWindow(title: executable)
+            logger.info("Launched \(executable)")
+        } catch {
+            logger.error("Failed to launch program: \(error)")
+            showVMError(
+                title: "Could not launch \(executable)",
+                detail: error.localizedDescription,
+                recovery: "Ensure the WinRunAgent service is running inside the Windows VM "
+                    + "and the VM is fully booted."
+            )
+        }
+    }
+
+    /// Embedded mode for local development: boot VM and show console.
+    @MainActor
+    private func bootEmbedded(_ embedded: EmbeddedServiceProvider) async {
+        do {
+            fputs("[APP] Embedded boot: ensureVMRunning()...\n", stderr)
+            _ = try await embedded.ensureVMRunning()
+            fputs("[APP] Embedded boot complete — opening console window\n", stderr)
+            consoleWindowController.showConsole(agentStatus: .checking)
+            consoleWindowController.updateAgentStatus(.notFound)
+        } catch {
+            fputs("[APP] Embedded boot FAILED: \(error)\n", stderr)
+            logger.error("Failed to start VM: \(error)")
+            showVMError(
+                title: "Could not start Windows VM",
+                detail: error.localizedDescription,
+                recovery: "Check that the Windows disk image exists and "
+                    + "QEMU/swtpm are available in bundle or Homebrew."
+            )
+        }
+    }
+
+    private func showVMError(title: String, detail: String, recovery: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = "\(detail)\n\n\(recovery)"
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "Retry")
+        alert.addButton(withTitle: "Quit")
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            Task { @MainActor in
+                let exe = CommandLine.arguments.dropFirst().first
+                    ?? "C:/Windows/System32/notepad.exe"
+                await bootAndLaunch(exe)
+            }
+        } else {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    // MARK: - Maintenance Boot
+
+    @objc private func startMaintenanceBoot() {
+        let diskPath = DiskImageConfiguration.defaultPath
+        guard FileManager.default.fileExists(atPath: diskPath.path) else {
+            let alert = NSAlert()
+            alert.messageText = "No Windows VM Found"
+            alert.informativeText = "Complete the setup wizard first to install Windows."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+
+        let confirm = NSAlert()
+        confirm.messageText = "Start Maintenance Boot?"
+        confirm.informativeText =
+            "This will open a QEMU window to boot your Windows VM interactively. "
+            + "Use this to install software, drivers, or the WinRunAgent.\n\n"
+            + "The VM will have network access for downloads."
+        confirm.alertStyle = .informational
+        confirm.addButton(withTitle: "Start QEMU")
+        confirm.addButton(withTitle: "Cancel")
+
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
+        let appSupportDir = diskPath.deletingLastPathComponent()
+        let virtioISO = QEMUInstallHelper.findVirtIOISO(appSupportDir: appSupportDir)
+
+        do {
+            let result = try QEMUInstallHelper.launchMaintenanceVM(
+                diskImagePath: diskPath,
+                virtioISOPath: virtioISO
+            )
+            logger.info("Maintenance QEMU launched (pid \(result.process.processIdentifier))")
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Failed to Start Maintenance Boot"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+
+    // MARK: - Console
+
+    @objc private func openConsole() {
+        Task { @MainActor in
+            consoleWindowController.showConsole(agentStatus: .notFound)
+        }
+    }
+
+    // MARK: - About / Settings / Help
 
     @objc private func showAbout() {
         let alert = NSAlert()

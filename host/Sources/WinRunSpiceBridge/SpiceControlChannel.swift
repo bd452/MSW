@@ -63,6 +63,7 @@ public extension SpiceControlChannelDelegate {
 /// This channel is separate from the per-window `SpiceWindowStream` and is used for
 /// control messages like session listing, shutdown requests, etc.
 public actor SpiceControlChannel {
+    private static let controlWindowID: UInt64 = .max
     private let logger: Logger
     private let configuration: SpiceStreamConfiguration
     private var messageIdCounter: UInt32 = 0
@@ -107,7 +108,7 @@ public actor SpiceControlChannel {
 
     /// Connect to the guest agent.
     public func connect() async throws {
-        logger.info("Connecting to guest control channel")
+        logger.info("Connecting to guest control channel via \(configuration.transport.summaryDescription)")
 
         // Create transport if not provided
         if transport == nil {
@@ -118,7 +119,8 @@ public actor SpiceControlChannel {
             #endif
         }
 
-        // Open a stream for control channel (windowID 0 indicates control channel)
+        // Open a dedicated control-only stream using a sentinel window ID so
+        // the C bridge can avoid binding display/input channels to this session.
         let callbacks = SpiceStreamCallbacks(
             onFrame: { _ in },  // Control channel doesn't receive frames
             onMetadata: { _ in },
@@ -133,9 +135,10 @@ public actor SpiceControlChannel {
         do {
             transportSubscription = try transport?.openStream(
                 configuration: configuration,
-                windowID: 0,  // Control channel uses windowID 0
+                windowID: Self.controlWindowID,
                 callbacks: callbacks
             )
+            logger.debug("Opened control-channel backing stream on windowID=\(Self.controlWindowID)")
 
             // Set up callback for receiving control messages
             transport?.setControlCallback { [weak self] data in
@@ -143,6 +146,7 @@ public actor SpiceControlChannel {
                     try? await self?.handleReceivedData(data)
                 }
             }
+            logger.debug("Registered control-channel binary callback")
 
             isConnected = true
             _delegate?.controlChannelDidConnect(self)
@@ -313,6 +317,7 @@ public actor SpiceControlChannel {
     /// Called when data is received from the Spice channel.
     /// This should be called by the transport layer when messages arrive.
     public func handleReceivedData(_ data: Data) throws {
+        logger.debug("Received control payload bytes=\(data.count)")
         guard let (type, message) = try SpiceMessageSerializer.deserialize(data) else {
             logger.warn("Incomplete message received")
             return
@@ -345,6 +350,7 @@ public actor SpiceControlChannel {
 
         if let messageId, let streamContinuation = pendingStreams.removeValue(forKey: messageId) {
             // This is a response to a pending request
+            logger.debug("Matched control response type=\(type) messageId=\(messageId)")
             if let errorMsg = message as? GuestErrorMessage {
                 streamContinuation.finish(throwing: SpiceControlError.guestError(
                     code: errorMsg.code,
@@ -356,6 +362,7 @@ public actor SpiceControlChannel {
             }
         } else {
             // Unsolicited message - notify delegate
+            logger.debug("Unsolicited control message type=\(type)")
             _delegate?.controlChannel(self, didReceiveMessage: message, type: type)
         }
     }

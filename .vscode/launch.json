@@ -1,6 +1,20 @@
 {
     "configurations": [
         {
+            "name": "WinRun: Run App (dev via make)",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "make run",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "WinRun: QEMU Doctor",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "make qemu-doctor",
+            "cwd": "${workspaceFolder}"
+        },
+        {
             "type": "swift",
             "request": "launch",
             "args": [],

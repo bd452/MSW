@@ -39,11 +39,14 @@ final class InstallProgressViewController: NSViewController {
 
     private func configureUI() {
         titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
+        titleLabel.isSelectable = true
         statusLabel.font = .systemFont(ofSize: 13)
         statusLabel.textColor = .secondaryLabelColor
+        statusLabel.isSelectable = true
         etaLabel.font = .systemFont(ofSize: 12)
         etaLabel.textColor = .secondaryLabelColor
         etaLabel.stringValue = ""
+        etaLabel.isSelectable = true
         progressIndicator.isIndeterminate = false
         progressIndicator.minValue = 0
         progressIndicator.maxValue = 1
@@ -124,6 +127,7 @@ final class InstallProgressViewController: NSViewController {
             let label = NSTextField(labelWithString: "• \(phase.displayName)")
             label.font = .systemFont(ofSize: 12)
             label.textColor = .secondaryLabelColor
+            label.isSelectable = true
             phaseLabels[phase] = label
             phasesStack.addArrangedSubview(label)
 
@@ -166,6 +170,7 @@ final class InstallProgressViewController: NSViewController {
             let label = NSTextField(labelWithString: "○ \(subPhase.displayName)")
             label.font = .systemFont(ofSize: 11)
             label.textColor = .tertiaryLabelColor
+            label.isSelectable = true
             subPhaseLabels[subPhase] = label
             stack.addArrangedSubview(label)
         }

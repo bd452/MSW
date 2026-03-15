@@ -42,21 +42,26 @@ final class SetupCompleteViewController: NSViewController {
 
     private func configureContent() {
         titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
+        titleLabel.isSelectable = true
 
         messageLabel.font = .systemFont(ofSize: 13)
         messageLabel.textColor = .secondaryLabelColor
+        messageLabel.isSelectable = true
 
         diskUsageLabel.font = .systemFont(ofSize: 13, weight: .medium)
         diskUsageLabel.textColor = .labelColor
         diskUsageLabel.stringValue = "Disk usage: \(formatDiskUsage(bytes: result.diskUsageBytes))"
+        diskUsageLabel.isSelectable = true
 
         detailsLabel.font = .systemFont(ofSize: 12)
         detailsLabel.textColor = .secondaryLabelColor
         detailsLabel.maximumNumberOfLines = 0
         detailsLabel.stringValue = formatDetails(result: result)
+        detailsLabel.isSelectable = true
 
         tipsTitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         tipsTitleLabel.textColor = .labelColor
+        tipsTitleLabel.isSelectable = true
 
         tipsBodyLabel.font = .systemFont(ofSize: 12)
         tipsBodyLabel.textColor = .secondaryLabelColor
@@ -66,6 +71,7 @@ final class SetupCompleteViewController: NSViewController {
         - Use the CLI: winrun \"C:\\Path\\To\\App.exe\" (or a macOS path under /Users)
         - After installing, WinRun can generate native macOS .app launchers for Windows apps
         """
+        tipsBodyLabel.isSelectable = true
 
         learnMoreButton.target = self
         learnMoreButton.action = #selector(openLearnMore)

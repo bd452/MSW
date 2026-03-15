@@ -19,6 +19,10 @@
 | QEMU x86 emulation             | ~10x slower than native, unusable for interactive GUI |
 | Rosetta + Wine on Linux VM     | Poor Windows app compatibility                        |
 
+### QEMU for Installation Only
+
+Apple's Virtualization.framework cannot render graphics during Windows boot — the UEFI firmware's VirtIO GPU GOP driver does not produce visible output for the Windows boot manager. QEMU (`qemu-system-aarch64`) is used exclusively during the installation phase because it provides `ramfb` (a simple framebuffer) alongside `virtio-gpu-pci`. After installation — with VirtIO drivers installed in the guest — the VM runs on Virtualization.framework for normal operation. QEMU is not used at runtime.
+
 **Licensing:** IoT Enterprise requires volume licensing or OEM channels. For development, use the 90-day evaluation ISO from Microsoft Evaluation Center.
 
 ## Controller Responsibilities

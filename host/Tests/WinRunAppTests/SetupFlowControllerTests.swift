@@ -56,16 +56,38 @@ final class SetupFlowControllerTests: XCTestCase {
         var config = VMConfiguration()
         config.diskImagePath = diskURL
         try store.save(config)
+        XCTAssertTrue(ProvisioningPreflight.markSetupComplete(diskImagePath: diskURL))
 
         let result = ProvisioningPreflight.evaluate(configStore: store, fileManager: .default)
 
         XCTAssertEqual(result, .ready(configuration: config))
     }
 
+    func testProvisioningPreflight_diskExistsWithoutCompletionMarker_returnsNeedsSetupIncomplete() throws {
+        let tempDir = try makeTempDirectory()
+        let configURL = tempDir.appendingPathComponent("config.json")
+        let diskURL = tempDir.appendingPathComponent("windows.img")
+
+        FileManager.default.createFile(atPath: diskURL.path, contents: Data())
+
+        let store = ConfigStore(configURL: configURL)
+        var config = VMConfiguration()
+        config.diskImagePath = diskURL
+        try store.save(config)
+
+        let result = ProvisioningPreflight.evaluate(configStore: store, fileManager: .default)
+
+        XCTAssertEqual(
+            result,
+            .needsSetup(diskImagePath: diskURL, reason: .setupIncomplete)
+        )
+    }
+
     @MainActor
     func testRoute_ready_callsNormalOperation() {
         let sut = SetupFlowController(
             preflight: .ready(configuration: VMConfiguration()),
+            environment: .development,
             presentSetupWindow: { _ in
                 XCTFail("Did not expect setup window presentation")
                 return NSWindow(

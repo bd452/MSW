@@ -9,6 +9,7 @@ final class SetupErrorViewController: NSViewController {
     enum RecoveryActionID: String {
         case retrySetup = "retry_setup"
         case chooseDifferentISO = "choose_different_iso"
+        case manualSetup = "manual_setup"
         case contactSupport = "contact_support"
         case reviewDetails = "review_details"
     }
@@ -78,6 +79,7 @@ final class SetupErrorViewController: NSViewController {
         error: Error,
         onRetrySetup: (() -> Void)? = nil,
         onChooseDifferentISO: (() -> Void)? = nil,
+        onManualSetup: (() -> Void)? = nil,
         onContactSupport: (() -> Void)? = nil,
         recoveryActions: [RecoveryAction] = []
     ) {
@@ -87,6 +89,7 @@ final class SetupErrorViewController: NSViewController {
             ? Self.defaultRecoveryActions(
                 onRetrySetup: onRetrySetup,
                 onChooseDifferentISO: onChooseDifferentISO,
+                onManualSetup: onManualSetup,
                 onContactSupport: onContactSupport
             )
             : recoveryActions
@@ -98,6 +101,7 @@ final class SetupErrorViewController: NSViewController {
         failureContext: SetupFailureContext,
         onRetrySetup: (() -> Void)? = nil,
         onChooseDifferentISO: (() -> Void)? = nil,
+        onManualSetup: (() -> Void)? = nil,
         onRollback: (() -> Void)? = nil,
         onContactSupport: (() -> Void)? = nil
     ) {
@@ -107,6 +111,7 @@ final class SetupErrorViewController: NSViewController {
             failureContext,
             onRetrySetup: onRetrySetup,
             onChooseDifferentISO: onChooseDifferentISO,
+            onManualSetup: onManualSetup,
             onRollback: onRollback,
             onContactSupport: onContactSupport
         )
@@ -122,18 +127,22 @@ final class SetupErrorViewController: NSViewController {
         view = NSView()
 
         titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
+        titleLabel.isSelectable = true
 
         summaryLabel.font = .systemFont(ofSize: 13)
         summaryLabel.textColor = .secondaryLabelColor
         summaryLabel.stringValue = "WinRun ran into a problem while setting up Windows."
+        summaryLabel.isSelectable = true
 
         detailsLabel.font = .systemFont(ofSize: 12)
         detailsLabel.textColor = .secondaryLabelColor
         detailsLabel.maximumNumberOfLines = 0
         detailsLabel.stringValue = formatDetails(error: error)
+        detailsLabel.isSelectable = true
 
         actionsTitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         actionsTitleLabel.textColor = .labelColor
+        actionsTitleLabel.isSelectable = true
 
         actionsStack.orientation = .vertical
         actionsStack.alignment = .leading
@@ -203,6 +212,7 @@ final class SetupErrorViewController: NSViewController {
                 helpLabel.font = .systemFont(ofSize: 12)
                 helpLabel.textColor = .secondaryLabelColor
                 helpLabel.maximumNumberOfLines = 0
+                helpLabel.isSelectable = true
                 row.addArrangedSubview(helpLabel)
             }
 
@@ -213,6 +223,7 @@ final class SetupErrorViewController: NSViewController {
     private static func defaultRecoveryActions(
         onRetrySetup: (() -> Void)?,
         onChooseDifferentISO: (() -> Void)?,
+        onManualSetup: (() -> Void)?,
         onContactSupport: (() -> Void)?
     ) -> [RecoveryAction] {
         let contact = onContactSupport ?? {
@@ -233,6 +244,13 @@ final class SetupErrorViewController: NSViewController {
                 help: "Some ISOs (e.g. Windows Server or non‑ARM64) won’t work well with WinRun.",
                 isPrimary: false,
                 handler: onChooseDifferentISO
+            ),
+            RecoveryAction(
+                id: .manualSetup,
+                title: "Continue with manual setup",
+                help: "Boot the installer manually in WinRun when automated setup is unavailable.",
+                isPrimary: false,
+                handler: onManualSetup
             ),
             RecoveryAction(
                 id: .contactSupport,
@@ -303,66 +321,27 @@ final class SetupErrorViewController: NSViewController {
         _ context: SetupFailureContext,
         onRetrySetup: (() -> Void)?,
         onChooseDifferentISO: (() -> Void)?,
+        onManualSetup: (() -> Void)?,
         onRollback: (() -> Void)?,
         onContactSupport: (() -> Void)?
     ) -> [RecoveryAction] {
         var actions: [RecoveryAction] = []
 
-        for suggestedAction in context.suggestedActions {
-            switch suggestedAction {
-            case .retry:
-                actions.append(RecoveryAction(
-                    id: .retrySetup,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: actions.isEmpty,  // First action is primary
-                    handler: onRetrySetup
-                ))
-
-            case .chooseDifferentISO:
-                actions.append(RecoveryAction(
-                    id: .chooseDifferentISO,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: actions.isEmpty,
-                    handler: onChooseDifferentISO
-                ))
-
-            case .rollback:
-                if context.cleanupRecommended {
-                    actions.append(RecoveryAction(
-                        id: .retrySetup,
-                        title: suggestedAction.displayName,
-                        help: suggestedAction.helpText,
-                        isPrimary: false,
-                        handler: onRollback
-                    ))
-                }
-
-            case .contactSupport:
-                let handler = onContactSupport ?? { NSWorkspace.shared.open(supportURL) }
-                actions.append(RecoveryAction(
-                    id: .contactSupport,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: false,
-                    handler: handler
-                ))
-
-            default:
-                // Informational actions without handlers
-                actions.append(RecoveryAction(
-                    id: .reviewDetails,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: false,
-                    handler: nil,
-                    isInformational: true
-                ))
+        for suggested in context.suggestedActions {
+            if let action = makeAction(
+                for: suggested,
+                isFirst: actions.isEmpty,
+                cleanupRecommended: context.cleanupRecommended,
+                onRetrySetup: onRetrySetup,
+                onChooseDifferentISO: onChooseDifferentISO,
+                onManualSetup: onManualSetup,
+                onRollback: onRollback,
+                onContactSupport: onContactSupport
+            ) {
+                actions.append(action)
             }
         }
 
-        // Always add review details at the end
         actions.append(RecoveryAction(
             id: .reviewDetails,
             title: "Review error details",
@@ -371,8 +350,73 @@ final class SetupErrorViewController: NSViewController {
             handler: nil,
             isInformational: true
         ))
-
         return actions
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private static func makeAction(
+        for suggested: RecoveryActionType,
+        isFirst: Bool,
+        cleanupRecommended: Bool,
+        onRetrySetup: (() -> Void)?,
+        onChooseDifferentISO: (() -> Void)?,
+        onManualSetup: (() -> Void)?,
+        onRollback: (() -> Void)?,
+        onContactSupport: (() -> Void)?
+    ) -> RecoveryAction? {
+        switch suggested {
+        case .retry:
+            return RecoveryAction(
+                id: .retrySetup,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: isFirst,
+                handler: onRetrySetup
+            )
+        case .chooseDifferentISO:
+            return RecoveryAction(
+                id: .chooseDifferentISO,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: isFirst,
+                handler: onChooseDifferentISO
+            )
+        case .manualSetup:
+            return RecoveryAction(
+                id: .manualSetup,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: isFirst,
+                handler: onManualSetup
+            )
+        case .rollback:
+            guard cleanupRecommended else { return nil }
+            return RecoveryAction(
+                id: .retrySetup,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: false,
+                handler: onRollback
+            )
+        case .contactSupport:
+            let handler = onContactSupport ?? { NSWorkspace.shared.open(supportURL) }
+            return RecoveryAction(
+                id: .contactSupport,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: false,
+                handler: handler
+            )
+        default:
+            return RecoveryAction(
+                id: .reviewDetails,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: false,
+                handler: nil,
+                isInformational: true
+            )
+        }
     }
 
     @objc private func runRecoveryAction(_ sender: NSButton) {

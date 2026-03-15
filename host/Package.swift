@@ -71,7 +71,8 @@ var targets: [Target] = [
             "WinRunShared",
             "WinRunXPC",
             "WinRunSpiceBridge",
-            "WinRunSetup"
+            "WinRunSetup",
+            "WinRunVirtualMachine",
         ],
         path: "Sources/WinRunApp",
         resources: [
