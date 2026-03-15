@@ -137,6 +137,8 @@ public struct SetupFailureContext: Sendable, Equatable {
 
         case .diskCreationFailed, .diskAlreadyExists:
             return [.rollback, .retry, .contactSupport]
+        case .installerLaunchFailed:
+            return [.retry, .chooseDifferentISO, .contactSupport]
 
         default:
             // Default set based on phase
@@ -278,6 +280,7 @@ extension WinRunError {
         case .diskAlreadyExists: return 71
         case .diskInvalidSize: return 72
         case .diskInsufficientSpace: return 73
+        case .installerLaunchFailed: return 74
         }
     }
 }

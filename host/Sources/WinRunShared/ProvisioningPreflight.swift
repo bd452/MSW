@@ -7,6 +7,7 @@ public enum ProvisioningPreflightResult: Equatable {
     public enum Reason: String, Equatable {
         case diskImageMissing
         case diskImageIsDirectory
+        case setupIncomplete
     }
 }
 
@@ -15,7 +16,8 @@ public struct ProvisioningPreflight {
 
     public static func evaluate(
         configStore: ConfigStore = ConfigStore(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        markerStore: SetupCompletionMarkerStore = SetupCompletionMarkerStore()
     ) -> ProvisioningPreflightResult {
         let configuration = configStore.loadOrDefault()
         let diskURL = configuration.diskImagePath
@@ -27,6 +29,12 @@ public struct ProvisioningPreflight {
 
         if isDirectory.boolValue {
             return .needsSetup(diskImagePath: diskURL, reason: .diskImageIsDirectory)
+        }
+
+        if let marker = markerStore.load(),
+           marker.diskImagePath == diskURL,
+           marker.status == .inProgress {
+            return .needsSetup(diskImagePath: diskURL, reason: .setupIncomplete)
         }
 
         return .ready(configuration: configuration)

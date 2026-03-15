@@ -11,6 +11,7 @@ public enum SetupWizardStep: String, Sendable, Equatable {
     case welcome
     case importISO
     case installing
+    case manualInstall
     case complete
     case error
 }
@@ -27,6 +28,9 @@ public protocol SetupWizardCoordinatorProtocol: AnyObject {
     func proceedFromWelcome()
     func selectISO(_ isoPath: URL)
     func startInstallation()
+    func beginManualSetup()
+    func launchManualInstaller()
+    func finishManualSetup()
     func cancel()
     func handleInstallationComplete(result: ProvisioningResult)
     func retry()
@@ -68,15 +72,20 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     private weak var delegate: SetupWizardCoordinatorDelegate?
     private let setupCoordinator: SetupCoordinator
+    let manualProvisioner: VMProvisioner
+    let setupMarkerStore: SetupCompletionMarkerStore
     private let viewControllerFactory: ViewControllerFactory
-    private let logger: Logger
+    let logger: Logger
 
-    private var window: NSWindow?
+    var window: NSWindow?
     private var provisioningTask: Task<Void, Never>?
+    var manualInstallSession: InstallerLaunchSession?
+    var manualInstallerWatchTask: Task<Void, Never>?
+    var manualDiagnostics: [String] = []
 
     // MARK: - Configuration
 
-    private var diskImagePath: URL {
+    var diskImagePath: URL {
         DiskImageConfiguration.defaultPath
     }
 
@@ -84,11 +93,15 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     public init(
         setupCoordinator: SetupCoordinator,
+        manualProvisioner: VMProvisioner = VMProvisioner(),
+        setupMarkerStore: SetupCompletionMarkerStore = SetupCompletionMarkerStore(),
         delegate: SetupWizardCoordinatorDelegate? = nil,
         viewControllerFactory: ViewControllerFactory? = nil,
         logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupWizardCoordinator")
     ) {
         self.setupCoordinator = setupCoordinator
+        self.manualProvisioner = manualProvisioner
+        self.setupMarkerStore = setupMarkerStore
         self.delegate = delegate
         self.viewControllerFactory = viewControllerFactory ?? Self.defaultViewControllerFactory
         self.logger = logger
@@ -132,15 +145,96 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
             return
         }
 
+        manualDiagnostics.removeAll(keepingCapacity: false)
+        markSetupInProgress()
         transitionTo(.installing)
         beginProvisioning(isoPath: isoPath)
+    }
+
+    /// Moves from automatic installation to manual-install fallback UI.
+    public func beginManualSetup() {
+        guard currentStep == .installing || currentStep == .error else {
+            logger.warn("beginManualSetup called from invalid step: \(currentStep.rawValue)")
+            return
+        }
+        transitionTo(.manualInstall)
+    }
+
+    /// Launches manual installer VM window and streams diagnostics.
+    public func launchManualInstaller() {
+        guard currentStep == .manualInstall else {
+            logger.warn("launchManualInstaller called from invalid step: \(currentStep.rawValue)")
+            return
+        }
+        guard let configuration = manualInstallationConfiguration else {
+            appendManualDiagnostic("Cannot start manual install: missing ISO selection.")
+            setManualStatus("Missing ISO selection.", isError: true)
+            return
+        }
+
+        manualInstallerWatchTask?.cancel()
+        manualInstallSession?.terminate()
+        manualInstallSession = nil
+
+        setManualStatus("Launching installer...", isError: false)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let session = try await self.manualProvisioner.startManualInstallation(
+                    configuration: configuration,
+                    outputHandler: { [weak self] output in
+                        Task { @MainActor [weak self] in
+                            self?.appendManualDiagnostic(output)
+                        }
+                    }
+                )
+
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.manualInstallSession = session
+                    self.setManualStatus("Installer window launched. Complete installation, then click \"I finished.\"", isError: false)
+                    self.observeManualSessionExit(session)
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.setManualStatus(error.localizedDescription, isError: true)
+                    self?.appendManualDiagnostic("Launch failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// Completes setup after manual installation.
+    public func finishManualSetup() {
+        guard currentStep == .manualInstall else {
+            logger.warn("finishManualSetup called from invalid step: \(currentStep.rawValue)")
+            return
+        }
+
+        manualInstallerWatchTask?.cancel()
+        manualInstallSession?.terminate()
+        manualInstallSession = nil
+        manualProvisioner.clearManualInstallationSession()
+        markSetupCompleted()
+        let result = ProvisioningResult(
+            success: true,
+            finalPhase: .complete,
+            durationSeconds: 0,
+            diskImagePath: diskImagePath
+        )
+        lastResult = result
+        transitionTo(.complete)
     }
 
     /// Cancels the current installation.
     public func cancel() {
         provisioningTask?.cancel()
+        manualInstallerWatchTask?.cancel()
+        manualInstallSession?.terminate()
+        manualInstallSession = nil
         Task {
             await setupCoordinator.cancel()
+            self.manualProvisioner.cancelInstallation()
         }
         logger.info("Installation cancelled by user")
     }
@@ -150,7 +244,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         guard currentStep == .installing else {
             // Silently ignore calls from terminal states (async task racing with manual test completion)
             // Only warn for truly invalid states where the flow is broken
-            if currentStep != .complete && currentStep != .error {
+            if currentStep != .complete && currentStep != .error && currentStep != .manualInstall {
                 logger.warn("handleInstallationComplete called from invalid step: \(currentStep.rawValue)")
             }
             return
@@ -158,10 +252,15 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         lastResult = result
 
         if result.success {
+            markSetupCompleted()
             transitionTo(.complete)
         } else {
             lastError = result.error
-            transitionTo(.error)
+            if shouldFallbackToManualInstall(for: result.error) {
+                beginManualSetup()
+            } else {
+                transitionTo(.error)
+            }
         }
     }
 
@@ -177,6 +276,7 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
             return
         }
 
+        markSetupInProgress()
         lastError = nil
         transitionTo(.installing)
         beginProvisioning(isoPath: isoPath)
@@ -184,10 +284,15 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
     /// Returns to ISO selection to choose a different ISO.
     public func chooseNewISO() {
-        guard currentStep == .error || currentStep == .importISO else {
+        guard currentStep == .error || currentStep == .importISO || currentStep == .manualInstall else {
             logger.warn("chooseNewISO called from invalid step: \(currentStep.rawValue)")
             return
         }
+        manualInstallerWatchTask?.cancel()
+        manualInstallSession?.terminate()
+        manualInstallSession = nil
+        manualDiagnostics.removeAll(keepingCapacity: false)
+        try? setupMarkerStore.clear()
         selectedISOPath = nil
         lastError = nil
         transitionTo(.importISO)
@@ -254,10 +359,15 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         case (.welcome, .importISO): return true
         case (.importISO, .installing): return true
         case (.importISO, .importISO): return true  // Re-select ISO
+        case (.installing, .manualInstall): return true
         case (.installing, .complete): return true
         case (.installing, .error): return true
+        case (.manualInstall, .complete): return true
+        case (.manualInstall, .error): return true
+        case (.manualInstall, .importISO): return true
         case (.error, .importISO): return true
         case (.error, .installing): return true  // Retry
+        case (.error, .manualInstall): return true
         case (.complete, _): return false  // Terminal
         default: return false
         }
@@ -297,6 +407,9 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
 
         case .installing:
             return createProgressViewController(coordinator: coordinator)
+
+        case .manualInstall:
+            return createManualInstallViewController(coordinator: coordinator)
 
         case .complete:
             return createCompleteViewController(coordinator: coordinator)
@@ -391,50 +504,4 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
         )
     }
 
-    private static func createFailureContext(
-        from result: ProvisioningResult,
-        coordinator: SetupWizardCoordinator
-    ) -> SetupFailureContext? {
-        guard !result.success, let error = result.error else { return nil }
-
-        let freeDiskSpace: UInt64? = {
-            let url = coordinator.diskImagePath.deletingLastPathComponent()
-            let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-            return values?.volumeAvailableCapacityForImportantUsage.map { UInt64($0) }
-        }()
-
-        return SetupFailureContext(
-            failedPhase: result.finalPhase,
-            error: error,
-            isoPath: coordinator.selectedISOPath,
-            diskImagePath: result.diskImagePath,
-            diskUsageBytes: result.diskUsageBytes,
-            freeDiskSpaceBytes: freeDiskSpace,
-            cleanupRecommended: result.finalPhase.isAfter(.creatingDisk)
-        )
-    }
-}
-
-// MARK: - ProvisioningDelegate Conformance
-
-@available(macOS 13, *)
-extension SetupWizardCoordinator: ProvisioningDelegate {
-    public func provisioningDidUpdateProgress(_ progress: ProvisioningProgress) {
-        Task { @MainActor [weak self] in
-            guard let self, self.currentStep == .installing else { return }
-            if let progressVC = self.window?.contentViewController as? InstallProgressViewController {
-                progressVC.apply(progress: progress)
-            }
-        }
-    }
-
-    public func provisioningDidChangePhase(from oldPhase: ProvisioningPhase, to newPhase: ProvisioningPhase) {
-        logger.debug("Provisioning phase: \(oldPhase.rawValue) → \(newPhase.rawValue)")
-    }
-
-    public func provisioningDidComplete(with result: ProvisioningResult) {
-        Task { @MainActor [weak self] in
-            self?.handleInstallationComplete(result: result)
-        }
-    }
 }

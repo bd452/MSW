@@ -165,6 +165,8 @@ private final class SetupPlaceholderViewController: NSViewController {
             "No Windows VM disk image was found."
         case .diskImageIsDirectory:
             "The configured VM disk image path points to a directory."
+        case .setupIncomplete:
+            "A previous setup run did not finish cleanly."
         }
 
         let details = NSTextField(wrappingLabelWithString: """

@@ -49,6 +49,7 @@ final class SetupFlowControllerTests: XCTestCase {
         let tempDir = try makeTempDirectory()
         let configURL = tempDir.appendingPathComponent("config.json")
         let diskURL = tempDir.appendingPathComponent("windows.img")
+        let markerURL = tempDir.appendingPathComponent("setup-state.json")
 
         FileManager.default.createFile(atPath: diskURL.path, contents: Data())
 
@@ -57,9 +58,39 @@ final class SetupFlowControllerTests: XCTestCase {
         config.diskImagePath = diskURL
         try store.save(config)
 
-        let result = ProvisioningPreflight.evaluate(configStore: store, fileManager: .default)
+        let markerStore = SetupCompletionMarkerStore(markerURL: markerURL)
+        let result = ProvisioningPreflight.evaluate(
+            configStore: store,
+            fileManager: .default,
+            markerStore: markerStore
+        )
 
         XCTAssertEqual(result, .ready(configuration: config))
+    }
+
+    func testProvisioningPreflight_setupIncompleteMarker_returnsNeedsSetup() throws {
+        let tempDir = try makeTempDirectory()
+        let configURL = tempDir.appendingPathComponent("config.json")
+        let diskURL = tempDir.appendingPathComponent("windows.img")
+        let markerURL = tempDir.appendingPathComponent("setup-state.json")
+
+        FileManager.default.createFile(atPath: diskURL.path, contents: Data())
+
+        let store = ConfigStore(configURL: configURL)
+        var config = VMConfiguration()
+        config.diskImagePath = diskURL
+        try store.save(config)
+
+        let markerStore = SetupCompletionMarkerStore(markerURL: markerURL)
+        try markerStore.markInProgress(diskImagePath: diskURL)
+
+        let result = ProvisioningPreflight.evaluate(
+            configStore: store,
+            fileManager: .default,
+            markerStore: markerStore
+        )
+
+        XCTAssertEqual(result, .needsSetup(diskImagePath: diskURL, reason: .setupIncomplete))
     }
 
     @MainActor

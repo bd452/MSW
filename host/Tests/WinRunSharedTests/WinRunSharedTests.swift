@@ -46,6 +46,58 @@ final class WinRunSharedTests: XCTestCase {
         XCTAssertEqual(result, .ready(configuration: configuration))
     }
 
+    func testProvisioningPreflightReturnsNeedsSetupWhenMarkerIsInProgress() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let diskURL = tempDir.appendingPathComponent("windows.img")
+        FileManager.default.createFile(atPath: diskURL.path, contents: Data(), attributes: nil)
+        let configURL = tempDir.appendingPathComponent("config.json")
+        let markerURL = tempDir.appendingPathComponent("setup-state.json")
+
+        let store = ConfigStore(configURL: configURL)
+        let configuration = VMConfiguration(disk: VMDiskConfiguration(imagePath: diskURL, sizeGB: 64))
+        try store.save(configuration)
+
+        let markerStore = SetupCompletionMarkerStore(markerURL: markerURL)
+        try markerStore.markInProgress(diskImagePath: diskURL)
+
+        let result = ProvisioningPreflight.evaluate(
+            configStore: store,
+            fileManager: .default,
+            markerStore: markerStore
+        )
+        XCTAssertEqual(result, .needsSetup(diskImagePath: diskURL, reason: .setupIncomplete))
+    }
+
+    func testProvisioningPreflightReturnsReadyWhenMarkerIsCompleted() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let diskURL = tempDir.appendingPathComponent("windows.img")
+        FileManager.default.createFile(atPath: diskURL.path, contents: Data(), attributes: nil)
+        let configURL = tempDir.appendingPathComponent("config.json")
+        let markerURL = tempDir.appendingPathComponent("setup-state.json")
+
+        let store = ConfigStore(configURL: configURL)
+        let configuration = VMConfiguration(disk: VMDiskConfiguration(imagePath: diskURL, sizeGB: 64))
+        try store.save(configuration)
+
+        let markerStore = SetupCompletionMarkerStore(markerURL: markerURL)
+        try markerStore.markCompleted(diskImagePath: diskURL)
+
+        let result = ProvisioningPreflight.evaluate(
+            configStore: store,
+            fileManager: .default,
+            markerStore: markerStore
+        )
+        XCTAssertEqual(result, .ready(configuration: configuration))
+    }
+
     func testValidationFailsWhenDiskIsMissing() {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
