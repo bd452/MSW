@@ -334,10 +334,12 @@ public final class SpiceWindowStream {
             self.transport.sendDragDropEvent(event)
         }
     }
+}
 
-    // MARK: - Private Implementation
+// MARK: - Private Implementation
 
-    private func openStream(for windowID: UInt64) {
+private extension SpiceWindowStream {
+    func openStream(for windowID: UInt64) {
         logger.debug("Opening stream internals for window \(windowID)")
         let callbacks = SpiceStreamCallbacks(
             onFrame: { [weak self] data in
@@ -385,7 +387,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleFrame(_ frame: Data) {
+    func handleFrame(_ frame: Data) {
         stateQueue.async {
             self.rawFrameCallbackCount += 1
             self.metrics.framesReceived += 1
@@ -402,7 +404,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleMetadata(_ metadata: WindowMetadata) {
+    func handleMetadata(_ metadata: WindowMetadata) {
         stateQueue.async {
             self.metrics.metadataUpdates += 1
             self.logger.debug(
@@ -418,7 +420,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleClipboard(_ clipboard: ClipboardData) {
+    func handleClipboard(_ clipboard: ClipboardData) {
         stateQueue.async {
             guard let delegate = self.delegate else { return }
             self.delegateQueue.async { [weak self] in
@@ -428,7 +430,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func handleClose(reason: SpiceStreamCloseReason) {
+    func handleClose(reason: SpiceStreamCloseReason) {
         stateQueue.async {
             self.logger.warn("Spice stream closed: \(reason)")
             let wasUserInitiated = self.state.isUserInitiatedClose
@@ -450,7 +452,7 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func scheduleReconnect(reason: SpiceStreamCloseReason) {
+    func scheduleReconnect(reason: SpiceStreamCloseReason) {
         guard let windowID = state.windowID else { return }
         metrics.reconnectAttempts += 1
         let attempt = metrics.reconnectAttempts
@@ -479,17 +481,16 @@ public final class SpiceWindowStream {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-    private func cancelReconnect() {
+    func cancelReconnect() {
         reconnectWorkItem?.cancel()
         reconnectWorkItem = nil
     }
 
-    private func finishDisconnect() {
+    func finishDisconnect() {
         let hadError = metrics.lastErrorDescription != nil && !metrics.lastErrorDescription!.isEmpty
         state.lifecycle = .disconnected
         cancelReconnect()
 
-        // Notify state change before the close callback
         if hadError {
             notifyStateChange(.failed(reason: metrics.lastErrorDescription!))
         } else {
@@ -502,11 +503,11 @@ public final class SpiceWindowStream {
         }
     }
 
-    private func transportDescription() -> String {
+    func transportDescription() -> String {
         configuration.transport.summaryDescription
     }
 
-    private func notifyStateChange(_ newState: SpiceConnectionState) {
+    func notifyStateChange(_ newState: SpiceConnectionState) {
         guard let delegate else { return }
         delegateQueue.async { [weak self] in
             guard let self else { return }

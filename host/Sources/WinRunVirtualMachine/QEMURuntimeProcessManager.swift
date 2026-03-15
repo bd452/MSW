@@ -58,60 +58,16 @@ final class QEMURuntimeProcessManager {
             throw QEMURuntimeProcessError.unsupportedNetworkMode(configuration.network.mode.rawValue)
         }
 
-        let tools = try QEMUToolResolver.discover()
-        logger.info("Resolved QEMU tools for runtime startup")
-        logger.debug("qemu=\(tools.qemuBinary.path)")
-        logger.debug("swtpm=\(tools.swtpmBinary.path)")
-        logger.debug("firmwareCode=\(tools.firmwareCode.path)")
-        logger.debug("firmwareVarsTemplate=\(tools.firmwareVarsTemplate.path)")
-        guard Self.qemuSupportsSpice(binary: tools.qemuBinary) else {
-            throw QEMURuntimeProcessError.spiceNotSupported
-        }
-        let diskPath = configuration.diskImagePath
-        let nvramPath = try QEMUToolResolver.ensureEFIVariableStore(
-            diskImagePath: diskPath,
-            varsTemplate: tools.firmwareVarsTemplate
-        )
-        logger.debug("diskImage=\(diskPath.path)")
-        logger.debug("nvram=\(nvramPath.path)")
-
-        let tpmStateDir = diskPath.deletingLastPathComponent().appendingPathComponent("swtpm-state")
-        let tpmSocket = tpmStateDir.appendingPathComponent("swtpm-sock")
+        let context = try prepareLaunchContext(configuration: configuration)
 
         do {
-            swtpmProcess = try launchSwtpm(binary: tools.swtpmBinary, stateDir: tpmStateDir, socketPath: tpmSocket)
-
-            let args = Self.buildArguments(
-                configuration: configuration,
-                firmwareCode: tools.firmwareCode,
-                nvram: nvramPath,
-                tpmSocketPath: tpmSocket,
-                spicePort: spicePort
+            swtpmProcess = try launchSwtpm(
+                binary: context.swtpmBinary,
+                stateDir: context.tpmStateDir,
+                socketPath: context.tpmSocket
             )
-            logger.debug("QEMU arguments: \(args.joined(separator: " "))")
-
-            let stderrPipe = Pipe()
-            qemuStderrPipe = stderrPipe
-            let process = Process()
-            process.executableURL = tools.qemuBinary
-            process.arguments = args
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = stderrPipe
-            process.terminationHandler = { [weak self] terminated in
-                self?.logger.error(
-                    "QEMU process terminated pid=\(terminated.processIdentifier) status=\(terminated.terminationStatus)"
-                )
-            }
-            try process.run()
+            let process = try launchQEMU(binary: context.qemuBinary, arguments: context.arguments)
             qemuProcess = process
-            logger.info("QEMU process started pid=\(process.processIdentifier)")
-
-            Task.detached { [weak self] in
-                let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                guard !data.isEmpty, let output = String(data: data, encoding: .utf8) else { return }
-                self?.logger.debug("QEMU stderr:\n\(output)")
-            }
-
             try await waitForSpiceReady(timeoutSeconds: 25)
         } catch {
             logger.error("Runtime start failed; cleaning up partial processes: \(error.localizedDescription)")
@@ -177,6 +133,79 @@ final class QEMURuntimeProcessManager {
             "-device", "tpm-tis-device,tpmdev=tpm0",
             "-nic", "user,model=virtio-net-pci,mac=\(mac)",
         ]
+    }
+
+    private struct LaunchContext {
+        let qemuBinary: URL
+        let swtpmBinary: URL
+        let tpmStateDir: URL
+        let tpmSocket: URL
+        let arguments: [String]
+    }
+
+    private func prepareLaunchContext(configuration: VMConfiguration) throws -> LaunchContext {
+        let tools = try QEMUToolResolver.discover()
+        logger.info("Resolved QEMU tools for runtime startup")
+        logger.debug("qemu=\(tools.qemuBinary.path)")
+        logger.debug("swtpm=\(tools.swtpmBinary.path)")
+        logger.debug("firmwareCode=\(tools.firmwareCode.path)")
+        logger.debug("firmwareVarsTemplate=\(tools.firmwareVarsTemplate.path)")
+        guard Self.qemuSupportsSpice(binary: tools.qemuBinary) else {
+            throw QEMURuntimeProcessError.spiceNotSupported
+        }
+
+        let diskPath = configuration.diskImagePath
+        let nvramPath = try QEMUToolResolver.ensureEFIVariableStore(
+            diskImagePath: diskPath,
+            varsTemplate: tools.firmwareVarsTemplate
+        )
+        logger.debug("diskImage=\(diskPath.path)")
+        logger.debug("nvram=\(nvramPath.path)")
+
+        let tpmStateDir = diskPath.deletingLastPathComponent().appendingPathComponent("swtpm-state")
+        let tpmSocket = tpmStateDir.appendingPathComponent("swtpm-sock")
+        let args = Self.buildArguments(
+            configuration: configuration,
+            firmwareCode: tools.firmwareCode,
+            nvram: nvramPath,
+            tpmSocketPath: tpmSocket,
+            spicePort: spicePort
+        )
+        logger.debug("QEMU arguments: \(args.joined(separator: " "))")
+
+        return LaunchContext(
+            qemuBinary: tools.qemuBinary,
+            swtpmBinary: tools.swtpmBinary,
+            tpmStateDir: tpmStateDir,
+            tpmSocket: tpmSocket,
+            arguments: args
+        )
+    }
+
+    private func launchQEMU(binary: URL, arguments: [String]) throws -> Process {
+        let stderrPipe = Pipe()
+        qemuStderrPipe = stderrPipe
+
+        let process = Process()
+        process.executableURL = binary
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = stderrPipe
+        process.terminationHandler = { [weak self] terminated in
+            self?.logger.error(
+                "QEMU process terminated pid=\(terminated.processIdentifier) status=\(terminated.terminationStatus)"
+            )
+        }
+        try process.run()
+        logger.info("QEMU process started pid=\(process.processIdentifier)")
+
+        Task.detached { [weak self] in
+            let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            guard !data.isEmpty, let output = String(data: data, encoding: .utf8) else { return }
+            self?.logger.debug("QEMU stderr:\n\(output)")
+        }
+
+        return process
     }
 
     private func waitForSpiceReady(timeoutSeconds: TimeInterval) async throws {
