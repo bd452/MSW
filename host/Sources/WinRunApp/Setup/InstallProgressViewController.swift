@@ -15,6 +15,9 @@ final class InstallProgressViewController: NSViewController {
     private let etaLabel = NSTextField(labelWithString: "")
     private let progressIndicator = NSProgressIndicator()
     private let phasesStack = NSStackView()
+    private let diagnosticsTitleLabel = NSTextField(labelWithString: "Diagnostics")
+    private let diagnosticsScrollView = NSScrollView()
+    private let diagnosticsTextView = NSTextView()
     private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
 
     // MARK: - State
@@ -24,6 +27,7 @@ final class InstallProgressViewController: NSViewController {
     private var subPhasesStack: NSStackView?
     private var startedAt = Date()
     private var lastProgress: ProvisioningProgress?
+    private var diagnosticLines: [String] = []
 
     /// Called after the user confirms cancellation.
     var onCancelRequested: (() -> Void)?
@@ -52,13 +56,31 @@ final class InstallProgressViewController: NSViewController {
         phasesStack.orientation = .vertical
         phasesStack.alignment = .leading
         phasesStack.spacing = 6
+        diagnosticsTitleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        diagnosticsTextView.isEditable = false
+        diagnosticsTextView.isSelectable = true
+        diagnosticsTextView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        diagnosticsTextView.string = ""
+        diagnosticsScrollView.borderType = .bezelBorder
+        diagnosticsScrollView.hasVerticalScroller = true
+        diagnosticsScrollView.documentView = diagnosticsTextView
         cancelButton.target = self
         cancelButton.action = #selector(confirmCancel)
         cancelButton.bezelStyle = .rounded
     }
 
     private func installSubviews() {
-        for subview in [titleLabel, statusLabel, progressIndicator, etaLabel, phasesStack, cancelButton] {
+        let subviews: [NSView] = [
+            titleLabel,
+            statusLabel,
+            progressIndicator,
+            etaLabel,
+            phasesStack,
+            diagnosticsTitleLabel,
+            diagnosticsScrollView,
+            cancelButton,
+        ]
+        for subview in subviews {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -81,7 +103,14 @@ final class InstallProgressViewController: NSViewController {
             phasesStack.topAnchor.constraint(equalTo: etaLabel.bottomAnchor, constant: 18),
             phasesStack.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             phasesStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            cancelButton.topAnchor.constraint(greaterThanOrEqualTo: phasesStack.bottomAnchor, constant: 20),
+            diagnosticsTitleLabel.topAnchor.constraint(equalTo: phasesStack.bottomAnchor, constant: 14),
+            diagnosticsTitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            diagnosticsTitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            diagnosticsScrollView.topAnchor.constraint(equalTo: diagnosticsTitleLabel.bottomAnchor, constant: 6),
+            diagnosticsScrollView.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            diagnosticsScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            diagnosticsScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 110),
+            cancelButton.topAnchor.constraint(greaterThanOrEqualTo: diagnosticsScrollView.bottomAnchor, constant: 20),
             cancelButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             cancelButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
         ])
@@ -92,6 +121,8 @@ final class InstallProgressViewController: NSViewController {
     func start() {
         startedAt = Date()
         lastProgress = nil
+        diagnosticLines.removeAll(keepingCapacity: false)
+        diagnosticsTextView.string = ""
         apply(progress: ProvisioningProgress(phase: .validatingISO, overallProgress: 0, message: "Starting setup…"))
     }
 
@@ -102,6 +133,20 @@ final class InstallProgressViewController: NSViewController {
         updatePhaseHighlight(progress: progress)
         updateEstimatedTimeRemaining(progress: progress)
         cancelButton.isEnabled = !progress.phase.isTerminal
+        appendDiagnosticLine(progress.message)
+    }
+
+    private func appendDiagnosticLine(_ message: String) {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard diagnosticLines.last != trimmed else { return }
+
+        diagnosticLines.append(trimmed)
+        if diagnosticLines.count > 300 {
+            diagnosticLines.removeFirst(diagnosticLines.count - 300)
+        }
+        diagnosticsTextView.string = diagnosticLines.joined(separator: "\n")
+        diagnosticsTextView.scrollToEndOfDocument(nil)
     }
 
     // MARK: - Phase List

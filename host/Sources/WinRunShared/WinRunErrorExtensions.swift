@@ -60,6 +60,7 @@ extension WinRunError {
         case .diskAlreadyExists: return 7007
         case .diskInvalidSize: return 7008
         case .diskInsufficientSpace: return 7009
+        case .installerLaunchFailed: return 7010
 
         case .cancelled: return 9001
         case .internalError: return 9002

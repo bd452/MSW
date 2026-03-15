@@ -110,11 +110,19 @@ public final class VMProvisioner: Sendable {
     private let floppyImageCreator: FloppyImageCreator
     private let installationTask = InstallationTaskHolder()
     private let allowSimulation: Bool
+    private let installerHelper: any InstallerLaunchHelping
+    private let automatedSessionHolder = InstallerSessionHolder()
+    private let manualSessionHolder = InstallerSessionHolder()
 
-    public init(resourcesDirectory: URL? = nil, allowSimulation: Bool = false) {
+    public init(
+        resourcesDirectory: URL? = nil,
+        allowSimulation: Bool = false,
+        installerHelper: any InstallerLaunchHelping = QEMUInstallHelper()
+    ) {
         self.resourcesDirectory = resourcesDirectory
         self.floppyImageCreator = FloppyImageCreator()
         self.allowSimulation = allowSimulation
+        self.installerHelper = installerHelper
     }
 
     // MARK: - Configuration Creation
@@ -193,6 +201,7 @@ public final class VMProvisioner: Sendable {
 
     // MARK: - Installation Lifecycle
 
+    // swiftlint:disable function_body_length
     /// Starts the Windows installation process.
     public func startInstallation(
         configuration: ProvisioningConfiguration,
@@ -223,23 +232,65 @@ public final class VMProvisioner: Sendable {
                 startTime: startTime, diskPath: configuration.diskImagePath)
         }
 
-        guard allowSimulation else {
-            return handleInstallationError(
-                WinRunError.notSupported(feature: "automated Windows installation"),
-                startTime: startTime,
-                diskPath: configuration.diskImagePath,
-                delegate: delegate
-            )
-        }
-
         do {
-            _ = try await createProvisioningConfiguration(configuration)
+            let vmConfiguration = try await createProvisioningConfiguration(configuration)
+
+            if allowSimulation {
+                reportProgress(
+                    delegate,
+                    phase: .booting,
+                    overall: 0.05,
+                    message: "Starting Windows Setup from ISO..."
+                )
+
+                if isCancelled() {
+                    return createCancelledResult(
+                        startTime: startTime, diskPath: configuration.diskImagePath)
+                }
+
+                try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
+
+                let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
+                let result = InstallationResult(
+                    success: true,
+                    finalPhase: .complete,
+                    durationSeconds: Date().timeIntervalSince(startTime),
+                    diskImagePath: configuration.diskImagePath,
+                    diskUsageBytes: diskUsage
+                )
+
+                reportProgress(
+                    delegate,
+                    phase: .complete,
+                    overall: 1.0,
+                    message: "Windows installation completed"
+                )
+                delegate?.installationDidComplete(with: result)
+                return result
+            }
+
+            let preflight = installerHelper.preflight(
+                configuration: configuration,
+                vmConfiguration: vmConfiguration,
+                resourcesDirectory: resourcesDirectory
+            )
+            for warning in preflight.warnings {
+                reportProgress(
+                    delegate,
+                    phase: .preparing,
+                    overall: 0.03,
+                    message: warning
+                )
+            }
+            guard preflight.isLaunchable else {
+                throw WinRunError.installerLaunchFailed(reason: preflight.summary)
+            }
 
             reportProgress(
                 delegate,
                 phase: .booting,
                 overall: 0.05,
-                message: "Starting Windows Setup from ISO..."
+                message: "Launching Windows installer VM..."
             )
 
             if isCancelled() {
@@ -247,7 +298,36 @@ public final class VMProvisioner: Sendable {
                     startTime: startTime, diskPath: configuration.diskImagePath)
             }
 
-            try await runInstallationPhases(delegate: delegate, isCancelled: isCancelled)
+            let session = try installerHelper.launchInstaller(
+                configuration: configuration,
+                vmConfiguration: vmConfiguration,
+                resourcesDirectory: resourcesDirectory,
+                outputHandler: { output in
+                    let progress = InstallationProgress(
+                        phase: .booting,
+                        phaseProgress: 0.2,
+                        overallProgress: 0.2,
+                        message: output
+                    )
+                    delegate?.installationDidUpdateProgress(progress)
+                }
+            )
+            automatedSessionHolder.set(session)
+            defer { automatedSessionHolder.clear() }
+
+            let exitCode = try await session.waitForExit(isCancelled: isCancelled)
+            guard exitCode == 0 else {
+                throw WinRunError.installerLaunchFailed(
+                    reason: "Installer process exited with code \(exitCode)."
+                )
+            }
+
+            reportProgress(
+                delegate,
+                phase: .postInstall,
+                overall: 0.95,
+                message: "Installer process finished; continuing setup."
+            )
 
             let diskUsage = try? getDiskUsage(at: configuration.diskImagePath)
             let result = InstallationResult(
@@ -264,6 +344,12 @@ public final class VMProvisioner: Sendable {
 
             return result
         } catch {
+            if let winRunError = error as? WinRunError, case .cancelled = winRunError {
+                return createCancelledResult(
+                    startTime: startTime,
+                    diskPath: configuration.diskImagePath
+                )
+            }
             return handleInstallationError(
                 error,
                 startTime: startTime,
@@ -272,15 +358,61 @@ public final class VMProvisioner: Sendable {
             )
         }
     }
+    // swiftlint:enable function_body_length
 
     /// Cancels the current installation if one is in progress.
     public func cancelInstallation() {
         installationTask.cancel()
+        automatedSessionHolder.cancel()
+        manualSessionHolder.cancel()
     }
 
     /// Checks if an installation is currently in progress.
     public var isInstalling: Bool {
         installationTask.isRunning
+    }
+
+    /// Runs installer prerequisite checks for manual setup UX.
+    public func installerPreflight(
+        configuration: ProvisioningConfiguration
+    ) async throws -> InstallerPreflightResult {
+        try validateConfiguration(configuration)
+        let vmConfiguration = try await createProvisioningConfiguration(configuration)
+        return installerHelper.preflight(
+            configuration: configuration,
+            vmConfiguration: vmConfiguration,
+            resourcesDirectory: resourcesDirectory
+        )
+    }
+
+    /// Launches the installer VM without waiting for completion (manual mode).
+    public func startManualInstallation(
+        configuration: ProvisioningConfiguration,
+        outputHandler: @escaping @Sendable (String) -> Void
+    ) async throws -> InstallerLaunchSession {
+        try validateConfiguration(configuration)
+        let vmConfiguration = try await createProvisioningConfiguration(configuration)
+        let preflight = installerHelper.preflight(
+            configuration: configuration,
+            vmConfiguration: vmConfiguration,
+            resourcesDirectory: resourcesDirectory
+        )
+        guard preflight.isLaunchable else {
+            throw WinRunError.installerLaunchFailed(reason: preflight.summary)
+        }
+        let session = try installerHelper.launchInstaller(
+            configuration: configuration,
+            vmConfiguration: vmConfiguration,
+            resourcesDirectory: resourcesDirectory,
+            outputHandler: outputHandler
+        )
+        manualSessionHolder.set(session)
+        return session
+    }
+
+    /// Clears the tracked manual installation session.
+    public func clearManualInstallationSession() {
+        manualSessionHolder.clear()
     }
 
     // MARK: - Private Helpers

@@ -156,6 +156,9 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
     /// Insufficient disk space for the operation.
     case diskInsufficientSpace(requiredGB: UInt64, availableGB: UInt64)
 
+    /// VM installer launcher failed before or during setup boot.
+    case installerLaunchFailed(reason: String)
+
     // MARK: - General Errors
 
     /// Operation was cancelled.
@@ -189,7 +192,8 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return .launcher
         case .isoMountFailed, .isoInvalid, .isoArchitectureUnsupported,
              .isoVersionWarning, .isoMetadataParseFailed,
-             .diskCreationFailed, .diskAlreadyExists, .diskInvalidSize, .diskInsufficientSpace:
+             .diskCreationFailed, .diskAlreadyExists, .diskInvalidSize, .diskInsufficientSpace,
+             .installerLaunchFailed:
             return .setup
         case .cancelled, .internalError, .notSupported:
             return .general
@@ -279,6 +283,8 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "Invalid disk size"
         case .diskInsufficientSpace:
             return "Insufficient disk space"
+        case .installerLaunchFailed:
+            return "Could not launch Windows installer"
 
         // General errors
         case .cancelled:
@@ -370,6 +376,8 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "The specified size of \(sizeGB)GB is invalid: \(reason)"
         case .diskInsufficientSpace(let requiredGB, let availableGB):
             return "Requires \(requiredGB)GB but only \(availableGB)GB is available."
+        case .installerLaunchFailed(let reason):
+            return reason
 
         case .cancelled:
             return "The operation was cancelled by the user or system."
@@ -450,6 +458,8 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             return "Specify a disk size between 32GB and 2TB."
         case .diskInsufficientSpace:
             return "Free up disk space or choose a smaller VM disk size."
+        case .installerLaunchFailed:
+            return "Install required tooling (qemu, swtpm, ARM64 firmware), then retry setup or use manual install."
 
         case .cancelled:
             return nil
@@ -545,6 +555,8 @@ public enum WinRunError: Error, LocalizedError, CustomStringConvertible {
             base = "Invalid disk size \(sizeGB)GB: \(reason)"
         case .diskInsufficientSpace(let requiredGB, let availableGB):
             base = "Insufficient space: need \(requiredGB)GB, have \(availableGB)GB"
+        case .installerLaunchFailed(let reason):
+            base = "Installer launch failed: \(reason)"
 
         case .cancelled:
             base = "Operation cancelled"

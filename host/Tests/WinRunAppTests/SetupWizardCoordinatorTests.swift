@@ -110,6 +110,32 @@ final class SetupWizardCoordinatorTests: XCTestCase {
         XCTAssertNotNil(coordinator.lastError)
     }
 
+    func testHandleInstallationComplete_installerLaunchFailure_transitionsToManualInstall() {
+        let coordinator = makeCoordinator()
+        goToInstalling(coordinator)
+
+        let result = ProvisioningResult(
+            success: false,
+            finalPhase: .installingWindows,
+            error: .installerLaunchFailed(reason: "Missing qemu-system-aarch64"),
+            durationSeconds: 5,
+            diskImagePath: URL(fileURLWithPath: "/tmp/windows.img")
+        )
+        coordinator.handleInstallationComplete(result: result)
+
+        XCTAssertEqual(coordinator.currentStep, .manualInstall)
+    }
+
+    func testFinishManualSetup_transitionsToComplete() {
+        let coordinator = makeCoordinator()
+        goToInstalling(coordinator)
+        coordinator.beginManualSetup()
+
+        coordinator.finishManualSetup()
+
+        XCTAssertEqual(coordinator.currentStep, .complete)
+    }
+
     // MARK: - Recovery Transition Tests
 
     func testRetry_fromError_transitionsToInstalling() {
