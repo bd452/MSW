@@ -220,8 +220,165 @@ final class InstallationLifecycleTests: XCTestCase {
         XCTAssertTrue(result.finalPhase.isTerminal)
     }
 
+    func testCancelInstallationDuringBootingReturnsCancelledResult() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+
+        let localProvisioner = provisioner!
+        let delegate = CancellingInstallationDelegate(targetPhase: .booting) {
+            localProvisioner.cancelInstallation()
+        }
+
+        let result = try await localProvisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.finalPhase, .cancelled)
+        if case .cancelled? = result.error {
+            // Expected
+        } else {
+            XCTFail("Expected cancelled error, got \(String(describing: result.error))")
+        }
+        XCTAssertTrue(delegate.observedPhases.contains(.booting))
+    }
+
+    func testInstallationProgressIncludesExpectedPhasesInOrder() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+        let delegate = MockInstallationDelegate()
+
+        let result = try await provisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+
+        XCTAssertTrue(result.success)
+
+        let expectedOrder: [InstallationPhase] = [
+            .preparing, .booting, .copyingFiles, .installingFeatures, .firstBoot, .postInstall, .complete,
+        ]
+        let condensedPhases = delegate.progressUpdates.reduce(into: [InstallationPhase]()) { phases, progress in
+            if phases.last != progress.phase {
+                phases.append(progress.phase)
+            }
+        }
+
+        var expectedIndex = 0
+        for phase in condensedPhases where expectedIndex < expectedOrder.count {
+            if phase == expectedOrder[expectedIndex] {
+                expectedIndex += 1
+            }
+        }
+        XCTAssertEqual(
+            expectedIndex,
+            expectedOrder.count,
+            "Observed phase sequence \(condensedPhases) should include all expected phases in order"
+        )
+
+        for (previous, next) in zip(delegate.progressUpdates, delegate.progressUpdates.dropFirst()) {
+            XCTAssertGreaterThanOrEqual(
+                next.overallProgress + 1e-9,
+                previous.overallProgress,
+                "Overall progress must be monotonic for setup lifecycle"
+            )
+        }
+    }
+
+    func testInstallToFirstBootTransitionOccursInOrder() async throws {
+        let delegate = try await runInstallationWithDelegate()
+
+        guard
+            let firstInstallingFeaturesIndex = delegate.progressUpdates.firstIndex(where: { $0.phase == .installingFeatures }),
+            let firstFirstBootIndex = delegate.progressUpdates.firstIndex(where: { $0.phase == .firstBoot })
+        else {
+            XCTFail("Expected installingFeatures and firstBoot phase updates")
+            return
+        }
+
+        XCTAssertLessThan(
+            firstInstallingFeaturesIndex,
+            firstFirstBootIndex,
+            "installingFeatures should occur before firstBoot"
+        )
+    }
+
+    func testFirstBootProgressIncrementsAndMessageIsSet() async throws {
+        let delegate = try await runInstallationWithDelegate()
+
+        let firstBootUpdates = delegate.progressUpdates.filter { $0.phase == .firstBoot }
+        XCTAssertEqual(firstBootUpdates.count, 10, "Simulation should emit 10 progress steps for firstBoot")
+
+        var previousPhaseProgress = 0.0
+        for update in firstBootUpdates {
+            XCTAssertGreaterThan(
+                update.phaseProgress,
+                previousPhaseProgress,
+                "firstBoot phaseProgress should increase monotonically"
+            )
+            XCTAssertEqual(update.message, "Completing first-time setup...")
+            previousPhaseProgress = update.phaseProgress
+        }
+
+        let finalFirstBootPhaseProgress = try XCTUnwrap(firstBootUpdates.last?.phaseProgress)
+        XCTAssertEqual(finalFirstBootPhaseProgress, 1.0, accuracy: 0.0001)
+    }
+
+    func testCancelAtFirstBootDoesNotContinueToPostInstall() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+
+        let localProvisioner = provisioner!
+        let delegate = CancellingInstallationDelegate(targetPhase: .firstBoot) {
+            localProvisioner.cancelInstallation()
+        }
+
+        let result = try await localProvisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertTrue(result.finalPhase.isTerminal)
+        XCTAssertTrue(delegate.observedPhases.contains(.firstBoot))
+        XCTAssertFalse(delegate.observedPhases.contains(.postInstall))
+        XCTAssertFalse(delegate.observedPhases.contains(.complete))
+    }
+
     func testIsInstalling_InitiallyFalse() {
         XCTAssertFalse(provisioner.isInstalling)
+    }
+
+    // MARK: - Shared Test Helpers
+
+    private func runInstallationWithDelegate() async throws -> MockInstallationDelegate {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+        let delegate = MockInstallationDelegate()
+
+        let result = try await provisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+        XCTAssertTrue(result.success)
+        return delegate
     }
 }
 
@@ -255,4 +412,39 @@ final class MockInstallationDelegate: InstallationDelegate, @unchecked Sendable 
         defer { lock.unlock() }
         _completionResult = result
     }
+}
+
+final class CancellingInstallationDelegate: InstallationDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private let targetPhase: InstallationPhase
+    private let cancelAction: @Sendable () -> Void
+    private var cancelled = false
+    private var _observedPhases: [InstallationPhase] = []
+
+    init(targetPhase: InstallationPhase, cancelAction: @escaping @Sendable () -> Void) {
+        self.targetPhase = targetPhase
+        self.cancelAction = cancelAction
+    }
+
+    var observedPhases: [InstallationPhase] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _observedPhases
+    }
+
+    func installationDidUpdateProgress(_ progress: InstallationProgress) {
+        lock.lock()
+        _observedPhases.append(progress.phase)
+        let shouldCancel = !cancelled && progress.phase == targetPhase
+        if shouldCancel {
+            cancelled = true
+        }
+        lock.unlock()
+
+        if shouldCancel {
+            cancelAction()
+        }
+    }
+
+    func installationDidComplete(with result: InstallationResult) {}
 }
