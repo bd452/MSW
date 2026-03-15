@@ -126,7 +126,7 @@ public sealed class SpiceControlPortTests : IDisposable
             BindingFlags.NonPublic | BindingFlags.Instance);
 
         Assert.NotNull(method);
-        var task = Assert.IsType<Task>(method!.Invoke(port, [CancellationToken.None]));
+        var task = Assert.IsAssignableFrom<Task>(method!.Invoke(port, [CancellationToken.None]));
         await task;
     }
 
