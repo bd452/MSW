@@ -220,6 +220,80 @@ final class InstallationLifecycleTests: XCTestCase {
         XCTAssertTrue(result.finalPhase.isTerminal)
     }
 
+    func testCancelInstallationDuringBootingReturnsCancelledResult() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+
+        let localProvisioner = provisioner!
+        let delegate = CancellingInstallationDelegate(targetPhase: .booting) {
+            localProvisioner.cancelInstallation()
+        }
+
+        let result = try await localProvisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.finalPhase, .cancelled)
+        if case .cancelled? = result.error {
+            // Expected
+        } else {
+            XCTFail("Expected cancelled error, got \(String(describing: result.error))")
+        }
+        XCTAssertTrue(delegate.observedPhases.contains(.booting))
+    }
+
+    func testInstallationProgressIncludesExpectedPhasesInOrder() async throws {
+        let isoPath = try createTestFile(named: "windows.iso")
+        let diskPath = try createTestFile(named: "disk.img")
+        let provConfig = ProvisioningConfiguration(
+            isoPath: isoPath,
+            diskImagePath: diskPath
+        )
+        let delegate = MockInstallationDelegate()
+
+        let result = try await provisioner.startInstallation(
+            configuration: provConfig,
+            delegate: delegate
+        )
+
+        XCTAssertTrue(result.success)
+
+        let expectedOrder: [InstallationPhase] = [
+            .preparing, .booting, .copyingFiles, .installingFeatures, .firstBoot, .postInstall, .complete,
+        ]
+        let condensedPhases = delegate.progressUpdates.reduce(into: [InstallationPhase]()) { phases, progress in
+            if phases.last != progress.phase {
+                phases.append(progress.phase)
+            }
+        }
+
+        var expectedIndex = 0
+        for phase in condensedPhases where expectedIndex < expectedOrder.count {
+            if phase == expectedOrder[expectedIndex] {
+                expectedIndex += 1
+            }
+        }
+        XCTAssertEqual(
+            expectedIndex,
+            expectedOrder.count,
+            "Observed phase sequence \(condensedPhases) should include all expected phases in order"
+        )
+
+        for (previous, next) in zip(delegate.progressUpdates, delegate.progressUpdates.dropFirst()) {
+            XCTAssertGreaterThanOrEqual(
+                next.overallProgress + 1e-9,
+                previous.overallProgress,
+                "Overall progress must be monotonic for setup lifecycle"
+            )
+        }
+    }
+
     func testIsInstalling_InitiallyFalse() {
         XCTAssertFalse(provisioner.isInstalling)
     }
@@ -255,4 +329,39 @@ final class MockInstallationDelegate: InstallationDelegate, @unchecked Sendable 
         defer { lock.unlock() }
         _completionResult = result
     }
+}
+
+final class CancellingInstallationDelegate: InstallationDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private let targetPhase: InstallationPhase
+    private let cancelAction: @Sendable () -> Void
+    private var cancelled = false
+    private var _observedPhases: [InstallationPhase] = []
+
+    init(targetPhase: InstallationPhase, cancelAction: @escaping @Sendable () -> Void) {
+        self.targetPhase = targetPhase
+        self.cancelAction = cancelAction
+    }
+
+    var observedPhases: [InstallationPhase] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _observedPhases
+    }
+
+    func installationDidUpdateProgress(_ progress: InstallationProgress) {
+        lock.lock()
+        _observedPhases.append(progress.phase)
+        let shouldCancel = !cancelled && progress.phase == targetPhase
+        if shouldCancel {
+            cancelled = true
+        }
+        lock.unlock()
+
+        if shouldCancel {
+            cancelAction()
+        }
+    }
+
+    func installationDidComplete(with result: InstallationResult) {}
 }

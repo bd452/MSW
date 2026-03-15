@@ -146,6 +146,36 @@ final class VirtualMachineControllerBasicTests: XCTestCase {
         XCTAssertEqual(state.activeSessions, 0)
     }
 
+    func testRegisterSessionAdjustsActiveSessionCountWithoutGoingNegative() async {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        await controller.registerSession(delta: 2)
+        var state = await controller.currentState()
+        XCTAssertEqual(state.activeSessions, 2)
+        XCTAssertEqual(state.status, .stopped)
+
+        await controller.registerSession(delta: -1)
+        state = await controller.currentState()
+        XCTAssertEqual(state.activeSessions, 1)
+        XCTAssertEqual(state.status, .stopped)
+
+        await controller.registerSession(delta: -10)
+        state = await controller.currentState()
+        XCTAssertEqual(state.activeSessions, 0, "Session count must floor at zero")
+        XCTAssertEqual(state.status, .stopped)
+    }
+
+    func testSuspendIfIdleWhenNotRunningIsNoOp() async throws {
+        let config = VMConfiguration()
+        let controller = VirtualMachineController(configuration: config)
+
+        try await controller.suspendIfIdle()
+        let state = await controller.currentState()
+        XCTAssertEqual(state.status, .stopped)
+        XCTAssertEqual(state.activeSessions, 0)
+    }
+
     func testShutdownWhenAlreadyStoppedThrowsError() async throws {
         let config = VMConfiguration()
         let controller = VirtualMachineController(configuration: config)
