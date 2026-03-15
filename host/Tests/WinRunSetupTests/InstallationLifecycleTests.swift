@@ -329,7 +329,8 @@ final class InstallationLifecycleTests: XCTestCase {
             previousPhaseProgress = update.phaseProgress
         }
 
-        XCTAssertEqual(firstBootUpdates.last?.phaseProgress, 1.0, accuracy: 0.0001)
+        let finalFirstBootPhaseProgress = try XCTUnwrap(firstBootUpdates.last?.phaseProgress)
+        XCTAssertEqual(finalFirstBootPhaseProgress, 1.0, accuracy: 0.0001)
     }
 
     func testCancelAtFirstBootDoesNotContinueToPostInstall() async throws {
