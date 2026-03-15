@@ -28,6 +28,8 @@
       - Control channel is currently wired but intentionally disconnected to avoid this
       - Fix: route control/port channel callbacks through the render session's existing transport instead of opening a separate session
       - Blocked features until fixed: guest agent frame routing (FrameReady), settings push (FrameBufferMode), window metadata from agent
+    - [ ] Register .exe and .msi file type associations in app Info.plist { host/Sources/WinRunApp/Resources/Info.plist, scripts/package-app.sh }
+    - [ ] Dynamic per-instance Dock identity (program name + extracted icon per running window) { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunApp/WinRunWindowController.swift }
   - [ ] Runtime ownership + reuse policy { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift, host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunShared/RuntimeEnvironment.swift } <docs/architecture.md>
     - [ ] Reuse compatible runtime instance on app start when present
     - [ ] Replace stale/incompatible runtime instance deterministically
@@ -36,6 +38,7 @@
     - [ ] Ensure per-window frame/metadata/input isolation by window/session ID
     - [ ] Launch multiple Windows apps into independent native host windows
     - [ ] Keep reconnect/session lifecycle robust across app/window churn
+    - [ ] Handle multi-window applications (parent/child relationships, dialog spawning) { host/Sources/WinRunApp/WinRunWindowController.swift, guest/WinRunAgent/Services/WindowTracker.cs } <docs/decisions/protocols.md>
   - [X] CLI parity with daemon features { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift, apps/launchers/ } <docs/decisions/protocols.md, docs/development.md>
     - [X] Implement VM lifecycle/status commands over XPC { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunXPC/XPCInterfaces.swift } <docs/decisions/protocols.md>
     - [X] Generate macOS launchers + icons on demand { host/Sources/WinRunCLI/WinRunCLI.swift, apps/launchers/ } <docs/development.md>
@@ -47,6 +50,12 @@
   - [X] Host test coverage { host/Tests/WinRunSharedTests/WinRunSharedTests.swift, new:host/Tests/WinRunSpiceBridgeTests/, new:host/Tests/WinRunVirtualMachineTests/ } <docs/development.md>
     - [X] Add unit tests for VM controller + Spice bridge { new:host/Tests/WinRunSpiceBridgeTests/SpiceWindowStreamTests.swift, new:host/Tests/WinRunVirtualMachineTests/VirtualMachineControllerTests.swift } <docs/development.md>
     - [X] Add CLI + daemon integration smoke tests { host/Tests/WinRunSharedTests/WinRunSharedTests.swift } <docs/development.md>
+  - [ ] VirtioFS filesystem sharing { host/Sources/WinRunVirtualMachine/VirtualMachineController+Configuration.swift, host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift }
+    - [ ] Enable VirtioFS mount (/Users → Z:\) when guest agent is available { host/Sources/WinRunVirtualMachine/VirtualMachineController+Configuration.swift }
+    - [ ] Validate filesystem access and permissions from guest { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift }
+  - [ ] CLI extended commands { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunShared/ }
+    - [ ] Add `winrun install` command for .msi and setup.exe installers { host/Sources/WinRunCLI/WinRunCLI.swift }
+    - [ ] Implement macOS↔Windows path translation in CLI and shared utilities { host/Sources/WinRunCLI/WinRunCLI.swift, host/Sources/WinRunShared/ }
 
 - [X] Guest WinRunAgent { guest/WinRunAgent/Program.cs, guest/WinRunAgent/Services/, guest/WinRunAgent.Tests/ } <docs/decisions/protocols.md, docs/architecture.md>
   - [X] Window tracking + metadata streaming { guest/WinRunAgent/Services/WindowTracker.cs, guest/WinRunAgent/Services/Messages.cs, guest/WinRunAgent/Services/DesktopDuplicationBridge.cs } <docs/decisions/protocols.md>
@@ -241,11 +250,20 @@
     - Uses timeout-based fallback for deterministic shutdown behavior
     - Improves data integrity and user experience
 
+- [ ] VM Suspend/Resume (Save State) { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift } <docs/decisions/virtualization.md>
+  - [ ] Implement QEMU save/restore VM state for ~2s fast resume { host/Sources/WinRunVirtualMachine/QEMURuntimeProcessManager.swift }
+  - [ ] Wire save-state into VirtualMachineController suspend/resume path (replace cold-boot stub) { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift }
+  - [ ] Auto-suspend VM state to disk after configurable idle timeout { host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunShared/VMConfiguration.swift }
+
 - [ ] Runtime Integration (local end-to-end) { host/Sources/WinRunApp/AppMain.swift, host/Sources/WinRunDaemon/, host/Sources/WinRunVirtualMachine/VirtualMachineController.swift, host/Sources/WinRunApp/Setup/ManualInstallViewController.swift } <docs/decisions/virtualization.md, docs/decisions/protocols.md>
   - [X] Boot VM via QEMU backend and verify console rendering
   - [ ] Validate daemon mode and embedded mode with consistent runtime ownership behavior
   - [ ] Validate end-to-end app → daemon/embedded → VM → agent → Spice → per-window rendering path
   - [ ] Validate retry/startup reliability under stale process/socket/lock scenarios
+
+- [ ] Installer Flow Notifications { host/Sources/WinRunDaemon/WinRunDaemon.swift, host/Sources/WinRunApp/ } <docs/architecture.md>
+  - [ ] Show macOS user notification when guest detects new desktop shortcut { host/Sources/WinRunDaemon/WinRunDaemon.swift }
+  - [ ] Prompt user approval to add generated launcher to ~/Applications { host/Sources/WinRunDaemon/WinRunDaemon.swift, host/Sources/WinRunApp/ }
 
 - [ ] Distribution Packaging { scripts/, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
   - [X] App bundle assembly { new:scripts/package-app.sh, host/Sources/WinRunApp/Resources/ } <docs/decisions/operations.md>
