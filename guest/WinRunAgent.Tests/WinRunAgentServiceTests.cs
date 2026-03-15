@@ -172,31 +172,8 @@ public sealed class WinRunAgentServiceTests : IDisposable
         };
         await inbound.Writer.WriteAsync(iconRequest);
 
-        // Allow enough time for shortcut scanning + message processing on CI
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
-
-        try
-        {
-            await service.RunAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected
-        }
-
-        // Find the ACK message
-        var reader = outbound.Reader;
-        AckMessage? ack = null;
-        while (reader.TryRead(out var msg))
-        {
-            if (msg is AckMessage a && a.MessageId == 99)
-            {
-                ack = a;
-                break;
-            }
-        }
-
-        Assert.NotNull(ack);
+        // Wait for the specific ACK instead of relying on fixed cancel timing.
+        var ack = await RunServiceUntilAckAsync(service, outbound, 99);
         Assert.False(ack.Success);
     }
 
@@ -527,5 +504,48 @@ public sealed class WinRunAgentServiceTests : IDisposable
         Assert.True(caps.Capabilities.HasFlag(GuestCapabilities.DesktopDuplication));
     }
 
+    private static async Task<AckMessage> RunServiceUntilAckAsync(
+        WinRunAgentService service,
+        Channel<GuestMessage> outbound,
+        uint messageId,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(10);
+        using var runCts = new CancellationTokenSource(effectiveTimeout);
+        var runTask = service.RunAsync(runCts.Token);
+
+        try
+        {
+            return await WaitForAckAsync(outbound, messageId, effectiveTimeout);
+        }
+        finally
+        {
+            runCts.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancelled.
+            }
+        }
+    }
+
+    private static async Task<AckMessage> WaitForAckAsync(
+        Channel<GuestMessage> outbound,
+        uint messageId,
+        TimeSpan timeout)
+    {
+        using var cts = new CancellationTokenSource(timeout);
+        while (true)
+        {
+            var message = await outbound.Reader.ReadAsync(cts.Token);
+            if (message is AckMessage ack && ack.MessageId == messageId)
+            {
+                return ack;
+            }
+        }
+    }
 }
 

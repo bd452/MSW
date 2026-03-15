@@ -267,6 +267,83 @@ final class SpiceControlChannelTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Configure Streaming Tests
+
+    func testConfigureStreamingSucceedsWhenGuestAcknowledges() async throws {
+        let channel = SpiceControlChannel()
+        await channel.simulateConnected()
+
+        let configureTask = Task {
+            try await channel.configureStreaming(frameBufferMode: .compressed, timeout: .milliseconds(500))
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        let ack = AckMessage(messageId: 1, success: true, errorMessage: nil)
+        let payload = try JSONEncoder().encode(ack)
+
+        var envelope = Data()
+        envelope.append(SpiceMessageType.ack.rawValue)
+        var length = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+        envelope.append(payload)
+
+        try await channel.simulateResponse(envelope)
+
+        try await configureTask.value
+    }
+
+    func testConfigureStreamingThrowsGuestErrorWhenAckFails() async throws {
+        let channel = SpiceControlChannel()
+        await channel.simulateConnected()
+
+        let configureTask = Task {
+            try await channel.configureStreaming(frameBufferMode: .uncompressed, timeout: .milliseconds(500))
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        let ack = AckMessage(messageId: 1, success: false, errorMessage: "Unsupported frame mode")
+        let payload = try JSONEncoder().encode(ack)
+
+        var envelope = Data()
+        envelope.append(SpiceMessageType.ack.rawValue)
+        var length = UInt32(payload.count).littleEndian
+        withUnsafeBytes(of: &length) { envelope.append(contentsOf: $0) }
+        envelope.append(payload)
+
+        try await channel.simulateResponse(envelope)
+
+        do {
+            try await configureTask.value
+            XCTFail("Expected SpiceControlError.guestError")
+        } catch let error as SpiceControlError {
+            if case .guestError(let code, let message) = error {
+                XCTAssertEqual(code, "CONFIGURE_STREAMING_FAILED")
+                XCTAssertEqual(message, "Unsupported frame mode")
+            } else {
+                XCTFail("Expected guestError, got \(error)")
+            }
+        }
+    }
+
+    func testConfigureStreamingFailsWhenNotConnected() async {
+        let channel = SpiceControlChannel()
+
+        do {
+            try await channel.configureStreaming(frameBufferMode: .compressed, timeout: .milliseconds(100))
+            XCTFail("Expected SpiceControlError.notConnected")
+        } catch let error as SpiceControlError {
+            if case .notConnected = error {
+                // Expected
+            } else {
+                XCTFail("Expected notConnected, got \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
 }
 
 // MARK: - FrameReady Notification Tests
