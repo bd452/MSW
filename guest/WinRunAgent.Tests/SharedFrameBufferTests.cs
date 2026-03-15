@@ -217,6 +217,6 @@ public sealed class SharedFrameBufferTests
 
         _ = Assert.Throws<InvalidOperationException>(() => writer.ReadHeader());
         _ = Assert.Throws<InvalidOperationException>(() =>
-            writer.WriteFrame(1, 1, 1, 1, 4, PixelFormatType.Bgra32, new byte[] { 0x1 }));
+            writer.WriteFrame(1, 1, 1, 1, 4, PixelFormatType.Bgra32, [0x1]));
     }
 }

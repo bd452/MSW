@@ -14,17 +14,14 @@ public sealed class ProvisioningReporterTests : IDisposable
         _reporter = new ProvisioningReporter(_outboundChannel, new TestLogger());
     }
 
-    public void Dispose()
-    {
-        _reporter.Dispose();
-    }
+    public void Dispose() => _reporter.Dispose();
 
     [Fact]
     public async Task ReportProgressAsync_UpdatesStateAndPublishesProgressMessage()
     {
         await _reporter.ReportProgressAsync(
             ProvisioningPhase.Agent,
-            (byte)150,
+            150,
             "Installing WinRun Agent");
 
         Assert.Equal(ProvisioningPhase.Agent, _reporter.CurrentPhase);

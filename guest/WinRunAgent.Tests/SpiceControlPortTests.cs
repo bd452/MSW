@@ -17,10 +17,7 @@ public sealed class SpiceControlPortTests : IDisposable
         _port = new SpiceControlPort(new TestLogger(), _inbound, _outbound);
     }
 
-    public void Dispose()
-    {
-        _port.Dispose();
-    }
+    public void Dispose() => _port.Dispose();
 
     [Fact]
     public async Task ProcessReadBufferAsync_WithCompleteMessage_QueuesInboundMessage()
@@ -103,10 +100,7 @@ public sealed class SpiceControlPortTests : IDisposable
     }
 
     [Fact]
-    public async Task StopAsync_CanBeCalledBeforeStart()
-    {
-        await _port.StopAsync();
-    }
+    public Task StopAsync_CanBeCalledBeforeStart() => _port.StopAsync();
 
     private static void AppendToReadBuffer(SpiceControlPort port, ReadOnlySpan<byte> data)
     {
