@@ -369,6 +369,9 @@ extension WinRunWindowController: NSWindowDelegate {
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
+        // Check host clipboard for changes and sync to guest
+        clipboardManager.checkForChanges()
+
         // Request clipboard from guest when window becomes active
         stream.requestClipboard(format: .plainText)
     }
