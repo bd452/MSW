@@ -401,6 +401,9 @@ make test-guest
 # Or directly:
 cd guest && dotnet test WinRunAgent.sln
 
+# Guest tests under Wine (optional, better local Windows approximation)
+make test-guest-wine
+
 # Remote execution (opt-in, via GitHub Actions)
 make test-guest-remote   # REQUIRED for guest code changes (runs on Windows)
 make test-host-remote    # run host tests on macOS remotely
@@ -408,7 +411,21 @@ make check-remote        # full CI remotely (host on macOS, guest on Windows)
 
 # Linux-friendly (runs what works locally on Linux)
 make check-linux         # lint both + guest build/test
+make check-linux-mid     # check-linux + Wine guest tests (recommended mid-task)
 ```
+
+### Wine-Assisted Guest Tests (Linux)
+
+`make test-guest-wine` runs guest tests through Wine using a Windows `dotnet.exe`, which provides a closer approximation to native Windows behavior during development.
+
+Requirements:
+- `wine` + `winepath` installed
+- A Windows .NET SDK extracted/installed locally, with `dotnet.exe` available
+
+Environment variables:
+- `WINE_DOTNET_EXE` — path to Windows `dotnet.exe` (default: `~/.dotnet-windows/dotnet.exe`)
+- `WINE_TEST_CONFIGURATION` — test configuration (`Debug` by default)
+- `WINE_TEST_PROJECT` — override test project path (defaults to `guest/WinRunAgent.Tests/WinRunAgent.Tests.csproj`)
 
 ### Test Organization
 
@@ -436,6 +453,7 @@ All checks must pass before merge. See [Branch Protection](#branch-protection) b
 # Run all checks (lint + build + test) - use before committing
 make check              # Full CI (requires macOS for host)
 make check-linux        # Linux-friendly (lint both + guest build/test)
+make check-linux-mid    # Linux dev loop (check-linux + Wine guest tests)
 
 # Platform-specific checks (native)
 make check-host         # SwiftLint + build + test (requires macOS)
@@ -493,10 +511,10 @@ make test-guest-remote    # REQUIRED: Tests on Windows CI (catches platform-spec
 
 **On Linux (or non-macOS environments like Cursor web agent):**
 ```bash
-# Run everything that works locally
-make check-linux          # Lint both + guest build/test
+# Mid-task loop: run fast native checks + Wine guest tests
+make check-linux-mid      # Lint/build/test + Wine guest tests
 
-# For guest code changes, also run remote Windows tests
+# Final gate after the full task is complete
 git push
 make test-guest-remote    # REQUIRED: Tests on Windows CI
 
@@ -509,6 +527,8 @@ make test-host-remote     # Runs build + test on macOS via GitHub Actions
 - Line ending issues (CRLF enforcement on Windows)
 - Windows-specific test failures
 - Platform-specific linting differences
+
+For day-to-day development, prefer `make check-linux-mid` for iterative validation and run `make test-guest-remote` once the full task is complete.
 
 **Important for Host Code on Non-macOS**: Use `make test-host-remote` to run host tests on macOS via GitHub Actions. Native host build/test requires macOS due to Apple framework dependencies (Virtualization.framework, AppKit, Metal).
 

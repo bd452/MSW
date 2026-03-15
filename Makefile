@@ -5,10 +5,10 @@ REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 SWIFTLINT := $(shell command -v swiftlint 2>/dev/null || echo "$(REPO_ROOT)/.tools/swiftlint/swiftlint-static")
 DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
 
-.PHONY: help bootstrap build build-host build-guest test test-host test-guest \
+.PHONY: help bootstrap build build-host build-guest test test-host test-guest test-guest-wine \
         test-guest-remote test-host-remote build-host-remote check-host-remote check-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
-        check-linux install-daemon uninstall-daemon \
+        check-linux check-linux-mid install-daemon uninstall-daemon \
         generate-protocol generate-protocol-host generate-protocol-guest generate-test-data \
         validate-protocol validate-protocol-host validate-protocol-guest \
         ci-watch brew-sync brew-check
@@ -28,6 +28,7 @@ help:
 	@echo "  test           Run all tests"
 	@echo "  test-host      Run macOS host tests (requires macOS)"
 	@echo "  test-guest     Run Windows guest tests (local)"
+	@echo "  test-guest-wine Run Windows guest tests under Wine (optional)"
 	@echo "  test-guest-remote  Run guest tests on Windows via GitHub Actions"
 	@echo "  test-host-remote   Run host tests on macOS via GitHub Actions"
 	@echo ""
@@ -46,6 +47,7 @@ help:
 	@echo "  check-host     Run host checks only (requires macOS)"
 	@echo "  check-guest    Run guest checks only"
 	@echo "  check-linux    Run checks that work on Linux (lint + guest build/test)"
+	@echo "  check-linux-mid Linux dev loop (check-linux + Wine guest tests)"
 	@echo ""
 	@echo "Remote CI targets (via GitHub Actions):"
 	@echo "  check-remote       Run full CI remotely (host on macOS, guest on Windows)"
@@ -56,6 +58,9 @@ help:
 	@echo "    make test-guest-remote              # uses gh auth token"
 	@echo "    make test-guest-remote GH_TOKEN=ghp_xxx  # explicit token"
 	@echo "  Token requires 'workflow' scope. Create at: https://github.com/settings/tokens/new"
+	@echo ""
+	@echo "Wine local guest testing:"
+	@echo "  make test-guest-wine WINE_DOTNET_EXE=~/.dotnet-windows/dotnet.exe"
 	@echo ""
 	@echo "CI watching:"
 	@echo "  ci-watch           Watch latest CI run for current branch, show errors on failure"
@@ -124,6 +129,11 @@ else
 		echo "⚠️  dotnet CLI not found; skipping guest tests"; \
 	fi
 endif
+
+# Run guest tests with Windows dotnet under Wine (best-effort local Windows parity)
+test-guest-wine:
+	@echo "🧪 Running guest tests under Wine..."
+	@$(REPO_ROOT)/scripts/test-guest-wine.sh
 
 # Run guest tests remotely on Windows via GitHub Actions
 # Requires: gh CLI authenticated with repo access
@@ -435,6 +445,12 @@ check-linux: lint-host lint-guest build-guest
 	@echo "   Note: Host build/test skipped (requires macOS). Use 'make check-host-remote' for full host CI."
 	@echo "   Note: Some guest tests require Windows. Use 'make test-guest-remote' for full guest tests."
 	@echo "   Note: WiX installer skipped (requires Windows). MSI is built in Windows CI."
+
+# Mid-task Linux loop: run normal Linux checks plus Wine-based guest tests.
+check-linux-mid: check-linux test-guest-wine
+	@echo ""
+	@echo "✅ Linux mid-task checks passed (native + Wine)."
+	@echo "   Final gate when the full task is complete: 'make test-guest-remote'."
 
 # Full remote CI: run host on macOS, guest on Windows via GitHub Actions
 check-remote:

@@ -61,8 +61,10 @@ After completing a task:
 1. Verify implementation matches documentation
 2. **Write tests** if the new code meets testing criteria (see [Testing](#testing) section)
    2.a. If the new code makes changes to areas with existing test coverage, update the relevant tests if necessary.
-3. **Run `make check-linux`** to verify lint and tests pass locally
-4. **Run remote tests and iterate until they pass**:
+3. **Run local mid-task checks**:
+   - Baseline: `make check-linux`
+   - Preferred for guest development loops: `make check-linux-mid` (adds Wine guest tests)
+4. **Run remote tests at full-task completion and iterate until they pass**:
    - For host changes: `make test-host-remote`
    - For guest changes: `make test-guest-remote`
    - **Prefer remote builds over CI tailing**: Always use `make test-*-remote` scripts first — they trigger builds, wait for completion, and stream errors directly. Only fall back to `make ci-watch` if the remote scripts fail due to permission issues.
@@ -240,6 +242,8 @@ make test-host    # test only
 # Guest only (requires .NET 8 SDK or use remote)
 make check-guest        # lint + build + test (local)
 make test-guest         # test only (local)
+make test-guest-wine    # test under Wine (optional local Windows approximation)
+make check-linux-mid    # Linux dev loop: check-linux + Wine guest tests
 
 # Remote tests (PREFERRED for CI validation)
 make test-host-remote   # triggers macOS build, waits, streams errors
