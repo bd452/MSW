@@ -179,6 +179,13 @@ Each sub-codebase targets exactly one platform:
 
 See platform-specific rules in `host/.cursorrules` (Swift) and `guest/.cursorrules` (C#) for language-specific details.
 
+### Runtime Environment (`WINRUN_ENV`)
+The `RuntimeEnvironment` enum in `WinRunShared` centrally controls service mode (embedded vs XPC) and security policy (dev vs prod). It reads from the `WINRUN_ENV` environment variable, defaulting to `development` in debug builds and `production` in release builds.
+
+- **Do NOT use `#if DEBUG` for dev-vs-prod behavior switching.** Use `RuntimeEnvironment.current` instead so the behavior can be overridden at launch.
+- Use `make run` for fast development (embedded VM, no daemon). Use `make run-prod` to test the daemon/XPC path.
+- Tests should inject `RuntimeEnvironment.development` explicitly to avoid dependence on the host's environment variables.
+
 ### Error Handling
 - Use idiomatic error handling for each platform (Result/throws in Swift, exceptions in C#)
 - All Spice/XPC operations need timeout handling

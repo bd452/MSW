@@ -167,7 +167,7 @@ final class VirtualMachineControllerBasicTests: XCTestCase {
             XCTFail("Expected error")
         } catch let error as VirtualMachineLifecycleError {
             if case .invalidSnapshot(let reason) = error {
-                XCTAssertTrue(reason.contains("running"))
+                XCTAssertTrue(reason.contains("not yet supported"))
             } else {
                 XCTFail("Expected invalidSnapshot error, got \(error)")
             }

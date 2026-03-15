@@ -21,7 +21,8 @@ final class VirtualMachineDelegate: NSObject, VZVirtualMachineDelegate {
     }
 
     func guestDidStop(_ virtualMachine: VZVirtualMachine) {
-        logger.info("Guest VM stopped gracefully")
+        logger.info("Guest VM stopped gracefully (state=\(virtualMachine.state.rawValue))")
+        fputs("[VZ-DELEGATE] guestDidStop\n", stderr)
         Task { @MainActor in
             await controller?.handleGuestDidStop()
         }
@@ -29,6 +30,7 @@ final class VirtualMachineDelegate: NSObject, VZVirtualMachineDelegate {
 
     func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: Error) {
         logger.error("Guest VM stopped with error: \(error.localizedDescription)")
+        fputs("[VZ-DELEGATE] didStopWithError: \(error)\n", stderr)
         Task { @MainActor in
             await controller?.handleGuestDidStopWithError(error)
         }
@@ -48,28 +50,76 @@ final class VirtualMachineDelegate: NSObject, VZVirtualMachineDelegate {
 
 #if canImport(Virtualization)
 /// Provides async/await wrappers for VZVirtualMachine completion-handler APIs.
+///
+/// All VZ operations are dispatched to the main queue because `VZVirtualMachine`
+/// requires operations on the queue where it was created. VMs must be created
+/// via `createVM(_:delegate:)` to ensure consistency.
 @available(macOS 13, *)
 enum NativeVirtualMachineBridge {
+    @MainActor
+    static func createVM(
+        _ config: VZVirtualMachineConfiguration,
+        delegate: VZVirtualMachineDelegate?
+    ) -> VZVirtualMachine {
+        let vm = VZVirtualMachine(configuration: config)
+        vm.delegate = delegate
+        return vm
+    }
+
     static func start(_ vm: VZVirtualMachine) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.start { result in
-                switch result {
-                case .success:
-                    cont.resume(returning: ())
-                case .failure(let error):
-                    cont.resume(throwing: error)
+            DispatchQueue.main.async {
+                vm.start { result in
+                    switch result {
+                    case .success:
+                        cont.resume(returning: ())
+                    case .failure(let error):
+                        cont.resume(throwing: error)
+                    }
                 }
             }
         }
     }
 
-    static func stop(_ vm: VZVirtualMachine) async throws {
+    /// Attempts a graceful shutdown via ACPI power button, falling back to
+    /// force stop after the timeout expires.
+    static func stop(_ vm: VZVirtualMachine, gracefulTimeout: TimeInterval = 30) async throws {
+        let canRequest = await MainActor.run { vm.canRequestStop }
+        if canRequest {
+            do {
+                try await MainActor.run { try vm.requestStop() }
+            } catch {
+                try await forceStop(vm)
+                return
+            }
+
+            let deadline = Date().addingTimeInterval(gracefulTimeout)
+            while Date() < deadline {
+                let vmState = await MainActor.run { vm.state }
+                if vmState == .stopped || vmState == .error {
+                    return
+                }
+                try await Task.sleep(nanoseconds: 500_000_000)
+            }
+
+            let vmState = await MainActor.run { vm.state }
+            if vmState != .stopped {
+                try await forceStop(vm)
+            }
+        } else {
+            try await forceStop(vm)
+        }
+    }
+
+    static func forceStop(_ vm: VZVirtualMachine) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.stop { error in
-                if let error {
-                    cont.resume(throwing: error)
-                } else {
-                    cont.resume(returning: ())
+            DispatchQueue.main.async {
+                vm.stop { error in
+                    if let error {
+                        cont.resume(throwing: error)
+                    } else {
+                        cont.resume(returning: ())
+                    }
                 }
             }
         }
@@ -78,12 +128,14 @@ enum NativeVirtualMachineBridge {
     @available(macOS 14, *)
     static func pause(_ vm: VZVirtualMachine) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.pause { result in
-                switch result {
-                case .success:
-                    cont.resume(returning: ())
-                case .failure(let error):
-                    cont.resume(throwing: error)
+            DispatchQueue.main.async {
+                vm.pause { result in
+                    switch result {
+                    case .success:
+                        cont.resume(returning: ())
+                    case .failure(let error):
+                        cont.resume(throwing: error)
+                    }
                 }
             }
         }
@@ -92,12 +144,14 @@ enum NativeVirtualMachineBridge {
     @available(macOS 14, *)
     static func resume(_ vm: VZVirtualMachine) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.resume { result in
-                switch result {
-                case .success:
-                    cont.resume(returning: ())
-                case .failure(let error):
-                    cont.resume(throwing: error)
+            DispatchQueue.main.async {
+                vm.resume { result in
+                    switch result {
+                    case .success:
+                        cont.resume(returning: ())
+                    case .failure(let error):
+                        cont.resume(throwing: error)
+                    }
                 }
             }
         }
@@ -110,15 +164,16 @@ enum NativeVirtualMachineBridge {
             )
         }
 
-        // Pause the VM before saving state
         try await pause(vm)
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.saveMachineStateTo(url: url) { error in
-                if let error {
-                    cont.resume(throwing: error)
-                } else {
-                    cont.resume(returning: ())
+            DispatchQueue.main.async {
+                vm.saveMachineStateTo(url: url) { error in
+                    if let error {
+                        cont.resume(throwing: error)
+                    } else {
+                        cont.resume(returning: ())
+                    }
                 }
             }
         }
@@ -132,16 +187,17 @@ enum NativeVirtualMachineBridge {
         }
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            vm.restoreMachineStateFrom(url: url) { error in
-                if let error {
-                    cont.resume(throwing: error)
-                } else {
-                    cont.resume(returning: ())
+            DispatchQueue.main.async {
+                vm.restoreMachineStateFrom(url: url) { error in
+                    if let error {
+                        cont.resume(throwing: error)
+                    } else {
+                        cont.resume(returning: ())
+                    }
                 }
             }
         }
 
-        // Resume the VM after restoring state
         try await resume(vm)
     }
 }

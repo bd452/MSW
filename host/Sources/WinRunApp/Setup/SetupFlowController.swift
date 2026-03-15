@@ -16,6 +16,7 @@ final class SetupFlowController {
     private let preflight: ProvisioningPreflightResult
     private let presentSetupWindow: SetupWindowPresenter
     private let setupCoordinatorFactory: () -> SetupCoordinator
+    private let environment: RuntimeEnvironment
 
     private var window: NSWindow?
     private var wizardCoordinator: SetupWizardCoordinator?
@@ -23,24 +24,27 @@ final class SetupFlowController {
 
     init(
         preflight: ProvisioningPreflightResult,
+        environment: RuntimeEnvironment = .current,
         logger: Logger = StandardLogger(subsystem: "WinRunApp.SetupFlowController"),
         presentSetupWindow: @escaping SetupWindowPresenter = SetupFlowController.defaultSetupWindowPresenter,
         setupCoordinatorFactory: @escaping () -> SetupCoordinator = { SetupCoordinator() }
     ) {
         self.preflight = preflight
+        self.environment = environment
         self.logger = logger
         self.presentSetupWindow = presentSetupWindow
         self.setupCoordinatorFactory = setupCoordinatorFactory
     }
 
     func routeToSetupOrNormalOperation(normalOperation: @escaping NormalOperationBlock) {
+        normalOperationBlock = normalOperation
+
         switch preflight {
         case .ready:
-            normalOperation()
+            ensureDaemonThenProceed()
 
         case .needsSetup(let diskImagePath, let reason):
             logger.info("Routing to setup UI. diskImagePath=\(diskImagePath.path) reason=\(reason.rawValue)")
-            normalOperationBlock = normalOperation
             presentSetupWizard(diskImagePath: diskImagePath, reason: reason)
         }
     }
@@ -129,9 +133,58 @@ extension SetupFlowController: SetupWizardCoordinatorDelegate {
             window?.close()
             window = nil
             wizardCoordinator = nil
-            normalOperationBlock?()
+            ensureDaemonThenProceed()
         } else {
             // User cancelled or gave up - quit the app
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func ensureDaemonThenProceed() {
+        guard environment.serviceMode == .xpc else {
+            normalOperationBlock?()
+            return
+        }
+        let result = DaemonInstaller.ensureDaemonInstalled(logger: logger)
+        switch result {
+        case .alreadyRunning, .installed:
+            normalOperationBlock?()
+
+        case .userCancelled:
+            showDaemonRequiredAlert(
+                message: "WinRun needs the background daemon to run Windows apps. "
+                    + "You can install it later by running:\n\n"
+                    + "  make install-daemon\n\n"
+                    + "in the project directory."
+            )
+
+        case .failed(let reason):
+            logger.error("Daemon installation failed: \(reason)")
+            showDaemonRequiredAlert(
+                message: "Could not install the WinRun daemon:\n\n\(reason)\n\n"
+                    + "You can install it manually by running:\n\n"
+                    + "  make install-daemon\n\n"
+                    + "in the project directory, then relaunch WinRun."
+            )
+        }
+    }
+
+    private func showDaemonRequiredAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Daemon Installation"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Try Again")
+        alert.addButton(withTitle: "Continue Anyway")
+        alert.addButton(withTitle: "Quit")
+
+        let response = alert.runModal()
+        switch response {
+        case .alertFirstButtonReturn:
+            ensureDaemonThenProceed()
+        case .alertSecondButtonReturn:
+            normalOperationBlock?()
+        default:
             NSApplication.shared.terminate(nil)
         }
     }

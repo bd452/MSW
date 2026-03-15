@@ -1,6 +1,6 @@
 # WinRun
 
-Run Windows applications seamlessly on macOS. WinRun uses Apple's Virtualization.framework and the Spice protocol to display Windows apps as native-feeling macOS windows.
+Run Windows applications seamlessly on macOS. WinRun uses QEMU (HVF acceleration) and the Spice protocol to display Windows apps as native-feeling macOS windows.
 
 ## Features
 
@@ -15,7 +15,7 @@ Run Windows applications seamlessly on macOS. WinRun uses Apple's Virtualization
 - **macOS 13 (Ventura) or later** on Apple Silicon (M1/M2/M3/M4)
 - **Windows 11 ARM64 ISO** (you provide your own license)
 - **~20GB free disk space** for Windows VM
-- **QEMU** + **swtpm** (installed automatically via `brew bundle` during bootstrap) — used only during initial Windows installation; swtpm provides the TPM 2.0 that Windows 11 requires
+- **QEMU** + **swtpm** (provisioned during bootstrap, including SPICE-capable managed QEMU for dev/runtime) — used for Windows installation and runtime; swtpm provides TPM 2.0 required by Windows 11
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ Windows Server ARM64 **does not include x86/x64 app emulation**. Most Windows ap
    - Windows installation via QEMU (~10-15 minutes)
    - VirtIO driver installation (from bundled `virtio-win.iso`)
    - Agent and service configuration
-3. Once complete, the VM runs natively via Virtualization.framework!
+3. Once complete, WinRun boots the VM with the bundled QEMU runtime backend.
 
 ### 4. Running Windows Apps
 

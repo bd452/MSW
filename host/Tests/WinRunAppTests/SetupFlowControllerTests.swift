@@ -87,6 +87,7 @@ final class SetupFlowControllerTests: XCTestCase {
     func testRoute_ready_callsNormalOperation() {
         let sut = SetupFlowController(
             preflight: .ready(configuration: VMConfiguration()),
+            environment: .development,
             presentSetupWindow: { _ in
                 XCTFail("Did not expect setup window presentation")
                 return NSWindow(

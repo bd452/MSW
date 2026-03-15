@@ -5,10 +5,12 @@ REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 SWIFTLINT := $(shell command -v swiftlint 2>/dev/null || echo "$(REPO_ROOT)/.tools/swiftlint/swiftlint-static")
 DOTNET := $(shell command -v dotnet 2>/dev/null || echo "$$HOME/.dotnet/dotnet")
 
-.PHONY: help bootstrap build build-host build-guest test test-host test-guest \
+.PHONY: help bootstrap build build-host build-guest \
+        run run-app run-prod package \
+        test test-host test-guest \
         test-guest-remote test-host-remote build-host-remote check-host-remote check-remote \
         lint lint-host lint-guest format format-host format-guest check check-host check-guest \
-        check-linux install-daemon uninstall-daemon check-deps \
+        check-linux install-daemon uninstall-daemon check-deps qemu-bootstrap qemu-doctor \
         generate-protocol generate-protocol-host generate-protocol-guest generate-test-data \
         validate-protocol validate-protocol-host validate-protocol-guest \
         ci-watch brew-sync brew-check
@@ -23,6 +25,12 @@ help:
 	@echo "  build          Build both host and guest"
 	@echo "  build-host     Build macOS host components"
 	@echo "  build-guest    Build Windows guest agent"
+	@echo ""
+	@echo "Run targets:"
+	@echo "  run            Build debug, sign, and run (embedded VM, no daemon)"
+	@echo "  run-app        Package full .app bundle and open it"
+	@echo "  run-prod       Run with WINRUN_ENV=production (requires daemon)"
+	@echo "  package        Build release .app bundle (scripts/package-app.sh)"
 	@echo ""
 	@echo "Test targets:"
 	@echo "  test           Run all tests"
@@ -68,6 +76,8 @@ help:
 	@echo ""
 	@echo "Setup targets:"
 	@echo "  bootstrap      Install dependencies and setup environment"
+	@echo "  qemu-bootstrap Build/install managed SPICE-enabled QEMU toolchain"
+	@echo "  qemu-doctor    Show QEMU candidates and SPICE capability status"
 	@echo "  install-daemon Install launchd daemon"
 	@echo "  uninstall-daemon Uninstall launchd daemon"
 	@echo ""
@@ -104,6 +114,48 @@ else
 		echo "⚠️  dotnet CLI not found; skipping guest build"; \
 	fi
 endif
+
+# ============================================================================
+# Run
+# ============================================================================
+
+# Fast dev loop: build debug, sign with virtualization entitlement, run directly.
+# Uses embedded VM (no daemon needed). Set WINRUN_ENV=production to test XPC path.
+run: build-host
+	@echo "🔏 Signing debug binary with virtualization entitlement..."
+	@codesign --force --sign - --timestamp=none \
+		--entitlements $(REPO_ROOT)/infrastructure/signing/winrun-app.entitlements \
+		$(REPO_ROOT)/host/.build/debug/WinRunApp
+	@echo "🚀 Launching WinRunApp (WINRUN_ENV=$${WINRUN_ENV:-development})..."
+	@MANAGED_PREFIX="$$HOME/.winrun/tools/qemu-spice"; \
+	if [ -z "$$WINRUN_QEMU_PREFIX" ] && [ -x "$$MANAGED_PREFIX/bin/qemu-system-aarch64" ]; then \
+		export WINRUN_QEMU_PREFIX="$$MANAGED_PREFIX"; \
+		echo "📦 Using managed QEMU prefix: $$WINRUN_QEMU_PREFIX"; \
+	fi; \
+	if [ -z "$$WINRUN_SWTPM_BINARY" ] && command -v swtpm >/dev/null 2>&1; then \
+		export WINRUN_SWTPM_BINARY="$$(command -v swtpm)"; \
+	fi; \
+	$(REPO_ROOT)/host/.build/debug/WinRunApp
+
+# Full app bundle: package with resources, icons, Dock presence, then open.
+run-app: package
+	@echo "🚀 Opening WinRun.app..."
+	@open $(REPO_ROOT)/build/WinRun.app
+
+# Test the daemon/XPC code path from a debug build.
+# Requires: make install-daemon
+run-prod: build-host
+	@echo "🔏 Signing debug binary with virtualization entitlement..."
+	@codesign --force --sign - --timestamp=none \
+		--entitlements $(REPO_ROOT)/infrastructure/signing/winrun-app.entitlements \
+		$(REPO_ROOT)/host/.build/debug/WinRunApp
+	@echo "📡 Launching WinRunApp in production mode (XPC → daemon)..."
+	@echo "   Requires daemon: make install-daemon"
+	@WINRUN_ENV=production $(REPO_ROOT)/host/.build/debug/WinRunApp
+
+# Build release .app bundle
+package:
+	@$(REPO_ROOT)/scripts/package-app.sh
 
 # ============================================================================
 # Test
@@ -569,22 +621,64 @@ uninstall-daemon:
 # Runtime Dependency Checks
 # ============================================================================
 
+qemu-bootstrap:
+	@$(REPO_ROOT)/scripts/build-qemu-spice.sh
+
+qemu-doctor:
+	@echo "🩺 QEMU doctor"
+	@MANAGED_PREFIX="$$HOME/.winrun/tools/qemu-spice"; \
+	MANAGED_QEMU="$$MANAGED_PREFIX/bin/qemu-system-aarch64"; \
+	if [ -x "$$MANAGED_QEMU" ]; then \
+		echo "  managed: $$MANAGED_QEMU"; \
+		$(REPO_ROOT)/scripts/check-qemu-spice.sh "$$MANAGED_QEMU" || true; \
+	else \
+		echo "  managed: not installed"; \
+	fi; \
+	if command -v qemu-system-aarch64 >/dev/null 2>&1; then \
+		SYSTEM_QEMU="$$(command -v qemu-system-aarch64)"; \
+		echo "  system:  $$SYSTEM_QEMU"; \
+		$(REPO_ROOT)/scripts/check-qemu-spice.sh "$$SYSTEM_QEMU" || true; \
+	else \
+		echo "  system:  not found"; \
+	fi
+
 check-deps:
 	@echo "🔍 Checking runtime dependencies..."
 	@MISSING=0; \
-	if ! command -v qemu-system-aarch64 >/dev/null 2>&1; then \
-		echo "❌ qemu-system-aarch64 not found (needed for Windows installation)"; \
-		echo "   Install with: brew install qemu"; \
-		MISSING=1; \
+	BUNDLED_QEMU="$(REPO_ROOT)/build/WinRun.app/Contents/Resources/qemu/bin/qemu-system-aarch64"; \
+	BUNDLED_SWTPM="$(REPO_ROOT)/build/WinRun.app/Contents/Resources/qemu/bin/swtpm"; \
+	MANAGED_QEMU="$$HOME/.winrun/tools/qemu-spice/bin/qemu-system-aarch64"; \
+	QEMU_CANDIDATE=""; \
+	if [ -x "$$BUNDLED_QEMU" ]; then \
+		echo "✅ bundled qemu-system-aarch64: $$BUNDLED_QEMU"; \
+		QEMU_CANDIDATE="$$BUNDLED_QEMU"; \
+	elif [ -x "$$MANAGED_QEMU" ]; then \
+		echo "✅ managed qemu-system-aarch64: $$MANAGED_QEMU"; \
+		QEMU_CANDIDATE="$$MANAGED_QEMU"; \
+	elif command -v qemu-system-aarch64 >/dev/null 2>&1; then \
+		echo "✅ system qemu-system-aarch64: $$(qemu-system-aarch64 --version | head -1)"; \
+		QEMU_CANDIDATE="$$(command -v qemu-system-aarch64)"; \
 	else \
-		echo "✅ qemu-system-aarch64: $$(qemu-system-aarch64 --version | head -1)"; \
+		echo "❌ qemu-system-aarch64 not found (bundled, managed, or system install required)"; \
+		echo "   Build bundle with: make package"; \
+		echo "   or run: make qemu-bootstrap"; \
+		MISSING=1; \
 	fi; \
-	if ! command -v swtpm >/dev/null 2>&1; then \
-		echo "❌ swtpm not found (needed for TPM 2.0 — required by Windows 11)"; \
-		echo "   Install with: brew install swtpm"; \
-		MISSING=1; \
+	if [ -n "$$QEMU_CANDIDATE" ]; then \
+		if ! "$(REPO_ROOT)/scripts/check-qemu-spice.sh" "$$QEMU_CANDIDATE"; then \
+			echo "   Hint: run 'make qemu-bootstrap' or set WINRUN_QEMU_BINARY to a SPICE-enabled build."; \
+			MISSING=1; \
+		fi; \
+	fi; \
+	if [ -x "$$BUNDLED_SWTPM" ]; then \
+		echo "✅ bundled swtpm: $$BUNDLED_SWTPM"; \
+	elif command -v swtpm >/dev/null 2>&1; then \
+		echo "✅ system swtpm: $$(swtpm --version 2>&1 | head -1)"; \
 	else \
-		echo "✅ swtpm: $$(swtpm --version 2>&1 | head -1)"; \
+		echo "❌ swtpm not found (bundled or Homebrew install required)"; \
+		echo "   Build bundle with: make package"; \
+		echo "   or install with: brew install swtpm"; \
+		MISSING=1; \
 	fi; \
 	if ! command -v codesign >/dev/null 2>&1; then \
 		echo "⚠️  codesign not found (needed for entitlement signing)"; \
@@ -593,7 +687,7 @@ check-deps:
 	fi; \
 	if [ "$$MISSING" -eq 1 ]; then \
 		echo ""; \
-		echo "Run 'make bootstrap' or 'make brew-sync' to install missing dependencies."; \
+		echo "Run 'make qemu-bootstrap' (preferred) or configure WINRUN_QEMU_BINARY/WINRUN_QEMU_PREFIX."; \
 		exit 1; \
 	fi; \
 	echo ""; \

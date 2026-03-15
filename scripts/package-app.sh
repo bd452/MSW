@@ -141,6 +141,9 @@ create_bundle_structure() {
     # Create directory structure per operations.md
     mkdir -p "${OUTPUT_DIR}/Contents/MacOS"
     mkdir -p "${OUTPUT_DIR}/Contents/Resources/provision"
+    mkdir -p "${OUTPUT_DIR}/Contents/Resources/qemu/bin"
+    mkdir -p "${OUTPUT_DIR}/Contents/Resources/qemu/lib"
+    mkdir -p "${OUTPUT_DIR}/Contents/Resources/qemu/share/qemu"
     mkdir -p "${OUTPUT_DIR}/Contents/Frameworks"
     mkdir -p "${OUTPUT_DIR}/Contents/Library/LaunchDaemons"
 
@@ -179,6 +182,115 @@ copy_binaries() {
     chmod +x "${OUTPUT_DIR}/Contents/MacOS/"*
 
     log_success "Binaries copied"
+}
+
+# =============================================================================
+# Bundle QEMU runtime tools (qemu + swtpm + firmware + dependent dylibs)
+# =============================================================================
+
+bundle_qemu_tools() {
+    log_info "Bundling QEMU runtime tools..."
+
+    local qemu_prefix="${WINRUN_QEMU_PREFIX:-}"
+    local swtpm_prefix="${WINRUN_SWTPM_PREFIX:-}"
+
+    if [[ -z "$qemu_prefix" ]]; then
+        if command -v brew >/dev/null 2>&1; then
+            qemu_prefix="$(brew --prefix qemu 2>/dev/null || true)"
+        fi
+    fi
+    if [[ -z "$swtpm_prefix" ]]; then
+        if command -v brew >/dev/null 2>&1; then
+            swtpm_prefix="$(brew --prefix swtpm 2>/dev/null || true)"
+        fi
+    fi
+
+    local qemu_bin="${qemu_prefix}/bin/qemu-system-aarch64"
+    local swtpm_bin="${swtpm_prefix}/bin/swtpm"
+    local qemu_share="${qemu_prefix}/share/qemu"
+    local dest_root="${OUTPUT_DIR}/Contents/Resources/qemu"
+    local dest_bin="${dest_root}/bin"
+    local dest_lib="${dest_root}/lib"
+    local dest_share="${dest_root}/share/qemu"
+
+    if [[ ! -x "$qemu_bin" ]]; then
+        log_error "qemu-system-aarch64 not found. Set WINRUN_QEMU_PREFIX or install: brew install qemu"
+        exit 1
+    fi
+    if ! "${REPO_ROOT}/scripts/check-qemu-spice.sh" "$qemu_bin" >/dev/null; then
+        log_error "The selected qemu-system-aarch64 does not support SPICE: ${qemu_bin}"
+        log_error "Provide a SPICE-enabled build with WINRUN_QEMU_BINARY or WINRUN_QEMU_PREFIX."
+        exit 1
+    fi
+    if [[ ! -x "$swtpm_bin" ]]; then
+        log_error "swtpm not found. Set WINRUN_SWTPM_PREFIX or install: brew install swtpm"
+        exit 1
+    fi
+    if [[ ! -d "$qemu_share" ]]; then
+        log_error "QEMU share directory not found at ${qemu_share}"
+        exit 1
+    fi
+
+    cp "$qemu_bin" "${dest_bin}/qemu-system-aarch64"
+    cp "$swtpm_bin" "${dest_bin}/swtpm"
+    chmod +x "${dest_bin}/qemu-system-aarch64" "${dest_bin}/swtpm"
+
+    cp "${qemu_share}/edk2-aarch64-code.fd" "${dest_share}/edk2-aarch64-code.fd"
+    cp "${qemu_share}/edk2-arm-vars.fd" "${dest_share}/edk2-arm-vars.fd"
+
+    # Copy non-system dylib dependencies for qemu + swtpm into app bundle.
+    local copied_libs=0
+    for executable in "${dest_bin}/qemu-system-aarch64" "${dest_bin}/swtpm"; do
+        while IFS= read -r dep; do
+            [[ -z "$dep" ]] && continue
+            [[ "$dep" == /usr/lib/* ]] && continue
+            [[ "$dep" == /System/* ]] && continue
+            if [[ -f "$dep" ]]; then
+                local dep_name
+                dep_name="$(basename "$dep")"
+                if [[ ! -f "${dest_lib}/${dep_name}" ]]; then
+                    cp "$dep" "${dest_lib}/${dep_name}"
+                    chmod +w "${dest_lib}/${dep_name}" 2>/dev/null || true
+                    ((copied_libs+=1))
+                fi
+            fi
+        done < <(otool -L "$executable" | awk 'NR>1 {print $1}')
+    done
+
+    for executable in "${dest_bin}/qemu-system-aarch64" "${dest_bin}/swtpm"; do
+        while IFS= read -r dep; do
+            [[ -z "$dep" ]] && continue
+            [[ "$dep" == /usr/lib/* ]] && continue
+            [[ "$dep" == /System/* ]] && continue
+            local dep_name
+            dep_name="$(basename "$dep")"
+            if [[ -f "${dest_lib}/${dep_name}" ]]; then
+                install_name_tool -change "$dep" "@loader_path/../lib/${dep_name}" "$executable" 2>/dev/null || true
+            fi
+        done < <(otool -L "$executable" | awk 'NR>1 {print $1}')
+    done
+
+    if [[ -d "$dest_lib" ]]; then
+        shopt -s nullglob
+        for lib in "${dest_lib}"/*.dylib; do
+            local lib_name
+            lib_name="$(basename "$lib")"
+            install_name_tool -id "@loader_path/${lib_name}" "$lib" 2>/dev/null || true
+            while IFS= read -r dep; do
+                [[ -z "$dep" ]] && continue
+                [[ "$dep" == /usr/lib/* ]] && continue
+                [[ "$dep" == /System/* ]] && continue
+                local dep_name
+                dep_name="$(basename "$dep")"
+                if [[ -f "${dest_lib}/${dep_name}" ]]; then
+                    install_name_tool -change "$dep" "@loader_path/${dep_name}" "$lib" 2>/dev/null || true
+                fi
+            done < <(otool -L "$lib" | awk 'NR>1 {print $1}')
+        done
+        shopt -u nullglob
+    fi
+
+    log_success "QEMU runtime bundled (copied ${copied_libs} dependent dylibs)"
 }
 
 # =============================================================================
@@ -548,6 +660,19 @@ sign_bundle_for_local_use() {
     if [[ -f "${macos_dir}/winrun-cli" ]]; then
         codesign --force --sign "${identity}" --timestamp=none "${macos_dir}/winrun-cli"
     fi
+    if [[ -f "${OUTPUT_DIR}/Contents/Resources/qemu/bin/qemu-system-aarch64" ]]; then
+        codesign --force --sign "${identity}" --timestamp=none \
+            "${OUTPUT_DIR}/Contents/Resources/qemu/bin/qemu-system-aarch64"
+    fi
+    if [[ -f "${OUTPUT_DIR}/Contents/Resources/qemu/bin/swtpm" ]]; then
+        codesign --force --sign "${identity}" --timestamp=none \
+            "${OUTPUT_DIR}/Contents/Resources/qemu/bin/swtpm"
+    fi
+    shopt -s nullglob
+    for lib in "${OUTPUT_DIR}/Contents/Resources/qemu/lib/"*.dylib; do
+        codesign --force --sign "${identity}" --timestamp=none "$lib"
+    done
+    shopt -u nullglob
 
     log_success "Local executable code signing completed"
 }
@@ -578,6 +703,10 @@ validate_bundle() {
         "Contents/MacOS/WinRun"
         "Contents/MacOS/winrund"
         "Contents/MacOS/winrun-cli"
+        "Contents/Resources/qemu/bin/qemu-system-aarch64"
+        "Contents/Resources/qemu/bin/swtpm"
+        "Contents/Resources/qemu/share/qemu/edk2-aarch64-code.fd"
+        "Contents/Resources/qemu/share/qemu/edk2-arm-vars.fd"
     )
 
     for file in "${required_files[@]}"; do
@@ -626,16 +755,6 @@ print_summary() {
 
     echo ""
 
-    # Check runtime dependencies
-    if ! command -v qemu-system-aarch64 >/dev/null 2>&1; then
-        log_warn "qemu-system-aarch64 not found. Required for Windows installation."
-        log_warn "Install with: brew install qemu"
-    fi
-    if ! command -v swtpm >/dev/null 2>&1; then
-        log_warn "swtpm not found. Required for TPM 2.0 (Windows 11 requirement)."
-        log_warn "Install with: brew install swtpm"
-    fi
-
     echo "Next steps:"
     echo "  1. Test the app: open '${OUTPUT_DIR}'"
     echo "  2. Code sign:    codesign --deep --force --sign 'Developer ID' '${OUTPUT_DIR}'"
@@ -661,6 +780,7 @@ main() {
     build_host
     create_bundle_structure
     copy_binaries
+    bundle_qemu_tools
     copy_plist_and_resources
     copy_provisioning_assets
     handle_virtio_drivers

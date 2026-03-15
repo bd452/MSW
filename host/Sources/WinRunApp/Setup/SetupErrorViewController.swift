@@ -327,70 +327,21 @@ final class SetupErrorViewController: NSViewController {
     ) -> [RecoveryAction] {
         var actions: [RecoveryAction] = []
 
-        for suggestedAction in context.suggestedActions {
-            switch suggestedAction {
-            case .retry:
-                actions.append(RecoveryAction(
-                    id: .retrySetup,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: actions.isEmpty,  // First action is primary
-                    handler: onRetrySetup
-                ))
-
-            case .chooseDifferentISO:
-                actions.append(RecoveryAction(
-                    id: .chooseDifferentISO,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: actions.isEmpty,
-                    handler: onChooseDifferentISO
-                ))
-
-            case .manualSetup:
-                actions.append(RecoveryAction(
-                    id: .manualSetup,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: actions.isEmpty,
-                    handler: onManualSetup
-                ))
-
-            case .rollback:
-                if context.cleanupRecommended {
-                    actions.append(RecoveryAction(
-                        id: .retrySetup,
-                        title: suggestedAction.displayName,
-                        help: suggestedAction.helpText,
-                        isPrimary: false,
-                        handler: onRollback
-                    ))
-                }
-
-            case .contactSupport:
-                let handler = onContactSupport ?? { NSWorkspace.shared.open(supportURL) }
-                actions.append(RecoveryAction(
-                    id: .contactSupport,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: false,
-                    handler: handler
-                ))
-
-            default:
-                // Informational actions without handlers
-                actions.append(RecoveryAction(
-                    id: .reviewDetails,
-                    title: suggestedAction.displayName,
-                    help: suggestedAction.helpText,
-                    isPrimary: false,
-                    handler: nil,
-                    isInformational: true
-                ))
+        for suggested in context.suggestedActions {
+            if let action = makeAction(
+                for: suggested,
+                isFirst: actions.isEmpty,
+                cleanupRecommended: context.cleanupRecommended,
+                onRetrySetup: onRetrySetup,
+                onChooseDifferentISO: onChooseDifferentISO,
+                onManualSetup: onManualSetup,
+                onRollback: onRollback,
+                onContactSupport: onContactSupport
+            ) {
+                actions.append(action)
             }
         }
 
-        // Always add review details at the end
         actions.append(RecoveryAction(
             id: .reviewDetails,
             title: "Review error details",
@@ -399,8 +350,73 @@ final class SetupErrorViewController: NSViewController {
             handler: nil,
             isInformational: true
         ))
-
         return actions
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private static func makeAction(
+        for suggested: RecoveryActionType,
+        isFirst: Bool,
+        cleanupRecommended: Bool,
+        onRetrySetup: (() -> Void)?,
+        onChooseDifferentISO: (() -> Void)?,
+        onManualSetup: (() -> Void)?,
+        onRollback: (() -> Void)?,
+        onContactSupport: (() -> Void)?
+    ) -> RecoveryAction? {
+        switch suggested {
+        case .retry:
+            return RecoveryAction(
+                id: .retrySetup,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: isFirst,
+                handler: onRetrySetup
+            )
+        case .chooseDifferentISO:
+            return RecoveryAction(
+                id: .chooseDifferentISO,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: isFirst,
+                handler: onChooseDifferentISO
+            )
+        case .manualSetup:
+            return RecoveryAction(
+                id: .manualSetup,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: isFirst,
+                handler: onManualSetup
+            )
+        case .rollback:
+            guard cleanupRecommended else { return nil }
+            return RecoveryAction(
+                id: .retrySetup,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: false,
+                handler: onRollback
+            )
+        case .contactSupport:
+            let handler = onContactSupport ?? { NSWorkspace.shared.open(supportURL) }
+            return RecoveryAction(
+                id: .contactSupport,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: false,
+                handler: handler
+            )
+        default:
+            return RecoveryAction(
+                id: .reviewDetails,
+                title: suggested.displayName,
+                help: suggested.helpText,
+                isPrimary: false,
+                handler: nil,
+                isInformational: true
+            )
+        }
     }
 
     @objc private func runRecoveryAction(_ sender: NSButton) {

@@ -410,10 +410,25 @@ final class MetalContentView: NSView {
         // to Windows coordinate system (origin at top-left)
         let flippedY = bounds.height - point.y
 
-        // Scale to guest pixel coordinates
+        let xScale: CGFloat
+        let yScale: CGFloat
+        if expectedFrameSize.width > 0, expectedFrameSize.height > 0, bounds.width > 0, bounds.height > 0 {
+            xScale = expectedFrameSize.width / bounds.width
+            yScale = expectedFrameSize.height / bounds.height
+        } else {
+            xScale = currentScaleFactor
+            yScale = currentScaleFactor
+        }
+
+        let scaledX = point.x * xScale
+        let scaledY = flippedY * yScale
+
+        let maxX = max(expectedFrameSize.width - 1, 0)
+        let maxY = max(expectedFrameSize.height - 1, 0)
+
         return NSPoint(
-            x: point.x * currentScaleFactor,
-            y: flippedY * currentScaleFactor
+            x: expectedFrameSize.width > 0 ? min(max(scaledX, 0), maxX) : max(scaledX, 0),
+            y: expectedFrameSize.height > 0 ? min(max(scaledY, 0), maxY) : max(scaledY, 0)
         )
     }
 
@@ -430,14 +445,19 @@ final class MetalContentView: NSView {
     override func flagsChanged(with event: NSEvent) {
         // Handle modifier key changes
         let keyCode = KeyCodeMapper.windowsKeyCode(fromMacOS: event.keyCode)
-        let isKeyDown = event.modifierFlags.rawValue > 0
+        let scanCode = KeyCodeMapper.windowsScanCode(fromMacOS: event.keyCode)
+        let isExtendedKey = KeyCodeMapper.isExtendedScanCode(fromMacOS: event.keyCode)
+        let isKeyDown = KeyCodeMapper.isModifierKeyDown(
+            macKeyCode: event.keyCode,
+            flags: event.modifierFlags.rawValue
+        )
 
         let keyboardEvent = KeyboardInputEvent(
             windowID: windowID,
             eventType: isKeyDown ? .down : .up,
             keyCode: keyCode,
-            scanCode: UInt32(event.keyCode),
-            isExtendedKey: false,
+            scanCode: scanCode,
+            isExtendedKey: isExtendedKey,
             modifiers: modifiers(from: event),
             character: nil
         )
@@ -446,16 +466,17 @@ final class MetalContentView: NSView {
 
     private func handleKeyboardEvent(_ event: NSEvent, type: KeyEventType) {
         let keyCode = KeyCodeMapper.windowsKeyCode(fromMacOS: event.keyCode)
+        let scanCode = KeyCodeMapper.windowsScanCode(fromMacOS: event.keyCode)
         let character = event.characters
 
-        // Check for extended keys (right-side modifiers, arrow keys, etc.)
-        let isExtendedKey = [0x7B, 0x7C, 0x7D, 0x7E, 0x73, 0x74, 0x75, 0x77, 0x79].contains(Int(event.keyCode))
+        // Use mapper-driven extended key semantics for Spice scancode input.
+        let isExtendedKey = KeyCodeMapper.isExtendedScanCode(fromMacOS: event.keyCode)
 
         let keyboardEvent = KeyboardInputEvent(
             windowID: windowID,
             eventType: type,
             keyCode: keyCode,
-            scanCode: UInt32(event.keyCode),
+            scanCode: scanCode,
             isExtendedKey: isExtendedKey,
             modifiers: modifiers(from: event),
             character: character

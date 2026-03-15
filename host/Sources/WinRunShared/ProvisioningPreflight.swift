@@ -26,7 +26,7 @@ public struct ProvisioningPreflight {
                 at: markerURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let payload = "complete\n\(diskImagePath.path)\n".data(using: .utf8) ?? Data("complete".utf8)
+            let payload = Data("complete\n\(diskImagePath.path)\n".utf8)
             try payload.write(to: markerURL, options: .atomic)
             return true
         } catch {

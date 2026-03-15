@@ -5,6 +5,7 @@ import Dispatch
 import WinRunShared
 import WinRunXPC
 
+@main
 struct WinRunCLI: ParsableCommand {
     static var configuration = CommandConfiguration(
         commandName: "winrun",
@@ -16,7 +17,8 @@ struct WinRunCLI: ParsableCommand {
             Shortcut.self,
             Config.self,
             CreateLauncher.self,
-            Init.self
+            Init.self,
+            Maintenance.self
         ]
     )
 }
@@ -476,5 +478,3 @@ struct LauncherBuilder {
             .replacingOccurrences(of: "'", with: "&apos;")
     }
 }
-
-WinRunCLI.main()

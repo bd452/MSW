@@ -27,6 +27,8 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     private var activeWindowID: UInt64 = 0
     private var routedWindowIDs: Set<UInt64> = []
     private var sharedMemoryMapping: SharedMemoryFileMapping?
+    private var loggedFirstRawFrame = false
+    private var loggedFirstSharedFrame = false
 
     /// Clipboard synchronization
     private let clipboardManager: ClipboardManager
@@ -79,6 +81,7 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
 
         logger.info("Window created with Metal rendering layer and input forwarding")
         stream.connect(toWindowID: activeWindowID)
+        consoleLog("Requested Spice stream connect for windowID=\(activeWindowID)")
 
         Task { [weak self] in
             guard let self else { return }
@@ -118,6 +121,10 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     // MARK: - SpiceWindowStreamDelegate
 
     func windowStream(_ stream: SpiceWindowStream, didUpdateFrame frame: Data) {
+        if !loggedFirstRawFrame {
+            loggedFirstRawFrame = true
+            consoleLog("Received first raw frame (\(frame.count) bytes)")
+        }
         guard let metalView = metalContentView else { return }
 
         // Use metadata dimensions if available, otherwise estimate from frame size
@@ -147,16 +154,24 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
     }
 
     func windowStream(_ stream: SpiceWindowStream, didUpdateMetadata metadata: WindowMetadata) {
+        consoleLog(
+            "Metadata update window=\(metadata.windowID) size=\(Int(metadata.frame.width))x\(Int(metadata.frame.height))"
+        )
         applyMetadata(metadata)
     }
 
     func windowStream(_ stream: SpiceWindowStream, didReceiveSharedFrame frame: SharedFrame) {
+        if !loggedFirstSharedFrame {
+            loggedFirstSharedFrame = true
+            consoleLog("Received first shared frame number=\(frame.frameNumber)")
+        }
         guard let metalView = metalContentView else { return }
         let scaleFactor = currentMetadata?.scaleFactor ?? 1.0
         metalView.updateSharedFrame(frame, guestScaleFactor: scaleFactor)
     }
 
     func windowStream(_ stream: SpiceWindowStream, didChangeState state: SpiceConnectionState) {
+        consoleLog("Stream state changed to \(state)")
         logger.debug("Spice stream state changed: \(state)")
         metalContentView?.updateConnectionState(state)
     }
@@ -322,6 +337,11 @@ final class WinRunWindowController: NSObject, SpiceWindowStreamDelegate, MetalCo
 
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/Library/Application Support/WinRun/SharedMemory/framebuffer.shm"
+    }
+
+    private func consoleLog(_ message: String) {
+        let line = "[CONSOLE] \(message)\n"
+        _ = line.withCString { fputs($0, stderr) }
     }
 }
 

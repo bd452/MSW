@@ -16,20 +16,17 @@ public actor SetupCoordinator {
 
     // MARK: - State
 
-    private var currentState: ProvisioningState = .idle
-    private var context: ProvisioningContext?
+    var currentState: ProvisioningState = .idle
+    var context: ProvisioningContext?
     private var isCancelled = false
 
-    // Current installation sub-phase (during installingWindows phase)
-    private var currentInstallationSubPhase: InstallationPhase?
-    private var currentSubPhaseProgress: Double = 0.0
+    var currentInstallationSubPhase: InstallationPhase?
+    var currentSubPhaseProgress: Double = 0.0
 
-    // Guest provisioning state (set via Spice message handlers)
-    private var provisioningComplete = false
-    private var provisioningError: WinRunError?
+    var provisioningComplete = false
+    var provisioningError: WinRunError?
 
-    // Stream for receiving guest provisioning messages
-    private var guestMessageContinuation: AsyncStream<GuestProvisioningEvent>.Continuation?
+    var guestMessageContinuation: AsyncStream<GuestProvisioningEvent>.Continuation?
 
     // MARK: - Delegate
 
@@ -385,66 +382,6 @@ public actor SetupCoordinator {
         }
     }
 
-    // MARK: - Guest Message Handling
-
-    /// Handles a provisioning progress message from the guest.
-    ///
-    /// Call this method when receiving `ProvisionProgressMessage` from the Spice channel.
-    public func handleProvisionProgress(_ message: ProvisionProgressMessage) {
-        guard currentState.phase == .postInstallProvisioning else { return }
-
-        let overallProgress = mapGuestPhaseToProgress(message.phase, phaseProgress: message.progressFraction)
-        updateProgress(phaseProgress: overallProgress, message: message.message)
-    }
-
-    /// Handles a provisioning error message from the guest.
-    ///
-    /// Call this method when receiving `ProvisionErrorMessage` from the Spice channel.
-    /// - Returns: Whether provisioning should continue (if error is recoverable).
-    @discardableResult
-    public func handleProvisionError(_ message: ProvisionErrorMessage) -> Bool {
-        guard currentState.phase == .postInstallProvisioning else { return false }
-
-        let errorMessage = "[\(message.phase.rawValue)] \(message.message) (0x\(String(message.errorCode, radix: 16)))"
-
-        if message.isRecoverable {
-            // Log but continue - the guest will proceed
-            updateProgress(
-                phaseProgress: currentState.phaseProgress,
-                message: "Warning: \(message.message)"
-            )
-            return true
-        } else {
-            // Unrecoverable error - provisioning failed
-            provisioningError = WinRunError.internalError(message: errorMessage)
-            return false
-        }
-    }
-
-    /// Handles a provisioning complete message from the guest.
-    ///
-    /// Call this method when receiving `ProvisionCompleteMessage` from the Spice channel.
-    public func handleProvisionComplete(_ message: ProvisionCompleteMessage) {
-        guard currentState.phase == .postInstallProvisioning else { return }
-
-        if message.success {
-            // Update context with final info from guest
-            context?.windowsVersion = message.windowsVersion
-            context?.agentVersion = message.agentVersion
-            context?.diskUsageBytes = message.diskUsageBytes
-            updateProgress(phaseProgress: 1.0, message: "Guest provisioning complete")
-            provisioningComplete = true
-        } else {
-            let errorMessage = message.errorMessage ?? "Guest provisioning failed"
-            provisioningError = WinRunError.internalError(message: errorMessage)
-        }
-    }
-
-    /// Maps a guest provisioning phase to overall post-install progress (0.0 to 1.0).
-    private func mapGuestPhaseToProgress(_ phase: GuestProvisioningPhase, phaseProgress: Double) -> Double {
-        calculateGuestPhaseProgress(phase, phaseProgress: phaseProgress)
-    }
-
     private func createSnapshot(configuration: SetupCoordinatorConfiguration) async throws {
         updateProgress(phaseProgress: 0.3, message: "Shutting down VM...")
         try await Task.sleep(nanoseconds: 100_000_000)  // Placeholder
@@ -482,7 +419,7 @@ public actor SetupCoordinator {
         }
     }
 
-    private func updateProgress(
+    func updateProgress(
         phaseProgress: Double,
         message: String,
         installationPhase: InstallationPhase? = nil,
@@ -553,52 +490,5 @@ public actor SetupCoordinator {
     private func getDiskUsage(at url: URL) throws -> UInt64 {
         let resourceValues = try url.resourceValues(forKeys: [.totalFileAllocatedSizeKey])
         return UInt64(resourceValues.totalFileAllocatedSize ?? 0)
-    }
-
-    // MARK: - Control Channel Message Routing
-
-    /// Routes a Spice message to the appropriate handler.
-    ///
-    /// Call this method from a `SpiceControlChannelDelegate` to route
-    /// provisioning messages to this coordinator.
-    ///
-    /// - Parameters:
-    ///   - message: The decoded message object.
-    ///   - type: The Spice message type.
-    public func routeSpiceMessage(_ message: Any, type: SpiceMessageType) {
-        switch type {
-        case .provisionProgress:
-            if let msg = message as? ProvisionProgressMessage {
-                guestMessageContinuation?.yield(.progress(msg))
-            }
-        case .provisionError:
-            if let msg = message as? ProvisionErrorMessage {
-                guestMessageContinuation?.yield(.error(msg))
-            }
-        case .provisionComplete:
-            if let msg = message as? ProvisionCompleteMessage {
-                guestMessageContinuation?.yield(.complete(msg))
-            }
-        default:
-            // Ignore non-provisioning messages
-            break
-        }
-    }
-
-    /// Injects a provisioning progress message (for testing).
-    ///
-    /// This allows tests to simulate guest messages without a real Spice connection.
-    public func injectProvisionProgress(_ message: ProvisionProgressMessage) {
-        guestMessageContinuation?.yield(.progress(message))
-    }
-
-    /// Injects a provisioning error message (for testing).
-    public func injectProvisionError(_ message: ProvisionErrorMessage) {
-        guestMessageContinuation?.yield(.error(message))
-    }
-
-    /// Injects a provisioning complete message (for testing).
-    public func injectProvisionComplete(_ message: ProvisionCompleteMessage) {
-        guestMessageContinuation?.yield(.complete(message))
     }
 }

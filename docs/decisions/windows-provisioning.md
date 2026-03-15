@@ -9,12 +9,12 @@ WinRun requires a Windows ARM64 virtual machine to run Windows applications. To 
 - ISO validation is implemented and supports `install.wim`, `install.esd`, and split `install.swm` images.
 - Setup wizard first-run routing, recovery UI, and diagnostics are implemented.
 - Manual setup fallback is implemented in the setup wizard when unattended install is unavailable.
-- **Windows installation uses QEMU** (`qemu-system-aarch64`) because Apple's Virtualization.framework UEFI firmware cannot render graphics during Windows boot (no `ramfb` equivalent; VirtIO GPU requires guest drivers). After installation with VirtIO drivers, the VM runs on Virtualization.framework for normal operation.
+- **Windows installation and runtime use QEMU** (`qemu-system-aarch64`) with HVF acceleration and swtpm. This avoids unsupported Windows-on-VZ behavior and keeps device/firmware semantics consistent from install through normal operation.
 - Unattended installation backend in `VMProvisioner.startInstallation()` is still a stub and currently returns `notSupported("automated Windows installation")` outside simulation/test mode.
 
-### Why QEMU for Installation
+### Why QEMU for Installation and Runtime
 
-Apple's `VZVirtioGraphicsDeviceConfiguration` requires VirtIO GPU drivers in the guest OS to render graphics. The UEFI firmware's GOP driver does not produce visible output for the Windows boot loader (confirmed empirically — VM runs but display is black). QEMU provides `ramfb`, a simple framebuffer device that works during UEFI/Windows Setup without guest drivers. After installation, VirtIO GPU drivers installed from `virtio-win.iso` enable Virtualization.framework to drive the display directly.
+Apple's Virtualization.framework does not support Windows guests. QEMU provides a consistent, production-capable path for both setup and normal operation on Apple Silicon via HVF acceleration. During installation, `ramfb` enables visible UEFI/Windows Setup output without guest drivers; after driver installation, runtime continues on the same QEMU backend with Spice channels for seamless windowing.
 
 ## Recommended Windows Versions
 

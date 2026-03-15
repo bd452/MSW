@@ -473,15 +473,10 @@ struct WinRunDaemonMain {
         let logger = StandardLogger(subsystem: "winrund-main")
         logger.info("Starting winrund XPC service")
 
-        // Configure authentication and throttling
-        // Use development config for now; production would load from config file
-        #if DEBUG
-        let authConfig = XPCAuthenticationConfig.development
-        let throttlingConfig = ThrottlingConfig.development
-        #else
-        let authConfig = XPCAuthenticationConfig.production
-        let throttlingConfig = ThrottlingConfig.production
-        #endif
+        let env = RuntimeEnvironment.current
+        let authConfig = env.authConfig
+        let throttlingConfig = env.throttlingConfig
+        logger.info("Runtime environment: \(env.rawValue)")
 
         logger.info("Auth config: allowUnsigned=\(authConfig.allowUnsignedClients), group=\(authConfig.allowedGroupName ?? "none")")
         logger.info("Throttling config: \(throttlingConfig.maxRequestsPerWindow) req/\(Int(throttlingConfig.windowSeconds))s")

@@ -2,7 +2,7 @@
 
 ## Overview
 
-A seamless Windows-on-macOS solution using Virtualization.framework + Spice protocol to run Windows GUI apps as native-feeling macOS windows.
+A seamless Windows-on-macOS solution using QEMU (HVF acceleration) + Spice protocol to run Windows GUI apps as native-feeling macOS windows.
 
 -----
 
@@ -16,7 +16,7 @@ A seamless Windows-on-macOS solution using Virtualization.framework + Spice prot
 
 - Launch daemon (plist in `/Library/LaunchDaemons/`)
 - Runs as privileged user for VM management
-- Swift-based, using Virtualization.framework
+- Swift-based, using a managed QEMU subprocess backend
 
 **Responsibilities:**
 

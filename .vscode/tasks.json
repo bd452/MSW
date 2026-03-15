@@ -2,6 +2,42 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "winrun: qemu-bootstrap",
+            "type": "process",
+            "command": "make",
+            "args": [
+                "qemu-bootstrap"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "winrun: qemu-doctor",
+            "type": "process",
+            "command": "make",
+            "args": [
+                "qemu-doctor"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "winrun: run app (dev)",
+            "type": "process",
+            "command": "make",
+            "args": [
+                "run"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "build",
             "command": "dotnet",
             "type": "process",

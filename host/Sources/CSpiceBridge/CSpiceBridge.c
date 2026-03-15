@@ -53,8 +53,13 @@ typedef struct winrun_spice_stream {
     SpiceSession *session;
     SpiceInputsChannel *inputs_channel;
     SpiceMainChannel *main_channel;
+    SpiceDisplayChannel *display_channel;
     SpicePortChannel *control_channel;  // For bidirectional control messages
     gulong channel_new_handler_id;
+    // Display signal handlers
+    gulong display_primary_create_handler_id;
+    gulong display_primary_destroy_handler_id;
+    gulong display_invalidate_handler_id;
     // Clipboard signal handlers on main channel
     gulong clipboard_grab_handler_id;
     gulong clipboard_data_handler_id;
@@ -66,6 +71,9 @@ typedef struct winrun_spice_stream {
 } winrun_spice_stream;
 
 static void *winrun_mock_worker(void *context);
+#if __APPLE__
+static void *winrun_spice_glib_worker(void *context);
+#endif
 
 #if __APPLE__
 // Forward declarations for clipboard signal handlers (needed before on_channel_new)
@@ -80,6 +88,24 @@ static void on_clipboard_release(SpiceMainChannel *channel, guint selection,
                                  gpointer user_data);
 static void on_control_port_data(SpicePortChannel *channel, gpointer data,
                                  gint size, gpointer user_data);
+static void on_display_primary_create(SpiceChannel *channel,
+                                      gint format,
+                                      gint width,
+                                      gint height,
+                                      gint stride,
+                                      gint shmid,
+                                      gpointer data,
+                                      gpointer user_data);
+static void on_display_primary_destroy(SpiceChannel *channel, gpointer user_data);
+static void on_display_invalidate(SpiceChannel *channel,
+                                  gint x,
+                                  gint y,
+                                  gint w,
+                                  gint h,
+                                  gpointer user_data);
+static void on_channel_event(SpiceChannel *channel, gint event, gpointer user_data);
+static void winrun_emit_display_metadata(winrun_spice_stream *stream, gint width, gint height);
+static void winrun_emit_primary_frame(SpiceChannel *channel, winrun_spice_stream *stream);
 
 // Port name for control channel - must match what guest listens on
 #define WINRUN_CONTROL_PORT_NAME "com.winrun.control"
@@ -91,8 +117,16 @@ static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointe
     if (!stream) {
         return;
     }
+    bool control_only_stream = (stream->window_id == UINT64_MAX);
+
+    g_signal_connect(channel, "channel-event", G_CALLBACK(on_channel_event), stream);
 
     if (SPICE_IS_INPUTS_CHANNEL(channel)) {
+        if (control_only_stream) {
+            fprintf(stderr, "[CSPICE] channel-new: inputs (ignored for control-only stream)\n");
+            return;
+        }
+        fprintf(stderr, "[CSPICE] channel-new: inputs\n");
         pthread_mutex_lock(&stream->send_mutex);
         // Release previous channel if reconnecting
         if (stream->inputs_channel) {
@@ -101,7 +135,9 @@ static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointe
         stream->inputs_channel = SPICE_INPUTS_CHANNEL(channel);
         g_object_ref(stream->inputs_channel);
         pthread_mutex_unlock(&stream->send_mutex);
+        spice_channel_connect(channel);
     } else if (SPICE_IS_MAIN_CHANNEL(channel)) {
+        fprintf(stderr, "[CSPICE] channel-new: main\n");
         pthread_mutex_lock(&stream->send_mutex);
 
         // Disconnect old clipboard handlers if reconnecting
@@ -151,7 +187,72 @@ static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointe
         );
 
         pthread_mutex_unlock(&stream->send_mutex);
+    } else if (SPICE_IS_DISPLAY_CHANNEL(channel)) {
+        if (control_only_stream) {
+            fprintf(stderr, "[CSPICE] channel-new: display (ignored for control-only stream)\n");
+            return;
+        }
+        fprintf(stderr, "[CSPICE] channel-new: display\n");
+        pthread_mutex_lock(&stream->send_mutex);
+
+        // Disconnect old display handlers if reconnecting
+        if (stream->display_channel) {
+            if (stream->display_primary_create_handler_id) {
+                g_signal_handler_disconnect(stream->display_channel, stream->display_primary_create_handler_id);
+            }
+            if (stream->display_primary_destroy_handler_id) {
+                g_signal_handler_disconnect(stream->display_channel, stream->display_primary_destroy_handler_id);
+            }
+            if (stream->display_invalidate_handler_id) {
+                g_signal_handler_disconnect(stream->display_channel, stream->display_invalidate_handler_id);
+            }
+            g_object_unref(stream->display_channel);
+        }
+
+        stream->display_channel = SPICE_DISPLAY_CHANNEL(channel);
+        g_object_ref(stream->display_channel);
+
+        // Listen for primary surface lifecycle and dirty-region updates
+        stream->display_primary_create_handler_id = g_signal_connect(
+            stream->display_channel,
+            "display-primary-create",
+            G_CALLBACK(on_display_primary_create),
+            stream
+        );
+        stream->display_primary_destroy_handler_id = g_signal_connect(
+            stream->display_channel,
+            "display-primary-destroy",
+            G_CALLBACK(on_display_primary_destroy),
+            stream
+        );
+        stream->display_invalidate_handler_id = g_signal_connect(
+            stream->display_channel,
+            "display-invalidate",
+            G_CALLBACK(on_display_invalidate),
+            stream
+        );
+
+        SpiceDisplayPrimary primary;
+        memset(&primary, 0, sizeof(primary));
+        gboolean has_primary = spice_display_channel_get_primary(SPICE_CHANNEL(stream->display_channel), 0, &primary);
+        fprintf(
+            stderr,
+            "[CSPICE] display channel initial primary available=%d width=%d height=%d stride=%d data=%p\n",
+            has_primary ? 1 : 0,
+            primary.width,
+            primary.height,
+            primary.stride,
+            (void *)primary.data
+        );
+        if (has_primary && primary.data && primary.width > 0 && primary.height > 0 && primary.stride > 0) {
+            winrun_emit_display_metadata(stream, primary.width, primary.height);
+            winrun_emit_primary_frame(SPICE_CHANNEL(stream->display_channel), stream);
+        }
+
+        pthread_mutex_unlock(&stream->send_mutex);
+        spice_channel_connect(channel);
     } else if (SPICE_IS_PORT_CHANNEL(channel)) {
+        fprintf(stderr, "[CSPICE] channel-new: port\n");
         // Check if this is our control port channel
         gchar *port_name = NULL;
         g_object_get(channel, "port-name", &port_name, NULL);
@@ -182,6 +283,7 @@ static void on_channel_new(SpiceSession *session, SpiceChannel *channel, gpointe
         }
 
         g_free(port_name);
+        spice_channel_connect(channel);
     }
 }
 
@@ -251,6 +353,154 @@ static winrun_clipboard_format spice_to_winrun_format(guint spice_type) {
         default: return WINRUN_CLIPBOARD_FORMAT_TEXT;
     }
 }
+
+static void winrun_emit_display_metadata(winrun_spice_stream *stream, gint width, gint height) {
+    if (!stream || !stream->metadata_cb) {
+        return;
+    }
+
+    winrun_spice_window_metadata metadata = {
+        .window_id = stream->window_id,
+        .position_x = 0.0,
+        .position_y = 0.0,
+        .width = width > 0 ? (double)width : 800.0,
+        .height = height > 0 ? (double)height : 600.0,
+        .scale_factor = 1.0,
+        .is_resizable = true,
+        .title = "Windows VM Console"
+    };
+    stream->metadata_cb(&metadata, stream->user_data);
+}
+
+static void winrun_emit_primary_frame(SpiceChannel *channel, winrun_spice_stream *stream) {
+    if (!channel || !stream || !stream->frame_cb) {
+        return;
+    }
+
+    SpiceDisplayPrimary primary;
+    memset(&primary, 0, sizeof(primary));
+    if (!spice_display_channel_get_primary(channel, 0, &primary)) {
+        return;
+    }
+    if (!primary.data || primary.width <= 0 || primary.height <= 0 || primary.stride <= 0) {
+        return;
+    }
+
+    size_t length = (size_t)primary.stride * (size_t)primary.height;
+    if (length == 0) {
+        return;
+    }
+    static uint64_t emitted_frames = 0;
+    emitted_frames++;
+    if (emitted_frames <= 5 || emitted_frames % 120 == 0) {
+        fprintf(
+            stderr,
+            "[CSPICE] emit-primary-frame #%llu size=%dx%d stride=%d bytes=%zu\n",
+            (unsigned long long)emitted_frames,
+            primary.width,
+            primary.height,
+            primary.stride,
+            length
+        );
+    }
+    stream->frame_cb(primary.data, length, stream->user_data);
+}
+
+static void on_display_primary_create(SpiceChannel *channel,
+                                      gint format,
+                                      gint width,
+                                      gint height,
+                                      gint stride,
+                                      gint shmid,
+                                      gpointer data,
+                                      gpointer user_data) {
+    (void)format;
+    (void)stride;
+    (void)shmid;
+    (void)data;
+
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream) {
+        return;
+    }
+
+    fprintf(stderr, "[CSPICE] display-primary-create %dx%d stride=%d\n", width, height, stride);
+    winrun_emit_display_metadata(stream, width, height);
+    winrun_emit_primary_frame(channel, stream);
+}
+
+static void on_display_primary_destroy(SpiceChannel *channel, gpointer user_data) {
+    (void)channel;
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream || !stream->metadata_cb) {
+        return;
+    }
+
+    winrun_spice_window_metadata metadata = {
+        .window_id = stream->window_id,
+        .position_x = 0.0,
+        .position_y = 0.0,
+        .width = 0.0,
+        .height = 0.0,
+        .scale_factor = 1.0,
+        .is_resizable = true,
+        .title = "Windows VM Console"
+    };
+    stream->metadata_cb(&metadata, stream->user_data);
+}
+
+static void on_display_invalidate(SpiceChannel *channel,
+                                  gint x,
+                                  gint y,
+                                  gint w,
+                                  gint h,
+                                  gpointer user_data) {
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+    winrun_spice_stream *stream = (winrun_spice_stream *)user_data;
+    if (!stream) {
+        return;
+    }
+    static int invalidate_count = 0;
+    invalidate_count++;
+    if (invalidate_count <= 3) {
+        fprintf(stderr, "[CSPICE] display-invalidate #%d x=%d y=%d w=%d h=%d\n",
+                invalidate_count, x, y, w, h);
+    }
+    winrun_emit_primary_frame(channel, stream);
+}
+
+static const char *winrun_channel_event_name(gint event) {
+    switch (event) {
+        case SPICE_CHANNEL_NONE: return "NONE";
+        case SPICE_CHANNEL_OPENED: return "OPENED";
+        case SPICE_CHANNEL_SWITCHING: return "SWITCHING";
+        case SPICE_CHANNEL_CLOSED: return "CLOSED";
+        case SPICE_CHANNEL_ERROR_IO: return "ERROR_IO";
+        case SPICE_CHANNEL_ERROR_TLS: return "ERROR_TLS";
+        case SPICE_CHANNEL_ERROR_LINK: return "ERROR_LINK";
+        case SPICE_CHANNEL_ERROR_CONNECT: return "ERROR_CONNECT";
+        case SPICE_CHANNEL_ERROR_AUTH: return "ERROR_AUTH";
+        default: return "UNKNOWN";
+    }
+}
+
+static void on_channel_event(SpiceChannel *channel, gint event, gpointer user_data) {
+    (void)user_data;
+    gint channel_type = 0;
+    gint channel_id = 0;
+    g_object_get(channel, "channel-type", &channel_type, "channel-id", &channel_id, NULL);
+    fprintf(
+        stderr,
+        "[CSPICE] channel-event type=%d id=%d event=%s(%d)\n",
+        channel_type,
+        channel_id,
+        winrun_channel_event_name(event),
+        event
+    );
+}
 #endif
 
 static void winrun_write_error(char *buffer, size_t length, const char *message) {
@@ -295,8 +545,12 @@ static winrun_spice_stream *winrun_spice_stream_create(
     stream->session = NULL;
     stream->inputs_channel = NULL;
     stream->main_channel = NULL;
+    stream->display_channel = NULL;
     stream->control_channel = NULL;
     stream->channel_new_handler_id = 0;
+    stream->display_primary_create_handler_id = 0;
+    stream->display_primary_destroy_handler_id = 0;
+    stream->display_invalidate_handler_id = 0;
     stream->clipboard_grab_handler_id = 0;
     stream->clipboard_data_handler_id = 0;
     stream->clipboard_request_handler_id = 0;
@@ -343,6 +597,19 @@ static void winrun_spice_stream_free(winrun_spice_stream *stream) {
         g_object_unref(stream->control_channel);
     }
 
+    if (stream->display_channel) {
+        if (stream->display_primary_create_handler_id) {
+            g_signal_handler_disconnect(stream->display_channel, stream->display_primary_create_handler_id);
+        }
+        if (stream->display_primary_destroy_handler_id) {
+            g_signal_handler_disconnect(stream->display_channel, stream->display_primary_destroy_handler_id);
+        }
+        if (stream->display_invalidate_handler_id) {
+            g_signal_handler_disconnect(stream->display_channel, stream->display_invalidate_handler_id);
+        }
+        g_object_unref(stream->display_channel);
+    }
+
     if (stream->inputs_channel) {
         g_object_unref(stream->inputs_channel);
     }
@@ -368,7 +635,13 @@ static bool winrun_spice_stream_start_worker(
         return false;
     }
 
-    if (pthread_create(&stream->worker_thread, NULL, winrun_mock_worker, stream) != 0) {
+#if __APPLE__
+    void *(*worker_entry)(void *) = winrun_spice_glib_worker;
+#else
+    void *(*worker_entry)(void *) = winrun_mock_worker;
+#endif
+
+    if (pthread_create(&stream->worker_thread, NULL, worker_entry, stream) != 0) {
         winrun_write_error(error_buffer, error_buffer_length, "Failed to spawn Spice worker thread");
         atomic_store(&stream->worker_running, false);
         return false;
@@ -377,6 +650,21 @@ static bool winrun_spice_stream_start_worker(
     stream->worker_started = true;
     return true;
 }
+
+#if __APPLE__
+static void *winrun_spice_glib_worker(void *context) {
+    winrun_spice_stream *stream = (winrun_spice_stream *)context;
+    if (!stream) {
+        return NULL;
+    }
+
+    while (atomic_load(&stream->worker_running)) {
+        g_main_context_iteration(NULL, TRUE);
+    }
+
+    return NULL;
+}
+#endif
 
 static void *winrun_mock_worker(void *context) {
     winrun_spice_stream *stream = (winrun_spice_stream *)context;
@@ -450,6 +738,14 @@ winrun_spice_stream_handle winrun_spice_stream_open_tcp(
 #if __APPLE__
     char port_string[16];
     snprintf(port_string, sizeof(port_string), "%u", port);
+    fprintf(
+        stderr,
+        "[CSPICE] open-tcp host=%s port=%u tls=%d window=%llu\n",
+        host,
+        port,
+        use_tls ? 1 : 0,
+        (unsigned long long)window_id
+    );
 
     stream->session = spice_session_new();
     if (!stream->session) {
@@ -473,9 +769,13 @@ winrun_spice_stream_handle winrun_spice_stream_open_tcp(
     if (ticket) {
         g_object_set(stream->session, "password", ticket, NULL);
     }
+    fprintf(stderr, "[CSPICE] spice_session_connect() invoked\n");
     spice_session_connect(stream->session);
-    // On macOS with libspice, real frame delivery comes from the session callbacks,
-    // not from the mock worker thread. Don't start the mock worker.
+    // Start a GLib event-loop worker so channel and frame callbacks are pumped.
+    if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
+        winrun_spice_stream_free(stream);
+        return NULL;
+    }
 #else
     (void)host;
     (void)port;
@@ -522,6 +822,7 @@ winrun_spice_stream_handle winrun_spice_stream_open_shared(
     }
 
 #if __APPLE__
+    fprintf(stderr, "[CSPICE] open-shared fd=%d window=%llu\n", shared_fd, (unsigned long long)window_id);
     stream->session = spice_session_new();
     if (!stream->session) {
         winrun_write_error(error_buffer, error_buffer_length, "Unable to create Spice session");
@@ -548,8 +849,10 @@ winrun_spice_stream_handle winrun_spice_stream_open_shared(
         winrun_spice_stream_free(stream);
         return NULL;
     }
-    // On macOS with libspice, real frame delivery comes from the session callbacks,
-    // not from the mock worker thread. Don't start the mock worker.
+    if (!winrun_spice_stream_start_worker(stream, error_buffer, error_buffer_length)) {
+        winrun_spice_stream_free(stream);
+        return NULL;
+    }
 #else
     (void)shared_fd;
     (void)ticket;
@@ -570,7 +873,15 @@ void winrun_spice_stream_close(winrun_spice_stream_handle streamHandle) {
         return;
     }
 
+    fprintf(stderr, "[CSPICE] stream-close window=%llu\n", (unsigned long long)stream->window_id);
     atomic_store(&stream->worker_running, false);
+
+#if __APPLE__
+    if (stream->session) {
+        spice_session_disconnect(stream->session);
+    }
+    g_main_context_wakeup(NULL);
+#endif
 
     // Only join the worker thread if it was actually started
     if (stream->worker_started) {

@@ -25,8 +25,10 @@ WinRunDaemon ─┬─→ WinRunVirtualMachine ─→ WinRunShared
               ├─→ WinRunXPC ────────────→ WinRunShared
               └─→ WinRunShared
 
-WinRunApp ────┬─→ WinRunSpiceBridge
+WinRunApp ────┬─→ WinRunVirtualMachine (embedded VM for dev)
+              ├─→ WinRunSpiceBridge
               ├─→ WinRunXPC
+              ├─→ WinRunSetup
               └─→ WinRunShared
 
 WinRunCLI ────┬─→ WinRunXPC
@@ -44,6 +46,13 @@ See also: global principle in root `.cursorrules` under "Platform Targeting & Co
 - Never silence compiler errors/warnings with platform guards unless the failing code exists only on a non-target platform; the macOS build must fail loudly.
 - Only use conditional compilation when code genuinely needs to run on multiple platforms (e.g., `WinRunSpiceBridge` has a mock transport for non-macOS test hosts).
 - Silent degradation via `#else` fallbacks hides real problems. Prefer loud failures over quiet misbehavior.
+
+### Runtime Environment
+- `RuntimeEnvironment.current` (in `WinRunShared`) controls service mode and security policy.
+- **Do NOT use `#if DEBUG` for dev-vs-prod behavior.** Use `RuntimeEnvironment.current` so it can be overridden via `WINRUN_ENV` env var.
+- `ServiceMode.embedded` = VM runs in-process via `EmbeddedServiceProvider`. `ServiceMode.xpc` = VM runs in `winrund` daemon via `WinRunDaemonClient`.
+- Both providers conform to `VMServiceProvider` protocol in `WinRunShared`.
+- Tests should inject `RuntimeEnvironment.development` explicitly to isolate from the env var.
 
 ### Concurrency
 - Use Swift Concurrency (async/await, actors) for all async operations
