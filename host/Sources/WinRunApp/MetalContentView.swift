@@ -197,6 +197,10 @@ final class MetalContentView: NSView {
         true // Accept mouse clicks even when window isn't focused
     }
 
+    override func menu(for event: NSEvent) -> NSMenu? {
+        nil // Suppress macOS context menu so right-clicks go to guest
+    }
+
     override func mouseDown(with event: NSEvent) {
         handleMouseEvent(event, type: .press, button: .left)
         pressedMouseButtons.insert(.left)
