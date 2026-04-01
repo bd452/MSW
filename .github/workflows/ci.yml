@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -29,6 +30,8 @@ jobs:
             host:
               - 'host/**'
               - 'shared/**'
+              - 'scripts/**'
+              - 'infrastructure/**'
               - '.github/workflows/ci.yml'
               - 'Brewfile'
               - 'Brewfile.lock'
@@ -188,6 +191,155 @@ jobs:
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Host Package - builds app bundle and DMG after successful host job
+  # ─────────────────────────────────────────────────────────────────────────────
+  host-package:
+    name: Host App Bundle + DMG
+    needs: [changes, host]
+    if: needs.changes.outputs.host == 'true'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cache Homebrew packages (same as host job)
+      - name: Cache Homebrew
+        id: brew-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/homebrew/Cellar
+            /opt/homebrew/opt
+            /opt/homebrew/bin
+            /opt/homebrew/lib
+            /opt/homebrew/include
+            /opt/homebrew/share
+            /opt/homebrew/Frameworks
+          key: brew-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Brewfile.lock') }}
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+        run: |
+          verify_cache() {
+            swiftlint version >/dev/null 2>&1 && \
+            pkg-config --exists spice-client-glib-2.0 2>/dev/null
+          }
+          
+          if verify_cache; then
+            echo "✓ Cache valid - all tools working"
+          else
+            echo "Cache miss or invalid - installing dependencies..."
+            brew bundle install --file=Brewfile --force
+          fi
+          
+          swiftlint version
+          pkg-config --modversion spice-client-glib-2.0
+
+      # Cache Swift build artifacts
+      - name: Cache Swift build
+        uses: actions/cache@v4
+        with:
+          path: |
+            host/.build
+            host/.swiftpm
+            ~/Library/Caches/org.swift.swiftpm
+          key: swift-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('host/Package.swift', 'host/Package.resolved') }}
+          restore-keys: swift-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build App Bundle
+        run: ./scripts/package-app.sh --output build/WinRun.app --skip-libs
+
+      - name: Create DMG
+        run: ./scripts/package-dmg.sh --app build/WinRun.app --output build/WinRun.dmg
+
+      # Sign and notarize only on release tags when credentials are available
+      - name: Sign and Notarize
+        if: startsWith(github.ref, 'refs/tags/v') && env.DEVELOPER_ID != ''
+        env:
+          DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          NOTARIZE_KEY_ID: ${{ secrets.NOTARIZE_KEY_ID }}
+          NOTARIZE_KEY_ISSUER: ${{ secrets.NOTARIZE_KEY_ISSUER }}
+          NOTARIZE_KEY_P8: ${{ secrets.NOTARIZE_KEY_P8 }}
+        run: ./scripts/sign-and-notarize.sh build/WinRun.app build/WinRun.dmg
+
+      - name: Upload App Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinRun-App
+          path: build/WinRun.app
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinRun-DMG
+          path: build/WinRun.dmg
+          retention-days: 30
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Release - create GitHub Release and upload artifacts on version tags
+  # ─────────────────────────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: [host-package, guest-installer]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download DMG Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WinRun-DMG
+          path: artifacts/
+
+      - name: Download MSI Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WinRunAgent-Installer
+          path: artifacts/
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Rename artifacts with version
+        run: |
+          cd artifacts
+          # Rename DMG with version
+          if [[ -f WinRun.dmg ]]; then
+            mv WinRun.dmg "WinRun-${{ steps.version.outputs.version }}.dmg"
+          fi
+          # Rename MSI with version (find the MSI file in the directory)
+          for msi in *.msi; do
+            if [[ -f "$msi" ]]; then
+              mv "$msi" "WinRunAgent-${{ steps.version.outputs.version }}.msi"
+              break
+            fi
+          done
+          ls -la
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WinRun v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
+          files: |
+            artifacts/WinRun-${{ steps.version.outputs.version }}.dmg
+            artifacts/WinRunAgent-${{ steps.version.outputs.version }}.msi
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Final gate - require this single check in branch protection
   # Jobs are successful if they passed OR were skipped (no relevant changes)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -195,7 +347,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [changes, host, guest, guest-installer]
+    needs: [changes, host, guest, guest-installer, host-package, release]
     steps:
       - name: Check all jobs passed
         run: |
@@ -204,9 +356,11 @@ jobs:
           echo "  host:           ${{ needs.host.result }}"
           echo "  guest:          ${{ needs.guest.result }}"
           echo "  guest-installer: ${{ needs.guest-installer.result }}"
+          echo "  host-package:   ${{ needs.host-package.result }}"
+          echo "  release:        ${{ needs.release.result }}"
           echo ""
           
-          # A job is OK if it succeeded or was skipped (no relevant files changed)
+          # A job is OK if it succeeded or was skipped (no relevant files changed or conditions not met)
           check_job() {
             local result="$1"
             local name="$2"
@@ -222,6 +376,8 @@ jobs:
           check_job "${{ needs.host.result }}" "host" || failed=1
           check_job "${{ needs.guest.result }}" "guest" || failed=1
           check_job "${{ needs.guest-installer.result }}" "guest-installer" || failed=1
+          check_job "${{ needs.host-package.result }}" "host-package" || failed=1
+          check_job "${{ needs.release.result }}" "release" || failed=1
           
           if [[ $failed -eq 1 ]]; then
             echo ""
