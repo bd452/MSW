@@ -503,5 +503,4 @@ public final class SetupWizardCoordinator: SetupWizardCoordinatorProtocol {
             onContactSupport: nil
         )
     }
-
 }
